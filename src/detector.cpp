@@ -46,8 +46,9 @@ torch::Tensor Detector::detect(const torch::Tensor& loc, const torch::Tensor& co
         nms_box = boxes.index_select(0, keep);
 //        torch::Tensor det_result = torch::cat({nms_score.unsqueeze(1), nms_box}, 1);
         this->output[0][cl].slice(0, 0, count) = torch::cat({nms_score.unsqueeze(1), nms_box}, 1);
-        std::cout << "size: " << scores.sizes() << ", nms: " << (t2 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
-                  << ", time: " << (clock() - t) * 1.0 / CLOCKS_PER_SEC * 1000 << std::endl;
+        std::cout << c_mask.sizes() << l_mask.sizes() << boxes.sizes() << keep.sizes() << nms_score.sizes() << nms_box.sizes() <<std::endl;
+//        std::cout << "size: " << scores.sizes() << ", nms: " << (t2 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
+//                  << ", time: " << (clock() - t) * 1.0 / CLOCKS_PER_SEC * 1000 << std::endl;
     }
 
     return this->output;

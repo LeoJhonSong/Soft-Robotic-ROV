@@ -3,6 +3,7 @@
 //
 #include <utils.h>
 #include <detector.h>
+#include <uart.h>
 
 #include <torch/script.h>
 #include <torch/torch.h>
