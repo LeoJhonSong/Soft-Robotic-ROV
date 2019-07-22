@@ -16,6 +16,8 @@ private:
     unsigned int tub;
     int ssd_dim;
     torch::Tensor output;
+//    torch::Tensor c_mask;
+//    torch::Tensor l_mask;
     std::vector<cv::Scalar> color{cv::Scalar(255,0,0), cv::Scalar(0, 255,255), cv::Scalar(0,0,255), cv::Scalar(255,0,255)};
 public:
     Detector(unsigned int, int, float, unsigned int, int);

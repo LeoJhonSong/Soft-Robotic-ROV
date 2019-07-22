@@ -11,7 +11,13 @@ Detector::Detector(unsigned int num_classes, int top_k,
     this->nms_thresh = nms_thresh;
     this->tub = tub;
     this->ssd_dim = ssd_dim;
-    this->output = torch::zeros({1, this->num_classes, this->top_k, 5}, torch::kFloat).to(torch::kCUDA);
+    this->output = torch::zeros({1, this->num_classes, this->top_k, 5}, torch::kFloat);//.to(torch::kCUDA);
+//    int anchor_num;
+//    if(this->ssd_dim==320) anchor_num = 6375;
+//    else anchor_num = 16320;
+//    this->c_mask = torch::zeros({anchor_num}, torch::kByte).to(torch::kCUDA);
+//    this->l_mask = torch::zeros({anchor_num, 4}, torch::kByte).to(torch::kCUDA);
+//    std::cout << c_mask.sizes() << c_mask.type() << l_mask.sizes() << l_mask.type() << std::endl;
     this->log_params();
 }
 
@@ -26,7 +32,9 @@ void Detector::log_params(){
 
 torch::Tensor Detector::detect(const torch::Tensor& loc, const torch::Tensor& conf, std::vector<float> conf_thresh){
     this->output.zero_();
-    torch::Tensor c_mask, l_mask, boxes, keep, nms_score, nms_box;
+    torch::Tensor c_mask, l_mask, scores, boxes, keep, nms_score, nms_box;
+    int count;
+    std::tuple<torch::Tensor, int> nms_result;
     for(unsigned int cl=1; cl<this->num_classes; cl++){
         clock_t t = clock();
         c_mask = conf[cl].gt(conf_thresh.at(cl-1));
@@ -34,29 +42,26 @@ torch::Tensor Detector::detect(const torch::Tensor& loc, const torch::Tensor& co
         if(c_mask.sum().item<float_t >() == 0){
             continue;
         }
+        scores = conf[cl].masked_select(c_mask);
         clock_t t2 = clock();
-        torch::Tensor scores = conf[cl].masked_select(c_mask);
         l_mask = c_mask.unsqueeze(1).expand_as(loc);
         boxes = loc.masked_select(l_mask).view({-1, 4});
-        std::tuple<torch::Tensor, int> nms_result = nms(boxes.mul(this->ssd_dim), scores);
+        nms_result = nms(boxes.mul(this->ssd_dim), scores);
         keep = std::get<0>(nms_result);
-        int count = std::get<1>(nms_result);
+        count = std::get<1>(nms_result);
 
         nms_score = scores.index_select(0, keep);
         nms_box = boxes.index_select(0, keep);
-//        torch::Tensor det_result = torch::cat({nms_score.unsqueeze(1), nms_box}, 1);
         this->output[0][cl].slice(0, 0, count) = torch::cat({nms_score.unsqueeze(1), nms_box}, 1);
-        std::cout << c_mask.sizes() << l_mask.sizes() << boxes.sizes() << keep.sizes() << nms_score.sizes() << nms_box.sizes() <<std::endl;
-//        std::cout << "size: " << scores.sizes() << ", nms: " << (t2 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
+//        std::cout << this->c_mask.sizes() << this->l_mask.sizes() << boxes.sizes() << keep.sizes() << nms_score.sizes() << nms_box.sizes() <<std::endl;
+//        std::cout << "class: " << cl <<  ", t2-t1: " << (t2 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
 //                  << ", time: " << (clock() - t) * 1.0 / CLOCKS_PER_SEC * 1000 << std::endl;
     }
-
     return this->output;
-
 }
 
 std::tuple<torch::Tensor, int> Detector::nms(const torch::Tensor& boxes, const torch::Tensor& scores){
-    torch::Tensor keep = torch::zeros(scores.sizes()).to(torch::kLong).to(torch::kCUDA);
+    torch::Tensor keep = torch::zeros(scores.sizes()).to(torch::kLong); //.to(torch::kCUDA);
     int count = 0;
     std::tuple<torch::Tensor, int> nms_result(keep, count);
     if(boxes.numel() == 0){
