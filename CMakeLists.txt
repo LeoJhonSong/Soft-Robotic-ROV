@@ -7,6 +7,8 @@ find_package(Torch REQUIRED)
 set(OpenCV_DIR "~/local/opencv3.4.cuda10.0/share/OpenCV")
 find_package( OpenCV 3 REQUIRED )
 set(OpenCV_LIBS ${OpenCV_LIBS} opencv_videoio)
+find_package (gflags REQUIRED)
+include_directories (${gflags_INCLUDE_DIR})
 ### test
 message(STATUS "OpenCV library status:")
 message(STATUS "    config: ${OpenCV_DIR}")
@@ -17,7 +19,7 @@ message(STATUS "    include path: ${OpenCV_INCLUDE_DIRS}")
 include_directories( ${OpenCV_INCLUDE_DIRS} include)
 file(GLOB SOURCES "src/*.cpp")
 
-add_executable(ResDet ${SOURCES})
-target_link_libraries(${PROJECT_NAME} ${TORCH_LIBRARIES} ${OpenCV_LIBS})
+add_executable(ResDet ${SOURCES} src/ruas.cpp)
+target_link_libraries(${PROJECT_NAME} ${TORCH_LIBRARIES} ${OpenCV_LIBS} gflags)
 set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 11)
 

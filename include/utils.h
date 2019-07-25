@@ -12,4 +12,4 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
 
-cv::Mat tensor2im(torch::Tensor tensor);
+cv::Mat tensor2im(torch::Tensor tensor, std::vector<int> );

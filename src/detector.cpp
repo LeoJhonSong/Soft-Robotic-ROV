@@ -102,8 +102,7 @@ void Detector::visualization(cv::Mat img, const torch::Tensor& detections){
             int x2 = boxes[i][2].item<int32_t>();
             int y2 = boxes[i][3].item<int32_t>();
             if(((x2-x1)*(y2-y1))/(img.cols*img.rows)>0.1) continue;
-//            cv::Rect rect(x1, y1, x2, y2);
-            cv::rectangle(img, cv::Point(x1, y1), cv::Point(x2, y2), this->color.at(j-1), 1, 1, 0);
+            cv::rectangle(img, cv::Point(x1, y1), cv::Point(x2, y2), this->color.at(j-1), 2, 1, 0);
         }
     }
     cv::imshow("ResDet", img);
