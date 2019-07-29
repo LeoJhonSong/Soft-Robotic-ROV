@@ -4,5 +4,6 @@
 --R 100 \
 --NET_PHASE 3 \
 --MODE 0 \
---SSD_DIM 320
+--SSD_DIM 512 \
+--TUB 3
 

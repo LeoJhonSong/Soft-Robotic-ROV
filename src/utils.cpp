@@ -15,3 +15,7 @@ cv::Mat tensor2im(torch::Tensor tensor, std::vector<int> vis_size) {
 //    cv::resize(img, img, vis_size);
     return img;
 }
+
+int clip(int n, int lower, int upper) {
+    return std::max(lower, std::min(n, upper));
+}

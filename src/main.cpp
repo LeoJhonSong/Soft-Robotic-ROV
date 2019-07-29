@@ -25,7 +25,9 @@ DEFINE_int32(R, 40, "Signal to Noise Ratio. The greater, the more serious of noi
 DEFINE_uint32(RUAS, 0, "0: skip; 1: clahe; 2: wiener+clahe");
 DEFINE_uint32(NET_PHASE, 0, "0: skip; 1: netG; 2: netG+RefineDet; 3: RefineDet" );
 DEFINE_uint32(SSD_DIM, 320, "" );
+DEFINE_uint32(TUB, 0, "" );
 DEFINE_int32(MODE, -1, "-1: load video; >0 load camera" );
+
 //DEFINE_string(SSD_MODEL, "../models/SSD320.pt", "" );
 
 
@@ -38,8 +40,8 @@ int main(int argc, char* argv[]) {
 
     if(FLAGS_NET_PHASE==1) model_path = "./models/netG.pt";
     else if(FLAGS_NET_PHASE==2) model_path = "./models/G_SSD_320.pt";
-    else if(FLAGS_SSD_DIM==512) model_path = "./models/SSD512.pt";
-    else model_path = "./models/SSD320.pt";
+    else if(FLAGS_SSD_DIM==512) model_path = "./models/SSD512_wof.pt";
+    else model_path = "./models/SSD320_wof.pt";
 
     std::shared_ptr<torch::jit::script::Module> net = torch::jit::load(model_path);
     net->to(at::kCUDA);
@@ -47,11 +49,10 @@ int main(int argc, char* argv[]) {
     unsigned int num_classes = 5;
     int top_k = 200;
     float nms_thresh = 0.3;
-    unsigned int tub = 5;
     std::vector<float> conf_thresh = {0.3, 0.3, 0.3, 0.3};
-    float tub_thresh = 0.9;
+    float tub_thresh = 0.3;
     bool reset_id = false;
-    Detector Detect(num_classes, top_k, nms_thresh, tub, FLAGS_SSD_DIM);
+    Detector Detect(num_classes, top_k, nms_thresh, FLAGS_TUB, FLAGS_SSD_DIM);
 
     // load filter
     CFilt filter(FLAGS_SSD_DIM, FLAGS_SSD_DIM, 3);
@@ -72,7 +73,7 @@ int main(int argc, char* argv[]) {
     torch::Tensor img_tensor, fake_B, loc, conf, ota_feature, detections;
     std::vector<torch::jit::IValue> net_input, net_output;
     cv::cuda::GpuMat img_gpu;
-    unsigned int loc_idex;
+    unsigned char loc_idex=0;
 
     while(capture.isOpened()){
         clock_t t1 = clock();
@@ -110,19 +111,27 @@ int main(int argc, char* argv[]) {
                 } else if (FLAGS_NET_PHASE == 3) loc_idex = 0;
                 loc = net_output.at(loc_idex).toTensor().to(torch::kCPU);
                 conf = net_output.at(loc_idex + 1).toTensor().to(torch::kCPU);
-                ota_feature = net_output.at(loc_idex + 2).toTensor().to(torch::kCPU);
+//                ota_feature = net_output.at(loc_idex + 2).toTensor().to(torch::kCPU);
             }
             net_input.pop_back();
-            detections = Detect.detect(loc, conf, conf_thresh);
+            clock_t t3 = clock();
+            if(FLAGS_TUB==0) detections = Detect.detect(loc, conf, conf_thresh);
+            else detections = Detect.detect(loc, conf, conf_thresh, tub_thresh, reset_id);
+            clock_t t4 = clock();
+            std::cout << "det: " << (t4 - t3) * 1.0 / CLOCKS_PER_SEC * 1000 << std::endl;
+
+
         }
         if(loc_idex == 1) img_vis = tensor2im(fake_B, vis_size);
         else {
             cv::cvtColor(frame, img_vis, cv::COLOR_BGR2RGB);
             cv::resize(img_vis, img_vis, cv::Size(vis_size[0], vis_size[1]));
         }
+        clock_t t2 = clock();
         Detect.visualization(img_vis, detections);
         clock_t t7 = clock();
-        std::cout << "total: " << (t7 - t1) * 1.0 / CLOCKS_PER_SEC * 1000 << std::endl;
+        std::cout << "total: " << (t2 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
+        << ", vis: " << (t7 - t2) * 1.0 / CLOCKS_PER_SEC * 1000 << std::endl;
     }
 
     return 0;
