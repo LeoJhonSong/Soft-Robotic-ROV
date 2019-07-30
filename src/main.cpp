@@ -50,7 +50,7 @@ int main(int argc, char* argv[]) {
     int top_k = 200;
     float nms_thresh = 0.3;
     std::vector<float> conf_thresh = {0.3, 0.3, 0.3, 0.3};
-    float tub_thresh = 0.3;
+    float tub_thresh = 0.1;
     bool reset_id = false;
     Detector Detect(num_classes, top_k, nms_thresh, FLAGS_TUB, FLAGS_SSD_DIM);
 
@@ -74,10 +74,9 @@ int main(int argc, char* argv[]) {
     std::vector<torch::jit::IValue> net_input, net_output;
     cv::cuda::GpuMat img_gpu;
     unsigned char loc_idex=0;
-
     while(capture.isOpened()){
-        clock_t t1 = clock();
         capture.read(frame);
+        clock_t t1 = clock();
         cv::resize(frame, frame, cv::Size(FLAGS_SSD_DIM, FLAGS_SSD_DIM));
         if(FLAGS_RUAS == 1){
             filter.clahe_gpu(frame);
@@ -87,6 +86,7 @@ int main(int argc, char* argv[]) {
 //        cv::imshow("test", frame);
 //        cv::waitKey(1);
         cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
+        clock_t t6 = clock();
 
         if(FLAGS_NET_PHASE>0) {
             if (FLAGS_NET_PHASE < 3 ) {
@@ -97,6 +97,7 @@ int main(int argc, char* argv[]) {
             }
             img_tensor = torch::from_blob(img_float.data, {1, FLAGS_SSD_DIM, FLAGS_SSD_DIM, 3}).to(torch::kCUDA);
             img_tensor = img_tensor.permute({0, 3, 1, 2});
+            clock_t t5 = clock();
             net_input.push_back(img_tensor);
             if(FLAGS_NET_PHASE == 1) {
                 fake_B = net->forward(net_input).toTensor();
@@ -118,7 +119,8 @@ int main(int argc, char* argv[]) {
             if(FLAGS_TUB==0) detections = Detect.detect(loc, conf, conf_thresh);
             else detections = Detect.detect(loc, conf, conf_thresh, tub_thresh, reset_id);
             clock_t t4 = clock();
-            std::cout << "det: " << (t4 - t3) * 1.0 / CLOCKS_PER_SEC * 1000 << std::endl;
+//            std::cout << "net: " << (t3 - t5) * 1.0 / CLOCKS_PER_SEC * 1000
+//            << ", det: " << (t4 - t3) * 1.0 / CLOCKS_PER_SEC * 1000 << std::endl;
 
 
         }
@@ -131,7 +133,8 @@ int main(int argc, char* argv[]) {
         Detect.visualization(img_vis, detections);
         clock_t t7 = clock();
         std::cout << "total: " << (t2 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
-        << ", vis: " << (t7 - t2) * 1.0 / CLOCKS_PER_SEC * 1000 << std::endl;
+                  << ", ruas: " << (t6 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
+                  << ", vis: " << (t7 - t2) * 1.0 / CLOCKS_PER_SEC * 1000 << std::endl;
     }
 
     return 0;

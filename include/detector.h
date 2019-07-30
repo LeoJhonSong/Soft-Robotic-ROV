@@ -19,6 +19,7 @@ private:
     torch::Tensor output;
     std::vector<std::map<int, std::pair<torch::Tensor, int>>> tubelets;
     std::vector<std::vector<int>> ides;
+    std::vector<std::set<int>> ides_set;
     torch::Tensor history_max_ides;
     unsigned int hold_len;
 //    unsigned feature_size;
