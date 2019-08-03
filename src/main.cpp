@@ -27,9 +27,7 @@ DEFINE_uint32(NET_PHASE, 0, "0: skip; 1: netG; 2: netG+RefineDet; 3: RefineDet" 
 DEFINE_uint32(SSD_DIM, 320, "" );
 DEFINE_uint32(TUB, 0, "" );
 DEFINE_int32(MODE, -1, "-1: load video; >0 load camera" );
-
-//DEFINE_string(SSD_MODEL, "../models/SSD320.pt", "" );
-
+DEFINE_int32(UART, -1, "-1: not use it; >0 use it" );
 
 int main(int argc, char* argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
@@ -45,11 +43,12 @@ int main(int argc, char* argv[]) {
 
     std::shared_ptr<torch::jit::script::Module> net = torch::jit::load(model_path);
     net->to(at::kCUDA);
+
     // load detector
     unsigned int num_classes = 5;
     int top_k = 200;
     float nms_thresh = 0.3;
-    std::vector<float> conf_thresh = {0.3, 0.3, 0.3, 0.3};
+    std::vector<float> conf_thresh = {0.5, 0.3, 0.5, 0.5};
     float tub_thresh = 0.1;
     bool reset_id = false;
     Detector Detect(num_classes, top_k, nms_thresh, FLAGS_TUB, FLAGS_SSD_DIM);
@@ -62,19 +61,35 @@ int main(int argc, char* argv[]) {
 
     // load video
     cv::VideoCapture capture;
-    if(FLAGS_MODE < 0) capture.open("/home/sean/data/UWdevkit/snippets/2.MP4");
+    if(FLAGS_MODE == -1){
+        capture.open("/home/sean/data/UWdevkit/snippets/2.MP4");
+        capture.set(CV_CAP_PROP_POS_FRAMES, 200);
+    }
+    else if(FLAGS_MODE == -2) capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
     else capture.open(FLAGS_MODE);
-
-    capture.set(CV_CAP_PROP_POS_FRAMES, 200);
-    std::vector<int> vis_size(640, 480);
+    std::cout << capture.isOpened() << std::endl;
+    std::vector<int> vis_size(640, 360);
 
     // intermediate variable
     cv::Mat frame, img_float, img_vis;
-    torch::Tensor img_tensor, fake_B, loc, conf, ota_feature, detections;
+    torch::Tensor img_tensor, fake_B, loc, conf, ota_feature;
     std::vector<torch::jit::IValue> net_input, net_output;
     cv::cuda::GpuMat img_gpu;
-    unsigned char loc_idex=0;
-    while(capture.isOpened()){
+    Uart uart("ttyUSB0", 115200);
+
+    // UART
+    if(FLAGS_UART) {
+        bool uart_open_flag, uart_init_flag;
+        uart_open_flag = uart.openFile();
+        if (!uart_open_flag)
+            std::cout << "UART fails to open " << std::endl;
+        uart_init_flag = uart.initPort();
+        if (!uart_init_flag)
+            std::cout << "UART fails to be inited " << std::endl;
+    }
+    unsigned char loc_idex = 0;
+    bool quit = false;
+    while(capture.isOpened() && !quit){
         capture.read(frame);
         clock_t t1 = clock();
         cv::resize(frame, frame, cv::Size(FLAGS_SSD_DIM, FLAGS_SSD_DIM));
@@ -116,8 +131,8 @@ int main(int argc, char* argv[]) {
             }
             net_input.pop_back();
             clock_t t3 = clock();
-            if(FLAGS_TUB==0) detections = Detect.detect(loc, conf, conf_thresh);
-            else detections = Detect.detect(loc, conf, conf_thresh, tub_thresh, reset_id);
+            if(FLAGS_TUB==0) Detect.detect(loc, conf, conf_thresh);
+            else Detect.detect(loc, conf, conf_thresh, tub_thresh, reset_id);
             clock_t t4 = clock();
 //            std::cout << "net: " << (t3 - t5) * 1.0 / CLOCKS_PER_SEC * 1000
 //            << ", det: " << (t4 - t3) * 1.0 / CLOCKS_PER_SEC * 1000 << std::endl;
@@ -127,15 +142,19 @@ int main(int argc, char* argv[]) {
         if(loc_idex == 1) img_vis = tensor2im(fake_B, vis_size);
         else {
             cv::cvtColor(frame, img_vis, cv::COLOR_BGR2RGB);
-            cv::resize(img_vis, img_vis, cv::Size(vis_size[0], vis_size[1]));
+            cv::resize(img_vis, img_vis, cv::Size(vis_size.at(0), vis_size.at(1)));
         }
         clock_t t2 = clock();
-        Detect.visualization(img_vis, detections);
+        Detect.visualization(img_vis);
         clock_t t7 = clock();
+        if(FLAGS_UART > 0)
+            Detect.uart_send(FLAGS_UART, uart);
+        int key = cv::waitKey(1);
+        parse_key(key, quit, reset_id, conf_thresh);
         std::cout << "total: " << (t2 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
                   << ", ruas: " << (t6 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
                   << ", vis: " << (t7 - t2) * 1.0 / CLOCKS_PER_SEC * 1000 << std::endl;
     }
-
+    uart.closeFile();
     return 0;
 }

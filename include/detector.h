@@ -8,6 +8,8 @@
 #include <torch/torch.h>
 #include <opencv2/opencv.hpp>
 #include <utils.h>
+#include <uart.h>
+
 
 class Detector {
 private:
@@ -29,14 +31,16 @@ public:
     void log_params();
 //    torch::Tensor detect(const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
 //            std::vector<float>, float, bool);
-    torch::Tensor detect(const torch::Tensor&, const torch::Tensor&, std::vector<float>);
-    torch::Tensor detect(const torch::Tensor&, const torch::Tensor&, std::vector<float>, float, bool);
+    void detect(const torch::Tensor&, const torch::Tensor&, std::vector<float>);
+    void detect(const torch::Tensor&, const torch::Tensor&, std::vector<float>, float, bool);
     std::tuple<torch::Tensor, int> nms(const torch::Tensor&, const torch::Tensor&);
     torch::Tensor iou(const torch::Tensor&, unsigned char);
-    void visualization(cv::Mat&, const torch::Tensor&);
+    void visualization(cv::Mat&);
     void init_tubelets();
     void delete_tubelets(unsigned char);
-    ~Detector(){};
+    void uart_send(unsigned char cls, Uart&);
+    ~Detector(){
+    };
 };
 
 

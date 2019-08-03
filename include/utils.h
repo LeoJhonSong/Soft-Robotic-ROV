@@ -14,3 +14,4 @@
 
 cv::Mat tensor2im(torch::Tensor tensor, std::vector<int> );
 int clip(int n, int lower, int upper);
+void parse_key(int, bool&, bool&, std::vector<float>&);
