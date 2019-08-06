@@ -1,10 +1,10 @@
 ./cmake-build-debug/ResDet \
 --RUAS 2 \
---K 50 \
---R 100 \
+--K 100 \
+--R 50 \
 --NET_PHASE 3 \
---MODE -2 \
+--MODE 0 \
 --SSD_DIM 320 \
 --TUB 5 \
---UART 2
+--UART 0
 

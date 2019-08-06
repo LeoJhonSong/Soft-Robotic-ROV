@@ -27,7 +27,7 @@ DEFINE_uint32(NET_PHASE, 0, "0: skip; 1: netG; 2: netG+RefineDet; 3: RefineDet" 
 DEFINE_uint32(SSD_DIM, 320, "" );
 DEFINE_uint32(TUB, 0, "" );
 DEFINE_int32(MODE, -1, "-1: load video; >0 load camera" );
-DEFINE_int32(UART, -1, "-1: not use it; >0 use it" );
+DEFINE_int32(UART, 0, "-1: not use it; >0 use it" );
 
 int main(int argc, char* argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
@@ -48,7 +48,7 @@ int main(int argc, char* argv[]) {
     unsigned int num_classes = 5;
     int top_k = 200;
     float nms_thresh = 0.3;
-    std::vector<float> conf_thresh = {0.5, 0.3, 0.5, 0.5};
+    std::vector<float> conf_thresh = {0.3, 0.3, 0.3, 0.3};
     float tub_thresh = 0.1;
     bool reset_id = false;
     Detector Detect(num_classes, top_k, nms_thresh, FLAGS_TUB, FLAGS_SSD_DIM);
@@ -67,8 +67,27 @@ int main(int argc, char* argv[]) {
     }
     else if(FLAGS_MODE == -2) capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
     else capture.open(FLAGS_MODE);
-    std::cout << capture.isOpened() << std::endl;
-    std::vector<int> vis_size(640, 360);
+    int fram_w = (int)capture.get(CV_CAP_PROP_FRAME_WIDTH);
+    int fram_h = (int)capture.get(CV_CAP_PROP_FRAME_HEIGHT);
+    std::vector<int> vis_size{640, 360};
+
+    //out video
+    char EXT[] = "MJPG";
+    int ex1 = EXT[0] | (EXT[1] << 8) | (EXT[2] << 16) | (EXT[3] << 24);
+    time_t now = time(nullptr);
+    tm *ltm = localtime(&now);
+    std::string video_name = "./record/" + std::to_string(1900 + ltm->tm_year) + "_" + std::to_string(1+ltm->tm_mon)+ "_" + std::to_string(ltm->tm_mday)
+            + "_" + std::to_string(ltm->tm_hour) + "_" + std::to_string(ltm->tm_min) + "_" + std::to_string(ltm->tm_sec);
+    cv::VideoWriter writer;
+    writer.open(video_name + ".mp4", ex1, 20, cv::Size(vis_size.at(0), vis_size.at(1)), true);
+    if(!writer.isOpened()){
+        std::cout << "Can not open the output video for write" << std::endl;
+    }
+    cv::VideoWriter writer_raw;
+    writer_raw.open(video_name+"_raw.mp4", ex1, 20, cv::Size(fram_w, fram_h), true);
+    if(!writer_raw.isOpened()){
+        std::cout << "Can not open the output video for raw write" << std::endl;
+    }
 
     // intermediate variable
     cv::Mat frame, img_float, img_vis;
@@ -91,7 +110,8 @@ int main(int argc, char* argv[]) {
     bool quit = false;
     while(capture.isOpened() && !quit){
         capture.read(frame);
-        clock_t t1 = clock();
+        writer_raw << frame;
+//        clock_t t1 = clock();
         cv::resize(frame, frame, cv::Size(FLAGS_SSD_DIM, FLAGS_SSD_DIM));
         if(FLAGS_RUAS == 1){
             filter.clahe_gpu(frame);
@@ -101,7 +121,7 @@ int main(int argc, char* argv[]) {
 //        cv::imshow("test", frame);
 //        cv::waitKey(1);
         cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
-        clock_t t6 = clock();
+//        clock_t t6 = clock();
 
         if(FLAGS_NET_PHASE>0) {
             if (FLAGS_NET_PHASE < 3 ) {
@@ -112,8 +132,8 @@ int main(int argc, char* argv[]) {
             }
             img_tensor = torch::from_blob(img_float.data, {1, FLAGS_SSD_DIM, FLAGS_SSD_DIM, 3}).to(torch::kCUDA);
             img_tensor = img_tensor.permute({0, 3, 1, 2});
-            clock_t t5 = clock();
-            net_input.push_back(img_tensor);
+//            clock_t t5 = clock();
+            net_input.emplace_back(img_tensor);
             if(FLAGS_NET_PHASE == 1) {
                 fake_B = net->forward(net_input).toTensor();
                 loc_idex = 1;
@@ -130,31 +150,32 @@ int main(int argc, char* argv[]) {
 //                ota_feature = net_output.at(loc_idex + 2).toTensor().to(torch::kCPU);
             }
             net_input.pop_back();
-            clock_t t3 = clock();
+//            clock_t t3 = clock();
             if(FLAGS_TUB==0) Detect.detect(loc, conf, conf_thresh);
             else Detect.detect(loc, conf, conf_thresh, tub_thresh, reset_id);
-            clock_t t4 = clock();
+            if(reset_id) reset_id = false;
+//            clock_t t4 = clock();
 //            std::cout << "net: " << (t3 - t5) * 1.0 / CLOCKS_PER_SEC * 1000
 //            << ", det: " << (t4 - t3) * 1.0 / CLOCKS_PER_SEC * 1000 << std::endl;
-
-
         }
         if(loc_idex == 1) img_vis = tensor2im(fake_B, vis_size);
         else {
             cv::cvtColor(frame, img_vis, cv::COLOR_BGR2RGB);
             cv::resize(img_vis, img_vis, cv::Size(vis_size.at(0), vis_size.at(1)));
         }
-        clock_t t2 = clock();
-        Detect.visualization(img_vis);
-        clock_t t7 = clock();
+//        clock_t t2 = clock();
+        Detect.visualization(img_vis, writer);
+//        clock_t t7 = clock();
         if(FLAGS_UART > 0)
             Detect.uart_send(FLAGS_UART, uart);
         int key = cv::waitKey(1);
-        parse_key(key, quit, reset_id, conf_thresh);
-        std::cout << "total: " << (t2 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
-                  << ", ruas: " << (t6 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
-                  << ", vis: " << (t7 - t2) * 1.0 / CLOCKS_PER_SEC * 1000 << std::endl;
+        parse_key(key, quit, reset_id, conf_thresh, FLAGS_K, FLAGS_R, filter);
+//        std::cout << "total: " << (t2 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
+//                  << ", ruas: " << (t6 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
+//                  << ", vis: " << (t7 - t2) * 1.0 / CLOCKS_PER_SEC * 1000 << std::endl;
     }
     uart.closeFile();
+    writer.release();
+    writer_raw.release();
     return 0;
 }

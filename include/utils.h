@@ -11,7 +11,9 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include "ruas.h"
 
 cv::Mat tensor2im(torch::Tensor tensor, std::vector<int> );
-int clip(int n, int lower, int upper);
-void parse_key(int, bool&, bool&, std::vector<float>&);
+void clip(float& n, float lower, float upper);
+void clip(int& n, int lower, int upper);
+void parse_key(int, bool&, bool&, std::vector<float>&, int&, int&, CFilt&);

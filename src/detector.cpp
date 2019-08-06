@@ -14,20 +14,8 @@ Detector::Detector(unsigned int num_classes, int top_k,
     if(this->tub > 0) {
         this->init_tubelets();
         this->hold_len = 10;
-//        this->match_score = 0.6;
-//        this->feature_size = 7;
-//        this->output = torch::zeros({1, this->num_classes, this->top_k, 5}, torch::kFloat);
     }
     this->output = torch::zeros({1, this->num_classes, this->top_k, 6}, torch::kFloat);
-//    bool uart_open_flag, uart_init_flag;
-//    Uart uart_("ttyUSB0", 115200);
-//    uart_open_flag = uart_.openFile();
-//    if (!uart_open_flag)
-//        std::cout << "UART fails to open " << std::endl;
-//    uart_init_flag = uart_.initPort();
-//    if (!uart_init_flag)
-//        std::cout << "UART fails to be inited " << std::endl;
-//    this->uart = uart_;
     this->log_params();
 }
 
@@ -60,7 +48,6 @@ void Detector::detect(const torch::Tensor& loc, const torch::Tensor& conf, std::
         torch::Tensor identity = torch::ones({count}).fill_(-1);
         this->output[0][cl].slice(0, 0, count) = torch::cat({nms_score.unsqueeze(1), nms_box, identity.unsqueeze(1)}, 1);
     }
-//    return this->output;
 }
 
 void Detector::detect(const torch::Tensor& loc, const torch::Tensor& conf, std::vector<float> conf_thresh, float tub_thresh, bool reset){
@@ -102,7 +89,6 @@ void Detector::detect(const torch::Tensor& loc, const torch::Tensor& conf, std::
             for(unsigned char m=0; m<identity.size(0); m++)
                 if(new_id_mask[m].item<int >() > 0) identity[m] = new_id[nid++];
         }
-//        std::cout << identity << ", " << this->ides_set.at(cl) << std::endl;
         for(unsigned int tc=0; tc<count; tc++){
             int curr_id = identity[tc].item<int>();
             if(this->tubelets.at(cl).find(curr_id) == this->tubelets.at(cl).end()){
@@ -124,10 +110,8 @@ void Detector::detect(const torch::Tensor& loc, const torch::Tensor& conf, std::
             this->output[0][cl].slice(0, count + non_matched_size, count + non_matched_size+1) = torch::cat({torch::zeros({1}).fill_(0.01), this->tubelets.at(cl)[s].first[0], torch::zeros({1}).fill_(s)}, 0);
             non_matched_size++;
         }
-//        std::cout << "after erase: "<< count << ", " << non_matched_size << std::endl;
         this->delete_tubelets(cl);
     }
-//    return this->output;
 }
 
 std::tuple<torch::Tensor, int> Detector::nms(const torch::Tensor& boxes, const torch::Tensor& scores){
@@ -183,17 +167,16 @@ torch::Tensor Detector::iou(const torch::Tensor& boxes, unsigned char cl){
         iou.slice(1, i, i+1) = inner.div(unions).unsqueeze(-1);
         i++;
     }
-//    std::cout << ", " << this->ides.at(cl).size() << ", "<<  this->ides_set.at(cl).size()  << std::endl;
     return iou;
 }
 
 
-void Detector::visualization(cv::Mat& img){
+void Detector::visualization(cv::Mat& img, cv::VideoWriter& writer){
+    std::stringstream stream;
     for(unsigned char j=1; j<this->output.size(1); j++){
         torch::Tensor dets = this->output[0][j];
         if(dets.sum().item<float>() == 0) continue;
         torch::Tensor mask = dets.slice(1, 0, 1).gt(0.0).expand_as(dets);
-//        std::cout << "vis: " << mask.sum() / 6 << std::endl;
         dets = dets.masked_select(mask);
         dets = dets.view({dets.size(0)/mask.size(1), mask.size(1)});
         torch::Tensor boxes = dets.slice(1, 1, 5);
@@ -203,20 +186,27 @@ void Detector::visualization(cv::Mat& img){
         boxes.slice(1, 3, 4) *= img.rows;
         torch::Tensor scores = dets.slice(1, 0, 1).squeeze(1);
         torch::Tensor ids = dets.slice(1, 5, 6).squeeze(1);
-
         for(unsigned char i=0; i<boxes.size(0); i++){
             int x1 = boxes[i][0].item<int>();
             int y1 = boxes[i][1].item<int>();
             int x2 = boxes[i][2].item<int>();
             int y2 = boxes[i][3].item<int>();
             float ratio = (float)(x2-x1)*(float)(y2-y1)/(float)(img.cols*img.rows);
-            if(ratio>0.1 || ratio<0.01) continue;
+            if(ratio>0.2 || ratio<0.001) continue;
             cv::rectangle(img, cv::Point(x1, y1), cv::Point(x2, y2), this->color.at(j-1), 2, 1, 0);
             if(ids[i].item<int>()>=0)
-                cv::putText(img, std::to_string(ids[i].item<int>()), cv::Point(x1, y1-5), 1, 1, this->color.at(j-1));
+                stream.str("");
+                stream << std::fixed << std::setprecision(2) << scores[i].item<float>();
+                cv::putText(img, std::to_string(ids[i].item<int>())+ ", " + stream.str()
+                        , cv::Point(x1, y1-5), 1, 1, this->color.at(j-1));
         }
     }
+    cv::putText(img, "trepang: "+std::to_string(this->history_max_ides[1].item<int>()+1) , cv::Point(10, 10), 1, 1, this->color.at(0), 2);
+    cv::putText(img, "urchin: "+std::to_string(this->history_max_ides[2].item<int>()+1) , cv::Point(10, 25), 1, 1, this->color.at(1), 2);
+    cv::putText(img, "shell: "+std::to_string(this->history_max_ides[3].item<int>()+1) , cv::Point(10, 40), 1, 1, this->color.at(2), 2);
+    cv::putText(img, "starfish: "+std::to_string(this->history_max_ides[4].item<int>()+1) , cv::Point(10, 55), 1, 1, this->color.at(3), 2);
     cv::imshow("ResDet", img);
+    writer << img;
 }
 
 void Detector::init_tubelets(){
@@ -248,12 +238,11 @@ void Detector::delete_tubelets(unsigned char cl){
 void Detector::uart_send(unsigned char cls, Uart& uart){
     torch::Tensor dets = this->output[0][cls][0];
     std::vector<char> send_list;
-    send_list.push_back(127);
+    send_list.push_back(110+cls);
     send_list.push_back((char)(dets[1].item<float>()*100));
     send_list.push_back((char)(dets[2].item<float>()*100));
     send_list.push_back((char)(dets[3].item<float>()*100));
     send_list.push_back((char)(dets[4].item<float>()*100));
-    send_list.push_back(126);
+    send_list.push_back(127);
     uart.send(send_list);
-//    std::cout << "send flag: " << send_flag << ", send list: " << send_list << std::endl;
 }

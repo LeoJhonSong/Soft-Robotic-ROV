@@ -9,6 +9,8 @@
 #include <opencv2/opencv.hpp>
 #include <utils.h>
 #include <uart.h>
+#include <sstream>
+#include <iomanip>
 
 
 class Detector {
@@ -35,7 +37,7 @@ public:
     void detect(const torch::Tensor&, const torch::Tensor&, std::vector<float>, float, bool);
     std::tuple<torch::Tensor, int> nms(const torch::Tensor&, const torch::Tensor&);
     torch::Tensor iou(const torch::Tensor&, unsigned char);
-    void visualization(cv::Mat&);
+    void visualization(cv::Mat&, cv::VideoWriter&);
     void init_tubelets();
     void delete_tubelets(unsigned char);
     void uart_send(unsigned char cls, Uart&);

@@ -16,15 +16,16 @@ cv::Mat tensor2im(torch::Tensor tensor, std::vector<int> vis_size) {
     return img;
 }
 
-int clip(int n, int lower, int upper) {
-    return std::max(lower, std::min(n, upper));
-}
 
 void clip(float& n, float lower, float upper) {
     n = std::max(lower, std::min(n, upper));
 }
 
-void parse_key(int key, bool& quit, bool& reset_id, std::vector<float>& conf_thresh){
+void clip(int& n, int lower, int upper) {
+    n = std::max(lower, std::min(n, upper));
+}
+
+void parse_key(int key, bool& quit, bool& reset_id, std::vector<float>& conf_thresh, int& FLAGS_K, int& FLAGS_R, CFilt& filter){
     switch (key){
         case 32:{  // space
             while(true) {
@@ -39,61 +40,70 @@ void parse_key(int key, bool& quit, bool& reset_id, std::vector<float>& conf_thr
         }
         case 50: {  // 2
             conf_thresh.at(0) += 0.1;
-            clip(conf_thresh.at(0), 0.0, 1.0);
+            clip(conf_thresh.at(0), 0.001, 1.0);
             std::cout << "conf_thresh: " << conf_thresh << std::endl;
             break;
         }
         case 49: {  // 1
             conf_thresh.at(0) -= 0.1;
-            clip(conf_thresh.at(0), 0.0, 1.0);
+            clip(conf_thresh.at(0), 0.001, 1.0);
             std::cout << "conf_thresh: " << conf_thresh << std::endl;
             break;
         }
-        case 87:{}
         case 119: {  // w
             conf_thresh.at(1) += 0.1;
-            clip(conf_thresh.at(1), 0.0, 1.0);
+            clip(conf_thresh.at(1), 0.001, 1.0);
             std::cout << "conf_thresh: " << conf_thresh << std::endl;
             break;
         }
-        case 81:{}
         case 113: {  // q
             conf_thresh.at(1) -= 0.1;
-            clip(conf_thresh.at(1), 0.0, 1.0);
+            clip(conf_thresh.at(1), 0.001, 1.0);
             std::cout << "conf_thresh: " << conf_thresh << std::endl;
             break;
         }
-        case 83:{}
         case 115: {  // s
             conf_thresh.at(2) += 0.1;
-            clip(conf_thresh.at(2), 0.0, 1.0);
+            clip(conf_thresh.at(2), 0.001, 1.0);
             std::cout << "conf_thresh: " << conf_thresh << std::endl;
             break;
         }
-        case 65:{}
         case 97: {  // a
             conf_thresh.at(2) -= 0.1;
-            clip(conf_thresh.at(2), 0.0, 1.0);
+            clip(conf_thresh.at(2), 0.001, 1.0);
             std::cout << "conf_thresh: " << conf_thresh << std::endl;
             break;
         }
-        case 88:
         case 120: {  // x
             conf_thresh.at(3) += 0.1;
-            clip(conf_thresh.at(3), 0.0, 1.0);
+            clip(conf_thresh.at(3), 0.001, 1.0);
             std::cout << "conf_thresh: " << conf_thresh << std::endl;
             break;
         }
-        case 90:
         case 122: {  // z
             conf_thresh.at(3) -= 0.1;
-            clip(conf_thresh.at(3), 0.0, 1.0);
+            clip(conf_thresh.at(3), 0.001, 1.0);
             std::cout << "conf_thresh: " << conf_thresh << std::endl;
             break;
         }
-
-
-
+        case 107: {  // k
+            FLAGS_K += 10;
+            clip(FLAGS_K, 0, 300);
+            filter.get_wf(FLAGS_K, FLAGS_R);
+            std::cout << "K: " << FLAGS_K << std::endl;
+            break;
+        }
+        case 108: {  // k
+            FLAGS_K -= 10;
+            clip(FLAGS_K, 0, 300);
+            filter.get_wf(FLAGS_K, FLAGS_R);
+            std::cout << "K: " << FLAGS_K << std::endl;
+            break;
+        }
+        case 114: {  // r
+            reset_id = true;
+            break;
+        }
     }
 
 
