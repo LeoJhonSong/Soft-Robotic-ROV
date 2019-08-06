@@ -29,12 +29,15 @@ private:
 //    unsigned feature_size;
     std::vector<cv::Scalar> color{cv::Scalar(255,0,0), cv::Scalar(0, 255,255), cv::Scalar(0,0,255), cv::Scalar(255,0,255)};
 public:
+    Detector(){};
     Detector(unsigned int, int, float, unsigned char, int);
+    void init_detector(unsigned int, int, float, unsigned char, int);
     void log_params();
 //    torch::Tensor detect(const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
 //            std::vector<float>, float, bool);
     void detect(const torch::Tensor&, const torch::Tensor&, std::vector<float>);
     void detect(const torch::Tensor&, const torch::Tensor&, std::vector<float>, float, bool);
+    void visual_detect(const torch::Tensor&, const torch::Tensor&, std::vector<float>, float, bool, cv::Mat&, cv::VideoWriter&);
     std::tuple<torch::Tensor, int> nms(const torch::Tensor&, const torch::Tensor&);
     torch::Tensor iou(const torch::Tensor&, unsigned char);
     void visualization(cv::Mat&, cv::VideoWriter&);

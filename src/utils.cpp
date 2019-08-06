@@ -5,17 +5,12 @@
 #include <utils.h>
 
 
-cv::Mat tensor2im(torch::Tensor tensor, std::vector<int> vis_size) {
-    tensor = torch::upsample_bilinear2d(tensor, {vis_size.at(1), vis_size.at(0)}, true);
-//    tensor = tensor[0].add(128.0).permute({1,2,0}).to(torch::kU8).to(torch::kCPU);
+cv::Mat tensor2im(torch::Tensor tensor) {
     tensor = tensor[0].add(1.0).div(2.0).mul(255.0).permute({1,2,0}).to(torch::kU8).to(torch::kCPU);
     cv::Mat img(tensor.size(0), tensor.size(1), CV_8UC3);
     std::memcpy((void*)img.data, tensor.data_ptr(), sizeof(torch::kU8)*tensor.numel());
-    cv::cvtColor(img, img, cv::COLOR_RGB2BGR);
-//    cv::resize(img, img, vis_size);
     return img;
 }
-
 
 void clip(float& n, float lower, float upper) {
     n = std::max(lower, std::min(n, upper));
@@ -105,8 +100,6 @@ void parse_key(int key, bool& quit, bool& reset_id, std::vector<float>& conf_thr
             break;
         }
     }
-
-
 //    elif key == 50: #2
 //    conf_list[0] = np.around(np.clip(conf_list[0] + 0.1, 0., 1.), 1)
 //    elif key == 49: #1
@@ -131,3 +124,5 @@ void parse_key(int key, bool& quit, bool& reset_id, std::vector<float>& conf_thr
 //    max_id = [torch.tensor(0.),]*len(UW_CLASSES)
 //    reset_id = True
 }
+
+std::vector<cv::Scalar> color{cv::Scalar(255,0,0), cv::Scalar(0, 255,255), cv::Scalar(0,0,255), cv::Scalar(255,0,255)};

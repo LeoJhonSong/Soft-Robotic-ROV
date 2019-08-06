@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 #include <gflags/gflags.h>
+#include <thread>
 
 DEFINE_int32(K, 100, "turbulence intensity. The greater, the intensive");
 DEFINE_int32(R, 40, "Signal to Noise Ratio. The greater, the more serious of noise");
@@ -29,21 +30,90 @@ DEFINE_uint32(TUB, 0, "" );
 DEFINE_int32(MODE, -1, "-1: load video; >0 load camera" );
 DEFINE_int32(UART, 0, "-1: not use it; >0 use it" );
 
-int main(int argc, char* argv[]) {
-    gflags::ParseCommandLineFlags(&argc, &argv, true);
+char EXT[] = "MJPG";
+int ex1 = EXT[0] | (EXT[1] << 8) | (EXT[2] << 16) | (EXT[3] << 24);
+time_t now = time(nullptr);
+tm *ltm = localtime(&now);
+std::string video_name = "./record/" + std::to_string(1900 + ltm->tm_year) + "_" + std::to_string(1+ltm->tm_mon)+ "_" + std::to_string(ltm->tm_mday)
+                         + "_" + std::to_string(ltm->tm_hour) + "_" + std::to_string(ltm->tm_min) + "_" + std::to_string(ltm->tm_sec);
+std::queue<cv::Mat> frame_queue;
+int frame_w, frame_h;
+bool raw_write_flag = true;
+void raw_write(){
+    cv::VideoWriter writer_raw;
+    writer_raw.open(video_name+"_raw.mp4", ex1, 20, cv::Size(frame_w, frame_h), true);
+    if(!writer_raw.isOpened()){
+        std::cout << "Can not open the output video for raw write" << std::endl;
+    }
+    while(raw_write_flag) {
+        if (!frame_queue.empty()) {
+            writer_raw << frame_queue.front();
+            frame_queue.pop();
+        }
+    }
+    std::cout << "raw_write thread qiut" << std::endl;
+    writer_raw.release();
+}
 
+std::queue<cv::Mat> processed_frame;
+std::queue<std::tuple<cv::Mat, torch::Tensor, torch::Tensor>> from_net;
+bool run_net_flag = true;
+unsigned char loc_idex = 0;
+void run_net() {
     // load models
     torch::NoGradGuard no_grad_guard;
     std::string model_path;
 
-    if(FLAGS_NET_PHASE==1) model_path = "./models/netG.pt";
-    else if(FLAGS_NET_PHASE==2) model_path = "./models/G_SSD_320.pt";
-    else if(FLAGS_SSD_DIM==512) model_path = "./models/SSD512_wof.pt";
+    if (FLAGS_NET_PHASE == 1) model_path = "./models/netG.pt";
+    else if (FLAGS_NET_PHASE == 2) model_path = "./models/G_SSD_320.pt";
+    else if (FLAGS_SSD_DIM == 512) model_path = "./models/SSD512_wof.pt";
     else model_path = "./models/SSD320_wof.pt";
 
     std::shared_ptr<torch::jit::script::Module> net = torch::jit::load(model_path);
     net->to(at::kCUDA);
+    cv::Mat img_float, img_vis;
+    torch::Tensor img_tensor, fake_B, loc, conf;
+    std::vector<torch::jit::IValue> net_input, net_output;
+    while (run_net_flag) {
+        if (!processed_frame.empty()) {
+            if (FLAGS_NET_PHASE > 0) {
+                if (FLAGS_NET_PHASE < 3) {
+                    cv::normalize(processed_frame.front(), img_float, -1, 1, cv::NORM_MINMAX, CV_32F);
+                } else if (FLAGS_NET_PHASE == 3) {
+                    processed_frame.front().convertTo(img_float, CV_32F);
+                    img_float = img_float - 128.0;
+                }
+                img_tensor = torch::from_blob(img_float.data, {1, FLAGS_SSD_DIM, FLAGS_SSD_DIM, 3}).to(torch::kCUDA);
+                img_tensor = img_tensor.permute({0, 3, 1, 2});
+                net_input.emplace_back(img_tensor);
+                if (FLAGS_NET_PHASE == 1) {
+                    fake_B = net->forward(net_input).toTensor();
+                    loc_idex = 1;
+                    cudaDeviceSynchronize();
+                } else if (FLAGS_NET_PHASE > 1) {
+                    net_output = net->forward(net_input).toTuple()->elements();
+                    cudaDeviceSynchronize();
+                    if (FLAGS_NET_PHASE == 2) {
+                        fake_B = net_output.at(0).toTensor();
+                        loc_idex = 1;
+                    } else if (FLAGS_NET_PHASE == 3) loc_idex = 0;
+                    loc = net_output.at(loc_idex).toTensor().to(torch::kCPU);
+                    conf = net_output.at(loc_idex + 1).toTensor().to(torch::kCPU);
+                }
+                if (loc_idex==1) img_vis = tensor2im(fake_B);
+                else img_vis = processed_frame.front();
+                net_input.pop_back();
+                from_net.push(std::tuple<cv::Mat, torch::Tensor, torch::Tensor>{img_vis, loc, conf});
+            }
+            processed_frame.pop();
+        }
+    }
+    std::cout << "run_net thread qiut" << std::endl;
+}
 
+int main(int argc, char* argv[]) {
+    gflags::ParseCommandLineFlags(&argc, &argv, true);
+    
     // load detector
     unsigned int num_classes = 5;
     int top_k = 200;
@@ -67,27 +137,19 @@ int main(int argc, char* argv[]) {
     }
     else if(FLAGS_MODE == -2) capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
     else capture.open(FLAGS_MODE);
-    int fram_w = (int)capture.get(CV_CAP_PROP_FRAME_WIDTH);
-    int fram_h = (int)capture.get(CV_CAP_PROP_FRAME_HEIGHT);
-    std::vector<int> vis_size{640, 360};
+    frame_w = (int)capture.get(CV_CAP_PROP_FRAME_WIDTH);
+    frame_h = (int)capture.get(CV_CAP_PROP_FRAME_HEIGHT);
+    std::vector<int> vis_size{1280, 720};
 
     //out video
-    char EXT[] = "MJPG";
-    int ex1 = EXT[0] | (EXT[1] << 8) | (EXT[2] << 16) | (EXT[3] << 24);
-    time_t now = time(nullptr);
-    tm *ltm = localtime(&now);
-    std::string video_name = "./record/" + std::to_string(1900 + ltm->tm_year) + "_" + std::to_string(1+ltm->tm_mon)+ "_" + std::to_string(ltm->tm_mday)
-            + "_" + std::to_string(ltm->tm_hour) + "_" + std::to_string(ltm->tm_min) + "_" + std::to_string(ltm->tm_sec);
     cv::VideoWriter writer;
     writer.open(video_name + ".mp4", ex1, 20, cv::Size(vis_size.at(0), vis_size.at(1)), true);
     if(!writer.isOpened()){
         std::cout << "Can not open the output video for write" << std::endl;
     }
-    cv::VideoWriter writer_raw;
-    writer_raw.open(video_name+"_raw.mp4", ex1, 20, cv::Size(fram_w, fram_h), true);
-    if(!writer_raw.isOpened()){
-        std::cout << "Can not open the output video for raw write" << std::endl;
-    }
+    std::thread raw_writer(raw_write);
+    std::thread net_runner(run_net);
+
 
     // intermediate variable
     cv::Mat frame, img_float, img_vis;
@@ -106,68 +168,30 @@ int main(int argc, char* argv[]) {
         if (!uart_init_flag)
             std::cout << "UART fails to be inited " << std::endl;
     }
-    unsigned char loc_idex = 0;
     bool quit = false;
     while(capture.isOpened() && !quit){
         capture.read(frame);
-        writer_raw << frame;
-//        clock_t t1 = clock();
+        frame_queue.push(frame);
         cv::resize(frame, frame, cv::Size(FLAGS_SSD_DIM, FLAGS_SSD_DIM));
         if(FLAGS_RUAS == 1){
             filter.clahe_gpu(frame);
         }else if(FLAGS_RUAS == 2){
             filter.wiener_gpu(frame);
         }
-//        cv::imshow("test", frame);
-//        cv::waitKey(1);
         cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
-//        clock_t t6 = clock();
+        processed_frame.push(frame);
+        if (processed_frame.size()>=5) processed_frame.pop();
 
-        if(FLAGS_NET_PHASE>0) {
-            if (FLAGS_NET_PHASE < 3 ) {
-                cv::normalize(frame, img_float, -1, 1, cv::NORM_MINMAX, CV_32F);
-            } else if (FLAGS_NET_PHASE == 3) {
-                frame.convertTo(img_float, CV_32F);
-                img_float = img_float - 128.0;
-            }
-            img_tensor = torch::from_blob(img_float.data, {1, FLAGS_SSD_DIM, FLAGS_SSD_DIM, 3}).to(torch::kCUDA);
-            img_tensor = img_tensor.permute({0, 3, 1, 2});
-//            clock_t t5 = clock();
-            net_input.emplace_back(img_tensor);
-            if(FLAGS_NET_PHASE == 1) {
-                fake_B = net->forward(net_input).toTensor();
-                loc_idex = 1;
-                cudaDeviceSynchronize();
-            }else if(FLAGS_NET_PHASE > 1) {
-                net_output = net->forward(net_input).toTuple()->elements();
-                cudaDeviceSynchronize();
-                if (FLAGS_NET_PHASE == 2) {
-                    fake_B = net_output.at(0).toTensor();
-                    loc_idex = 1;
-                } else if (FLAGS_NET_PHASE == 3) loc_idex = 0;
-                loc = net_output.at(loc_idex).toTensor().to(torch::kCPU);
-                conf = net_output.at(loc_idex + 1).toTensor().to(torch::kCPU);
-//                ota_feature = net_output.at(loc_idex + 2).toTensor().to(torch::kCPU);
-            }
-            net_input.pop_back();
-//            clock_t t3 = clock();
-            if(FLAGS_TUB==0) Detect.detect(loc, conf, conf_thresh);
-            else Detect.detect(loc, conf, conf_thresh, tub_thresh, reset_id);
-            if(reset_id) reset_id = false;
-//            clock_t t4 = clock();
-//            std::cout << "net: " << (t3 - t5) * 1.0 / CLOCKS_PER_SEC * 1000
-//            << ", det: " << (t4 - t3) * 1.0 / CLOCKS_PER_SEC * 1000 << std::endl;
-        }
-        if(loc_idex == 1) img_vis = tensor2im(fake_B, vis_size);
-        else {
-            cv::cvtColor(frame, img_vis, cv::COLOR_BGR2RGB);
+        if (!from_net.empty()) {
+            cv::cvtColor(std::get<0>(from_net.front()), img_vis, cv::COLOR_BGR2RGB);
             cv::resize(img_vis, img_vis, cv::Size(vis_size.at(0), vis_size.at(1)));
+
+            Detect.visual_detect(std::get<1>(from_net.front()), std::get<2>(from_net.front()), conf_thresh, tub_thresh, reset_id, img_vis, writer);
+            if (reset_id) reset_id = false;
+            if (FLAGS_UART > 0)
+                Detect.uart_send(FLAGS_UART, uart);
+            from_net.pop();
         }
-//        clock_t t2 = clock();
-        Detect.visualization(img_vis, writer);
-//        clock_t t7 = clock();
-        if(FLAGS_UART > 0)
-            Detect.uart_send(FLAGS_UART, uart);
         int key = cv::waitKey(1);
         parse_key(key, quit, reset_id, conf_thresh, FLAGS_K, FLAGS_R, filter);
 //        std::cout << "total: " << (t2 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
@@ -176,6 +200,10 @@ int main(int argc, char* argv[]) {
     }
     uart.closeFile();
     writer.release();
-    writer_raw.release();
+    raw_write_flag = false;
+    raw_writer.join();
+    run_net_flag = false;
+    net_runner.join();
+    writer.release();
     return 0;
 }

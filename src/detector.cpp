@@ -19,6 +19,20 @@ Detector::Detector(unsigned int num_classes, int top_k,
     this->log_params();
 }
 
+void Detector::init_detector(unsigned int num_classes_, int top_k_, float nms_thresh_, unsigned char tub_, int ssd_dim_){
+    this->num_classes = num_classes_;
+    this->top_k = top_k_;
+    this->nms_thresh = nms_thresh_;
+    this->tub = tub_;
+    this->ssd_dim = ssd_dim_;
+    if(this->tub > 0) {
+        this->init_tubelets();
+        this->hold_len = 10;
+    }
+    this->output = torch::zeros({1, this->num_classes, this->top_k, 6}, torch::kFloat);
+    this->log_params();
+}
+
 void Detector::log_params(){
     std::cout << "num_classes: " << num_classes << std::endl;
     std::cout << "top_k: " << top_k << std::endl;
@@ -48,6 +62,7 @@ void Detector::detect(const torch::Tensor& loc, const torch::Tensor& conf, std::
         torch::Tensor identity = torch::ones({count}).fill_(-1);
         this->output[0][cl].slice(0, 0, count) = torch::cat({nms_score.unsqueeze(1), nms_box, identity.unsqueeze(1)}, 1);
     }
+//    return this->output;
 }
 
 void Detector::detect(const torch::Tensor& loc, const torch::Tensor& conf, std::vector<float> conf_thresh, float tub_thresh, bool reset){
@@ -112,6 +127,7 @@ void Detector::detect(const torch::Tensor& loc, const torch::Tensor& conf, std::
         }
         this->delete_tubelets(cl);
     }
+//    return this->output;
 }
 
 std::tuple<torch::Tensor, int> Detector::nms(const torch::Tensor& boxes, const torch::Tensor& scores){
@@ -209,6 +225,7 @@ void Detector::visualization(cv::Mat& img, cv::VideoWriter& writer){
     writer << img;
 }
 
+
 void Detector::init_tubelets(){
     for(unsigned char i=0; i<num_classes; i++) {
         this->tubelets.emplace_back(std::map<int, std::pair<torch::Tensor, int>>{});
@@ -245,4 +262,9 @@ void Detector::uart_send(unsigned char cls, Uart& uart){
     send_list.push_back((char)(dets[4].item<float>()*100));
     send_list.push_back(127);
     uart.send(send_list);
+}
+
+void Detector::visual_detect(const torch::Tensor& loc, const torch::Tensor& conf, std::vector<float> conf_thresh, float tub_thresh, bool reset, cv::Mat& img, cv::VideoWriter& writer){
+    this->detect(loc, conf, conf_thresh, tub_thresh, reset);
+    this->visualization(img, writer);
 }
