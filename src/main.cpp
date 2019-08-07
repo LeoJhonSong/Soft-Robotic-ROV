@@ -39,21 +39,9 @@ std::string video_name = "./record/" + std::to_string(1900 + ltm->tm_year) + "_"
 std::queue<cv::Mat> frame_queue;
 int frame_w, frame_h;
 bool raw_write_flag = true;
-void raw_write(){
-    cv::VideoWriter writer_raw;
-    writer_raw.open(video_name+"_raw.mp4", ex1, 20, cv::Size(frame_w, frame_h), true);
-    if(!writer_raw.isOpened()){
-        std::cout << "Can not open the output video for raw write" << std::endl;
-    }
-    while(raw_write_flag) {
-        if (!frame_queue.empty()) {
-            writer_raw << frame_queue.front();
-            frame_queue.pop();
-        }
-    }
-    std::cout << "raw_write thread qiut" << std::endl;
-    writer_raw.release();
-}
+
+int key;
+bool run_rov_flag = true;
 
 
 int main(int argc, char* argv[]) {
@@ -90,7 +78,7 @@ int main(int argc, char* argv[]) {
     cv::VideoCapture capture;
     if(FLAGS_MODE == -1){
         capture.open("/home/sean/data/UWdevkit/snippets/echinus.mp4");
-//        capture.set(CV_CAP_PROP_POS_FRAMES, 200);
+        capture.set(CV_CAP_PROP_POS_FRAMES, 200);
     }
     else if(FLAGS_MODE == -2) capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
     else capture.open(FLAGS_MODE);
@@ -176,7 +164,8 @@ int main(int argc, char* argv[]) {
         if (reset_id) reset_id = false;
         if (FLAGS_UART > 0)
             Detect.uart_send(FLAGS_UART, uart);
-        int key = cv::waitKey(1);
+        key = cv::waitKey(1);
+        std::cout << key << std::endl;
         parse_key(key, quit, reset_id, conf_thresh, FLAGS_K, FLAGS_R, filter);
 //        std::cout << "total: " << (t2 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
 //                  << ", ruas: " << (t6 - t1) * 1.0 / CLOCKS_PER_SEC * 1000

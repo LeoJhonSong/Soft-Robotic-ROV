@@ -199,3 +199,25 @@ void TCP_Server::sendMsg(int move)
     // response.erase(std::remove_if(response.begin(), response.end(), ::isspace), response.end());  // remove spaces
     auto bytes_sent = send(newFD, response.data(), response.length(), 0);
 }
+
+extern int key;
+extern bool run_rov_flag;
+
+void run_rov() {
+    while (run_rov_flag) {
+        switch (key) {
+            case 82: { // up
+
+            }
+            case 81: { // left
+
+            }
+            case 84: { // down
+
+            }
+            case 83: { // right
+
+            }
+        }
+    }
+}

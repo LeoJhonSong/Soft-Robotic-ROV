@@ -124,3 +124,24 @@ void parse_key(int key, bool& quit, bool& reset_id, std::vector<float>& conf_thr
 //    max_id = [torch.tensor(0.),]*len(UW_CLASSES)
 //    reset_id = True
 }
+
+extern std::string video_name;
+extern int frame_w, frame_h, ex1;
+extern bool raw_write_flag;
+extern std::queue<cv::Mat> frame_queue;
+
+void raw_write(){
+    cv::VideoWriter writer_raw;
+    writer_raw.open(video_name+"_raw.mp4", ex1, 20, cv::Size(frame_w, frame_h), true);
+    if(!writer_raw.isOpened()){
+        std::cout << "Can not open the output video for raw write" << std::endl;
+    }
+    while(raw_write_flag) {
+        if (!frame_queue.empty()) {
+            writer_raw << frame_queue.front();
+            frame_queue.pop();
+        }
+    }
+    std::cout << "raw_write thread qiut" << std::endl;
+    writer_raw.release();
+}
