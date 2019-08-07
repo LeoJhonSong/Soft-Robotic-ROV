@@ -6,6 +6,6 @@
 --MODE -1 \
 --SSD_DIM 320 \
 --NETG_DIM 256 \
---TUB 1 \
+--TUB 0 \
 --UART 0 \
 --WITH_ROV 0

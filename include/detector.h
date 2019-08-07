@@ -21,8 +21,8 @@ private:
     unsigned int tub;
     int ssd_dim;
     torch::Tensor output;
-    std::vector<std::map<int, std::pair<torch::Tensor, int>>> tubelets;
-    std::vector<std::vector<int>> ides;
+    std::vector<std::map<int, std::tuple<torch::Tensor, int, int>>> tubelets;
+    std::vector<std::vector<std::pair<int, int>>> ides;
     std::vector<std::set<int>> ides_set;
     torch::Tensor history_max_ides;
     unsigned int hold_len;

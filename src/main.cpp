@@ -126,8 +126,8 @@ int main(int argc, char* argv[]) {
     // load video
     cv::VideoCapture capture;
     if(FLAGS_MODE == -1){
-        capture.open("/home/sean/data/UWdevkit/snippets/2.MP4");
-        capture.set(CV_CAP_PROP_POS_FRAMES, 200);
+        capture.open("/home/sean/data/UWdevkit/snippets/echinus.mp4");
+//        capture.set(CV_CAP_PROP_POS_FRAMES, 200);
     }
     else if(FLAGS_MODE == -2) capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
     else capture.open(FLAGS_MODE);
