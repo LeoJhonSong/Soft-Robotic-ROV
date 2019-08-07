@@ -199,3 +199,47 @@ void TCP_Server::sendMsg(int move)
     // response.erase(std::remove_if(response.begin(), response.end(), ::isspace), response.end());  // remove spaces
     auto bytes_sent = send(newFD, response.data(), response.length(), 0);
 }
+
+extern bool run_rov_flag;
+extern int rov_key;
+TCP_Server server;
+void run_rov(){
+    while(run_rov_flag) {
+        std::cout << "run_rov: try to recive" << std:: endl;
+        server.recvMsg();
+        std::cout << "run_rov: recived" << std:: endl;
+        switch (rov_key) {
+            case 82: // up
+                server.sendMsg(8);
+                sleep(1);
+                server.sendMsg(16);
+                break;
+            case 81: // left
+                server.sendMsg(10);
+                sleep(1);
+                server.sendMsg(16);
+                break;
+            case 84: // down
+                server.sendMsg(9);
+                sleep(1);
+                server.sendMsg(16);
+                break;
+            case 83: // right
+                server.sendMsg(11);
+                sleep(1);
+                server.sendMsg(16);
+                break;
+            case 44: // ,
+                server.sendMsg(15);
+                sleep(1);
+                server.sendMsg(16);
+                break;
+            case 46: // .
+                server.sendMsg(14);
+                sleep(1);
+                server.sendMsg(16);
+                break;
+        }
+    }
+    std::cout << "run_rov quit" << std::endl;
+}

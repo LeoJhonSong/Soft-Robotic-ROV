@@ -77,4 +77,5 @@ class TCP_Server {
         socklen_t client_addr_size = sizeof(client_addr);
 };
 
+void run_rov();
 #endif //TCP_SERVER_TCP_SERVER_H

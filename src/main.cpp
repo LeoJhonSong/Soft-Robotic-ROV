@@ -1,10 +1,11 @@
 //
 // Created by sean on 7/11/19.
 //
-#include <utils.h>
-#include <detector.h>
-#include <uart.h>
-#include <ruas.h>
+#include "utils.h"
+#include "detector.h"
+#include "uart.h"
+#include "ruas.h"
+#include "rov.h"
 
 #include <cuda_runtime.h>
 
@@ -20,7 +21,6 @@
 #include <vector>
 #include <gflags/gflags.h>
 #include <thread>
-#include <mutex>
 
 DEFINE_int32(K, 100, "turbulence intensity. The greater, the intensive");
 DEFINE_int32(R, 40, "Signal to Noise Ratio. The greater, the more serious of noise");
@@ -30,8 +30,7 @@ DEFINE_uint32(SSD_DIM, 320, "" );
 DEFINE_uint32(TUB, 0, "" );
 DEFINE_int32(MODE, -1, "-1: load video; >0 load camera" );
 DEFINE_int32(UART, 0, "-1: not use it; >0 use it" );
-
-std::mutex g_mutex;
+DEFINE_int32(WITH_ROV, 0, "0: not use it; >0 use it" );
 
 char EXT[] = "MJPG";
 int ex1 = EXT[0] | (EXT[1] << 8) | (EXT[2] << 16) | (EXT[3] << 24);
@@ -39,25 +38,17 @@ time_t now = time(nullptr);
 tm *ltm = localtime(&now);
 std::string video_name = "./record/" + std::to_string(1900 + ltm->tm_year) + "_" + std::to_string(1+ltm->tm_mon)+ "_" + std::to_string(ltm->tm_mday)
                          + "_" + std::to_string(ltm->tm_hour) + "_" + std::to_string(ltm->tm_min) + "_" + std::to_string(ltm->tm_sec);
+
+// run_rov thread
+bool run_rov_flag = true;
+int rov_key;
+
+// raw_write thread
 std::queue<cv::Mat> frame_queue;
 int frame_w, frame_h;
 bool raw_write_flag = true;
-void raw_write(){
-    cv::VideoWriter writer_raw;
-    writer_raw.open(video_name+"_raw.mp4", ex1, 20, cv::Size(frame_w, frame_h), true);
-    if(!writer_raw.isOpened()){
-        std::cout << "Can not open the output video for raw write" << std::endl;
-    }
-    while(raw_write_flag) {
-        if (!frame_queue.empty()) {
-            writer_raw << frame_queue.front();
-            frame_queue.pop();
-        }
-    }
-    std::cout << "raw_write thread qiut" << std::endl;
-    writer_raw.release();
-}
 
+// run_net thread
 std::queue<cv::Mat> processed_frame;
 std::queue<std::tuple<cv::Mat, torch::Tensor, torch::Tensor>> from_net;
 bool run_net_flag = true;
@@ -78,42 +69,35 @@ void run_net() {
     torch::Tensor img_tensor, fake_B, loc, conf;
     std::vector<torch::jit::IValue> net_input, net_output;
     while (run_net_flag) {
-        clock_t t1= clock();
         if (!processed_frame.empty()) {
-            if (FLAGS_NET_PHASE > 0) {
-                if (FLAGS_NET_PHASE < 3) {
-                    cv::normalize(processed_frame.front(), img_float, -1, 1, cv::NORM_MINMAX, CV_32F);
-                } else if (FLAGS_NET_PHASE == 3) {
-                    processed_frame.front().convertTo(img_float, CV_32F);
-                    img_float = img_float - 128.0;
-                }
-                img_tensor = torch::from_blob(img_float.data, {1, FLAGS_SSD_DIM, FLAGS_SSD_DIM, 3}).to(torch::kCUDA);
-                img_tensor = img_tensor.permute({0, 3, 1, 2});
-                net_input.emplace_back(img_tensor);
-                if (FLAGS_NET_PHASE == 1) {
-                    fake_B = net->forward(net_input).toTensor();
-                    loc_idex = 1;
-                    cudaDeviceSynchronize();
-                } else if (FLAGS_NET_PHASE > 1) {
-                    net_output = net->forward(net_input).toTuple()->elements();
-                    cudaDeviceSynchronize();
-                    if (FLAGS_NET_PHASE == 2) {
-                        fake_B = net_output.at(0).toTensor();
-                        loc_idex = 1;
-                    } else if (FLAGS_NET_PHASE == 3) loc_idex = 0;
-                    loc = net_output.at(loc_idex).toTensor().to(torch::kCPU);
-                    conf = net_output.at(loc_idex + 1).toTensor().to(torch::kCPU);
-                }
-                if (loc_idex==1) img_vis = tensor2im(fake_B);
-                else img_vis = processed_frame.front();
-                net_input.pop_back();
-                from_net.push(std::tuple<cv::Mat, torch::Tensor, torch::Tensor>{img_vis, loc, conf});
+            if (FLAGS_NET_PHASE < 3) {
+                cv::normalize(processed_frame.front(), img_float, -1, 1, cv::NORM_MINMAX, CV_32F);
+            } else if (FLAGS_NET_PHASE == 3) {
+                processed_frame.front().convertTo(img_float, CV_32F);
+                img_float = img_float - 128.0;
             }
-            clock_t t2= clock();
-            std::cout << "det, from_net size: " << processed_frame.size() << ", time: "<< (t2 - t1) * 1.0 / CLOCKS_PER_SEC * 1000 << std::endl;
-
+            img_tensor = torch::from_blob(img_float.data, {1, FLAGS_SSD_DIM, FLAGS_SSD_DIM, 3}).to(torch::kCUDA);
+            img_tensor = img_tensor.permute({0, 3, 1, 2});
+            net_input.emplace_back(img_tensor);
+            if (FLAGS_NET_PHASE == 1) {
+                fake_B = net->forward(net_input).toTensor();
+                loc_idex = 1;
+                cudaDeviceSynchronize();
+            } else if (FLAGS_NET_PHASE > 1) {
+                net_output = net->forward(net_input).toTuple()->elements();
+                cudaDeviceSynchronize();
+                if (FLAGS_NET_PHASE == 2) {
+                    fake_B = net_output.at(0).toTensor();
+                    loc_idex = 1;
+                } else if (FLAGS_NET_PHASE == 3) loc_idex = 0;
+                loc = net_output.at(loc_idex).toTensor().to(torch::kCPU);
+                conf = net_output.at(loc_idex + 1).toTensor().to(torch::kCPU);
+            }
+            if (loc_idex==1) img_vis = tensor2im(fake_B);
+            else img_vis = processed_frame.front();
+            net_input.pop_back();
+            from_net.push(std::tuple<cv::Mat, torch::Tensor, torch::Tensor>{img_vis, loc, conf});
             processed_frame.pop();
-
         }
     }
     std::cout << "run_net thread qiut" << std::endl;
@@ -155,8 +139,6 @@ int main(int argc, char* argv[]) {
     if(!writer.isOpened()){
         std::cout << "Can not open the output video for write" << std::endl;
     }
-    std::thread raw_writer(raw_write);
-    std::thread net_runner(run_net);
 
     // intermediate variable
     cv::Mat frame, img_float, img_vis;
@@ -175,9 +157,22 @@ int main(int argc, char* argv[]) {
         if (!uart_init_flag)
             std::cout << "UART fails to be inited " << std::endl;
     }
+
     bool quit = false;
     clock_t t_start= clock();
     unsigned int frame_num = 0;
+
+    // multi thread
+//    TCP_Server server;
+    if (FLAGS_NET_PHASE == 0)
+        run_net_flag = false;
+    std::thread net_runner(run_net);
+    if (FLAGS_WITH_ROV == 0)
+        run_rov_flag = false;
+    std::thread rov_runner(run_rov);
+    std::thread raw_writer(raw_write);
+
+
     while(capture.isOpened() && !quit){
         bool read_ret = capture.read(frame);
         if(!read_ret) break;
@@ -191,7 +186,7 @@ int main(int argc, char* argv[]) {
         }
         cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
         processed_frame.push(frame);
-        std::cout << "main, processed_frame size: " << processed_frame.size() << std::endl;
+//        std::cout << "main, processed_frame size: " << processed_frame.size() << std::endl;
         if (processed_frame.size()>=5) processed_frame.pop();
 
         if (!from_net.empty()) {
@@ -204,7 +199,15 @@ int main(int argc, char* argv[]) {
                 Detect.uart_send(FLAGS_UART, uart);
             from_net.pop();
         }
+        else if (FLAGS_NET_PHASE==0){
+            cv::cvtColor(frame.clone(), img_vis, cv::COLOR_BGR2RGB);
+            cv::resize(img_vis, img_vis, vis_size);
+            cv::imshow("ResDet", img_vis);
+            writer << img_vis;
+        }
         int key = cv::waitKey(1);
+        rov_key = key;
+//        std::cout << key << std::endl;
         parse_key(key, quit, reset_id, conf_thresh, FLAGS_K, FLAGS_R, filter);
 //        std::cout << "total: " << (t2 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
 //                  << ", ruas: " << (t6 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
@@ -219,6 +222,8 @@ int main(int argc, char* argv[]) {
     raw_writer.join();
     run_net_flag = false;
     net_runner.join();
+    run_rov_flag = false;
+    rov_runner.join();
     writer.release();
     return 0;
 }
