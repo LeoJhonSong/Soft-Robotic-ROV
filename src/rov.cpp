@@ -210,36 +210,40 @@ void run_rov(){
         std::cout << "run_rov: recived" << std:: endl;
         switch (rov_key) {
             case 82: // up
-                server.sendMsg(8);
+                server.sendMsg(SEND_HALF_FORWARD);
                 sleep(1);
-                server.sendMsg(16);
+                server.sendMsg(SEND_SLEEP);
                 break;
             case 81: // left
-                server.sendMsg(10);
+                server.sendMsg(SEND_HALF_LEFT);
                 sleep(1);
-                server.sendMsg(16);
+                server.sendMsg(SEND_SLEEP);
                 break;
             case 84: // down
-                server.sendMsg(9);
+                server.sendMsg(SEND_HALF_BACKWARD);
                 sleep(1);
-                server.sendMsg(16);
+                server.sendMsg(SEND_SLEEP);
                 break;
             case 83: // right
-                server.sendMsg(11);
+                server.sendMsg(SEND_HALF_RIGHT);
                 sleep(1);
-                server.sendMsg(16);
+                server.sendMsg(SEND_SLEEP);
                 break;
             case 44: // ,
-                server.sendMsg(15);
+                server.sendMsg(SEND_HALF_DOWN);
                 sleep(1);
-                server.sendMsg(16);
+                server.sendMsg(SEND_SLEEP);
                 break;
             case 46: // .
-                server.sendMsg(14);
+                server.sendMsg(SEND_HALF_UP);
                 sleep(1);
-                server.sendMsg(16);
+                server.sendMsg(SEND_SLEEP);
+                break;
+            default:
+                server.sendMsg(SEND_SLEEP);
                 break;
         }
+        rov_key = -1;
     }
     std::cout << "run_rov quit" << std::endl;
 }

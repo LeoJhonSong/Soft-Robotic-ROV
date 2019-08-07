@@ -95,7 +95,7 @@ extern bool raw_write_flag;
 extern std::string video_name;
 void raw_write(){
     cv::VideoWriter writer_raw;
-    writer_raw.open(video_name+"_raw.mp4", ex1, 20, cv::Size(frame_w, frame_h), true);
+    writer_raw.open(video_name+"_raw.mp4", ex1, 25, cv::Size(frame_w, frame_h), true);
     if(!writer_raw.isOpened()){
         std::cout << "Can not open the output video for raw write" << std::endl;
     }

@@ -13,7 +13,7 @@ Detector::Detector(unsigned int num_classes, int top_k,
     this->ssd_dim = ssd_dim;
     if(this->tub > 0) {
         this->init_tubelets();
-        this->hold_len = 10;
+        this->hold_len = 5;
     }
     this->output = torch::zeros({1, this->num_classes, this->top_k, 6}, torch::kFloat);
     this->log_params();
@@ -106,16 +106,16 @@ void Detector::detect(const torch::Tensor& loc, const torch::Tensor& conf, std::
         }
         for(unsigned int tc=0; tc<count; tc++){
             int curr_id = identity[tc].item<int>();
-            if(this->tubelets.at(cl).find(curr_id) == this->tubelets.at(cl).end()){
-                this->tubelets.at(cl)[curr_id] = std::pair<torch::Tensor, int>{nms_box[tc].unsqueeze(0), this->hold_len+1};
-            }else{
-                this->ides_set.at(cl).erase(curr_id);
-                torch::Tensor new_tube = torch::cat({nms_box[tc].unsqueeze(0), this->tubelets.at(cl)[curr_id].first}, 0);
-                if(new_tube.size(0) > this->tub)
-                    new_tube = new_tube.slice(0, 0, this->tub);
-                this->tubelets.at(cl)[curr_id] = std::pair<torch::Tensor, int>{new_tube, this->hold_len+1};
-                nms_box[tc] = new_tube.mean(0);
-            }
+//            if(this->tubelets.at(cl).find(curr_id) == this->tubelets.at(cl).end()){
+            this->tubelets.at(cl)[curr_id] = std::pair<torch::Tensor, int>{nms_box[tc].unsqueeze(0), this->hold_len+1};
+//            }else{
+//                this->ides_set.at(cl).erase(curr_id);
+//                torch::Tensor new_tube = torch::cat({nms_box[tc].unsqueeze(0), this->tubelets.at(cl)[curr_id].first}, 0);
+//                if(new_tube.size(0) > this->tub)
+//                    new_tube = new_tube.slice(0, 0, this->tub);
+//                this->tubelets.at(cl)[curr_id] = std::pair<torch::Tensor, int>{new_tube, this->hold_len+1};
+//                nms_box[tc] = new_tube.mean(0);
+//            }
         }
         this->output[0][cl].slice(0, 0, count) = torch::cat({nms_score.unsqueeze(1), nms_box, identity.unsqueeze(1)}, 1);
         int non_matched_size = 0;

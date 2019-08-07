@@ -27,6 +27,7 @@ DEFINE_int32(R, 40, "Signal to Noise Ratio. The greater, the more serious of noi
 DEFINE_uint32(RUAS, 0, "0: skip; 1: clahe; 2: wiener+clahe");
 DEFINE_uint32(NET_PHASE, 0, "0: skip; 1: netG; 2: netG+RefineDet; 3: RefineDet" );
 DEFINE_uint32(SSD_DIM, 320, "" );
+DEFINE_uint32(NETG_DIM, 320, "" );
 DEFINE_uint32(TUB, 0, "" );
 DEFINE_int32(MODE, -1, "-1: load video; >0 load camera" );
 DEFINE_int32(UART, 0, "-1: not use it; >0 use it" );
@@ -59,7 +60,7 @@ void run_net() {
     std::string model_path;
 
     if (FLAGS_NET_PHASE == 1) model_path = "./models/netG.pt";
-    else if (FLAGS_NET_PHASE == 2) model_path = "./models/G_SSD_320.pt";
+    else if (FLAGS_NET_PHASE == 2) model_path = "./models/Unet256_SSD320_wof.pt";
     else if (FLAGS_SSD_DIM == 512) model_path = "./models/SSD512_wof.pt";
     else model_path = "./models/SSD320_wof.pt";
 
@@ -76,7 +77,7 @@ void run_net() {
                 processed_frame.front().convertTo(img_float, CV_32F);
                 img_float = img_float - 128.0;
             }
-            img_tensor = torch::from_blob(img_float.data, {1, FLAGS_SSD_DIM, FLAGS_SSD_DIM, 3}).to(torch::kCUDA);
+            img_tensor = torch::from_blob(img_float.data, {1, FLAGS_NETG_DIM, FLAGS_NETG_DIM, 3}).to(torch::kCUDA);
             img_tensor = img_tensor.permute({0, 3, 1, 2});
             net_input.emplace_back(img_tensor);
             if (FLAGS_NET_PHASE == 1) {
@@ -99,6 +100,7 @@ void run_net() {
             from_net.push(std::tuple<cv::Mat, torch::Tensor, torch::Tensor>{img_vis, loc, conf});
             processed_frame.pop();
         }
+
     }
     std::cout << "run_net thread qiut" << std::endl;
 }
@@ -110,7 +112,7 @@ int main(int argc, char* argv[]) {
     unsigned int num_classes = 5;
     int top_k = 200;
     float nms_thresh = 0.3;
-    std::vector<float> conf_thresh = {0.3, 0.3, 0.3, 0.3};
+    std::vector<float> conf_thresh = {0.3, 0.3, 0.5, 0.5};
     float tub_thresh = 0.1;
     bool reset_id = false;
     Detector Detect(num_classes, top_k, nms_thresh, FLAGS_TUB, FLAGS_SSD_DIM);
@@ -124,18 +126,18 @@ int main(int argc, char* argv[]) {
     // load video
     cv::VideoCapture capture;
     if(FLAGS_MODE == -1){
-        capture.open("/home/sean/data/UWdevkit/snippets/echinus.mp4");
-//        capture.set(CV_CAP_PROP_POS_FRAMES, 200);
+        capture.open("/home/sean/data/UWdevkit/snippets/2.MP4");
+        capture.set(CV_CAP_PROP_POS_FRAMES, 200);
     }
     else if(FLAGS_MODE == -2) capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
     else capture.open(FLAGS_MODE);
     frame_w = (int)capture.get(CV_CAP_PROP_FRAME_WIDTH);
     frame_h = (int)capture.get(CV_CAP_PROP_FRAME_HEIGHT);
-    cv::Size vis_size(1280, 720);
+    cv::Size vis_size(640, 360);
 
     //out video
     cv::VideoWriter writer;
-    writer.open(video_name + ".mp4", ex1, 20, vis_size, true);
+    writer.open(video_name + ".mp4", ex1, 25, vis_size, true);
     if(!writer.isOpened()){
         std::cout << "Can not open the output video for write" << std::endl;
     }
@@ -161,9 +163,10 @@ int main(int argc, char* argv[]) {
     bool quit = false;
     clock_t t_start= clock();
     unsigned int frame_num = 0;
+    int wait_mm = 1;
+    if (FLAGS_TUB == 0 && FLAGS_MODE==-1) wait_mm = 10;
 
     // multi thread
-//    TCP_Server server;
     if (FLAGS_NET_PHASE == 0)
         run_net_flag = false;
     std::thread net_runner(run_net);
@@ -178,7 +181,7 @@ int main(int argc, char* argv[]) {
         if(!read_ret) break;
         frame_num ++;
         frame_queue.push(frame);
-        cv::resize(frame, frame, cv::Size(FLAGS_SSD_DIM, FLAGS_SSD_DIM));
+        cv::resize(frame, frame, cv::Size(FLAGS_NETG_DIM, FLAGS_NETG_DIM));
         if(FLAGS_RUAS == 1){
             filter.clahe_gpu(frame);
         }else if(FLAGS_RUAS == 2){
@@ -205,13 +208,14 @@ int main(int argc, char* argv[]) {
             cv::imshow("ResDet", img_vis);
             writer << img_vis;
         }
-        int key = cv::waitKey(1);
+        int key = cv::waitKey(wait_mm);
         rov_key = key;
 //        std::cout << key << std::endl;
         parse_key(key, quit, reset_id, conf_thresh, FLAGS_K, FLAGS_R, filter);
 //        std::cout << "total: " << (t2 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
 //                  << ", ruas: " << (t6 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
 //                  << ", vis: " << (t7 - t2) * 1.0 / CLOCKS_PER_SEC * 1000 << std::endl;
+
     }
     clock_t t_end= clock();
     std::cout << "frame amount: " << frame_num  << ", FPS: " << (double)frame_num / ((t_end - t_start) * 1.0 / CLOCKS_PER_SEC) << std::endl;
