@@ -20,6 +20,7 @@
 #include <vector>
 #include <gflags/gflags.h>
 #include <thread>
+#include <mutex>
 
 DEFINE_int32(K, 100, "turbulence intensity. The greater, the intensive");
 DEFINE_int32(R, 40, "Signal to Noise Ratio. The greater, the more serious of noise");
@@ -29,6 +30,8 @@ DEFINE_uint32(SSD_DIM, 320, "" );
 DEFINE_uint32(TUB, 0, "" );
 DEFINE_int32(MODE, -1, "-1: load video; >0 load camera" );
 DEFINE_int32(UART, 0, "-1: not use it; >0 use it" );
+
+std::mutex g_mutex;
 
 char EXT[] = "MJPG";
 int ex1 = EXT[0] | (EXT[1] << 8) | (EXT[2] << 16) | (EXT[3] << 24);
@@ -75,6 +78,7 @@ void run_net() {
     torch::Tensor img_tensor, fake_B, loc, conf;
     std::vector<torch::jit::IValue> net_input, net_output;
     while (run_net_flag) {
+        clock_t t1= clock();
         if (!processed_frame.empty()) {
             if (FLAGS_NET_PHASE > 0) {
                 if (FLAGS_NET_PHASE < 3) {
@@ -105,7 +109,11 @@ void run_net() {
                 net_input.pop_back();
                 from_net.push(std::tuple<cv::Mat, torch::Tensor, torch::Tensor>{img_vis, loc, conf});
             }
+            clock_t t2= clock();
+            std::cout << "det, from_net size: " << processed_frame.size() << ", time: "<< (t2 - t1) * 1.0 / CLOCKS_PER_SEC * 1000 << std::endl;
+
             processed_frame.pop();
+
         }
     }
     std::cout << "run_net thread qiut" << std::endl;
@@ -113,7 +121,7 @@ void run_net() {
 
 int main(int argc, char* argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
-    
+
     // load detector
     unsigned int num_classes = 5;
     int top_k = 200;
@@ -132,24 +140,23 @@ int main(int argc, char* argv[]) {
     // load video
     cv::VideoCapture capture;
     if(FLAGS_MODE == -1){
-        capture.open("/home/sean/data/UWdevkit/snippets/2.MP4");
-        capture.set(CV_CAP_PROP_POS_FRAMES, 200);
+        capture.open("/home/sean/data/UWdevkit/snippets/echinus.mp4");
+//        capture.set(CV_CAP_PROP_POS_FRAMES, 200);
     }
     else if(FLAGS_MODE == -2) capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
     else capture.open(FLAGS_MODE);
     frame_w = (int)capture.get(CV_CAP_PROP_FRAME_WIDTH);
     frame_h = (int)capture.get(CV_CAP_PROP_FRAME_HEIGHT);
-    std::vector<int> vis_size{1280, 720};
+    cv::Size vis_size(1280, 720);
 
     //out video
     cv::VideoWriter writer;
-    writer.open(video_name + ".mp4", ex1, 20, cv::Size(vis_size.at(0), vis_size.at(1)), true);
+    writer.open(video_name + ".mp4", ex1, 20, vis_size, true);
     if(!writer.isOpened()){
         std::cout << "Can not open the output video for write" << std::endl;
     }
     std::thread raw_writer(raw_write);
     std::thread net_runner(run_net);
-
 
     // intermediate variable
     cv::Mat frame, img_float, img_vis;
@@ -169,8 +176,12 @@ int main(int argc, char* argv[]) {
             std::cout << "UART fails to be inited " << std::endl;
     }
     bool quit = false;
+    clock_t t_start= clock();
+    unsigned int frame_num = 0;
     while(capture.isOpened() && !quit){
-        capture.read(frame);
+        bool read_ret = capture.read(frame);
+        if(!read_ret) break;
+        frame_num ++;
         frame_queue.push(frame);
         cv::resize(frame, frame, cv::Size(FLAGS_SSD_DIM, FLAGS_SSD_DIM));
         if(FLAGS_RUAS == 1){
@@ -180,11 +191,12 @@ int main(int argc, char* argv[]) {
         }
         cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
         processed_frame.push(frame);
+        std::cout << "main, processed_frame size: " << processed_frame.size() << std::endl;
         if (processed_frame.size()>=5) processed_frame.pop();
 
         if (!from_net.empty()) {
             cv::cvtColor(std::get<0>(from_net.front()), img_vis, cv::COLOR_BGR2RGB);
-            cv::resize(img_vis, img_vis, cv::Size(vis_size.at(0), vis_size.at(1)));
+            cv::resize(img_vis, img_vis, vis_size);
 
             Detect.visual_detect(std::get<1>(from_net.front()), std::get<2>(from_net.front()), conf_thresh, tub_thresh, reset_id, img_vis, writer);
             if (reset_id) reset_id = false;
@@ -198,6 +210,9 @@ int main(int argc, char* argv[]) {
 //                  << ", ruas: " << (t6 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
 //                  << ", vis: " << (t7 - t2) * 1.0 / CLOCKS_PER_SEC * 1000 << std::endl;
     }
+    clock_t t_end= clock();
+    std::cout << "frame amount: " << frame_num  << ", FPS: " << (double)frame_num / ((t_end - t_start) * 1.0 / CLOCKS_PER_SEC) << std::endl;
+
     uart.closeFile();
     writer.release();
     raw_write_flag = false;

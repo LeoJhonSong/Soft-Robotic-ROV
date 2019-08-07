@@ -210,17 +210,22 @@ void Detector::visualization(cv::Mat& img, cv::VideoWriter& writer){
             float ratio = (float)(x2-x1)*(float)(y2-y1)/(float)(img.cols*img.rows);
             if(ratio>0.2 || ratio<0.001) continue;
             cv::rectangle(img, cv::Point(x1, y1), cv::Point(x2, y2), this->color.at(j-1), 2, 1, 0);
-            if(ids[i].item<int>()>=0)
-                stream.str("");
-                stream << std::fixed << std::setprecision(2) << scores[i].item<float>();
-                cv::putText(img, std::to_string(ids[i].item<int>())+ ", " + stream.str()
-                        , cv::Point(x1, y1-5), 1, 1, this->color.at(j-1));
+            stream.str("");
+            stream << std::fixed << std::setprecision(2) << scores[i].item<float>();
+            cv::putText(img, std::to_string(ids[i].item<int>())+ ", " + stream.str()
+                    , cv::Point(x1, y1-5), 1, 1, this->color.at(j-1));
         }
     }
-    cv::putText(img, "trepang: "+std::to_string(this->history_max_ides[1].item<int>()+1) , cv::Point(10, 10), 1, 1, this->color.at(0), 2);
-    cv::putText(img, "urchin: "+std::to_string(this->history_max_ides[2].item<int>()+1) , cv::Point(10, 25), 1, 1, this->color.at(1), 2);
-    cv::putText(img, "shell: "+std::to_string(this->history_max_ides[3].item<int>()+1) , cv::Point(10, 40), 1, 1, this->color.at(2), 2);
-    cv::putText(img, "starfish: "+std::to_string(this->history_max_ides[4].item<int>()+1) , cv::Point(10, 55), 1, 1, this->color.at(3), 2);
+    if (this->tub > 0) {
+        cv::putText(img, "trepang: " + std::to_string(this->history_max_ides[1].item<int>() + 1), cv::Point(10, 10), 1,
+                    1, this->color.at(0), 2);
+        cv::putText(img, "urchin: " + std::to_string(this->history_max_ides[2].item<int>() + 1), cv::Point(10, 25), 1,
+                    1, this->color.at(1), 2);
+        cv::putText(img, "shell: " + std::to_string(this->history_max_ides[3].item<int>() + 1), cv::Point(10, 40), 1, 1,
+                    this->color.at(2), 2);
+        cv::putText(img, "starfish: " + std::to_string(this->history_max_ides[4].item<int>() + 1), cv::Point(10, 55), 1,
+                    1, this->color.at(3), 2);
+    }
     cv::imshow("ResDet", img);
     writer << img;
 }
@@ -265,6 +270,8 @@ void Detector::uart_send(unsigned char cls, Uart& uart){
 }
 
 void Detector::visual_detect(const torch::Tensor& loc, const torch::Tensor& conf, std::vector<float> conf_thresh, float tub_thresh, bool reset, cv::Mat& img, cv::VideoWriter& writer){
-    this->detect(loc, conf, conf_thresh, tub_thresh, reset);
+    if(this->tub>0)
+        this->detect(loc, conf, conf_thresh, tub_thresh, reset);
+    else this->detect(loc, conf, conf_thresh);
     this->visualization(img, writer);
 }

@@ -124,5 +124,3 @@ void parse_key(int key, bool& quit, bool& reset_id, std::vector<float>& conf_thr
 //    max_id = [torch.tensor(0.),]*len(UW_CLASSES)
 //    reset_id = True
 }
-
-std::vector<cv::Scalar> color{cv::Scalar(255,0,0), cv::Scalar(0, 255,255), cv::Scalar(0,0,255), cv::Scalar(255,0,255)};

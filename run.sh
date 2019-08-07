@@ -5,5 +5,5 @@
 --NET_PHASE 3 \
 --MODE 0 \
 --SSD_DIM 320 \
---TUB 5 \
+--TUB 0 \
 --UART 0

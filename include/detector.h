@@ -27,7 +27,7 @@ private:
     torch::Tensor history_max_ides;
     unsigned int hold_len;
 //    unsigned feature_size;
-    std::vector<cv::Scalar> color{cv::Scalar(255,0,0), cv::Scalar(0, 255,255), cv::Scalar(0,0,255), cv::Scalar(255,0,255)};
+    std::vector<cv::Scalar> color{cv::Scalar(255,255,0), cv::Scalar(0, 255,255), cv::Scalar(0,0,255), cv::Scalar(255,0,255)};
 public:
     Detector(){};
     Detector(unsigned int, int, float, unsigned char, int);
