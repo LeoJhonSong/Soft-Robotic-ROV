@@ -21,6 +21,8 @@
 #include <vector>
 #include <gflags/gflags.h>
 #include <thread>
+#include "glog/logging.h"
+#include "glog/raw_logging.h"
 
 DEFINE_int32(K, 100, "turbulence intensity. The greater, the intensive");
 DEFINE_int32(R, 40, "Signal to Noise Ratio. The greater, the more serious of noise");
@@ -40,9 +42,14 @@ tm *ltm = localtime(&now);
 std::string video_name = "./record/" + std::to_string(1900 + ltm->tm_year) + "_" + std::to_string(1+ltm->tm_mon)+ "_" + std::to_string(ltm->tm_mday)
                          + "_" + std::to_string(ltm->tm_hour) + "_" + std::to_string(ltm->tm_min) + "_" + std::to_string(ltm->tm_sec);
 
+
 // run_rov thread
 bool run_rov_flag = true;
 int rov_key;
+bool rov_half_speed = true;
+bool land = false;
+int send_byte = 0;
+bool dive_ready = true;
 
 // raw_write thread
 std::queue<cv::Mat> frame_queue;
@@ -107,6 +114,12 @@ void run_net() {
 
 int main(int argc, char* argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
+    // log
+//    FLAGS_log_dir=".";
+//    FLAGS_logtostderr = 1;
+//    google::InitGoogleLogging("test");
+//    LOG(INFO) << "Hello, World!";
+
 
     // load detector
     unsigned int num_classes = 5;
@@ -165,6 +178,8 @@ int main(int argc, char* argv[]) {
     unsigned int frame_num = 0;
     int wait_mm = 1;
     if (FLAGS_TUB == 0 && FLAGS_MODE==-1) wait_mm = 10;
+    bool auto_rov = false;
+    clock_t t_send;
 
     // multi thread
     if (FLAGS_NET_PHASE == 0)
@@ -174,7 +189,7 @@ int main(int argc, char* argv[]) {
         run_rov_flag = false;
     std::thread rov_runner(run_rov);
     std::thread raw_writer(raw_write);
-
+    std::cout << capture.isOpened() << std::endl;
 
     while(capture.isOpened() && !quit){
         bool read_ret = capture.read(frame);
@@ -198,20 +213,41 @@ int main(int argc, char* argv[]) {
 
             Detect.visual_detect(std::get<1>(from_net.front()), std::get<2>(from_net.front()), conf_thresh, tub_thresh, reset_id, img_vis, writer);
             if (reset_id) reset_id = false;
-            if (FLAGS_UART > 0)
-                Detect.uart_send(FLAGS_UART, uart);
+            if (FLAGS_UART > 0 && land && send_byte == -1) {
+                send_byte = Detect.uart_send(FLAGS_UART, uart);
+                std::cout << "main: try to uart send, return " << send_byte << std::endl;
+                if (send_byte == 6) {
+                    std::cout << "main: uart send successfully, clock start" << std::endl;
+                    t_send = clock();
+                }
+                else if(send_byte == 0) {
+                    std::cout << "main: uart fail to send, start a new loop" << std::endl;
+                    dive_ready = true;
+                    land = false;
+                    send_byte = -1;
+                }
+            }
             from_net.pop();
         }
-        else if (FLAGS_NET_PHASE==0){
+        else if (FLAGS_NET_PHASE==0) {
             cv::cvtColor(frame.clone(), img_vis, cv::COLOR_BGR2RGB);
             cv::resize(img_vis, img_vis, vis_size);
             cv::imshow("ResDet", img_vis);
             writer << img_vis;
         }
+        if (send_byte == 6){
+            float t_after_send = (clock() - t_send) * 1.0 / CLOCKS_PER_SEC;
+            std::cout << "main: t after send: " << t_after_send << std::endl;
+            if (t_after_send > 20) {
+                std::cout << "main: grasping done, start a new grasping" << std::endl;
+                send_byte = -1;
+            }
+        }
         int key = cv::waitKey(wait_mm);
-        rov_key = key;
+        if (!auto_rov)
+            rov_key = key;
 //        std::cout << key << std::endl;
-        parse_key(key, quit, reset_id, conf_thresh, FLAGS_K, FLAGS_R, filter);
+        parse_key(key, quit, reset_id, conf_thresh, FLAGS_K, FLAGS_R, filter, auto_rov);
 //        std::cout << "total: " << (t2 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
 //                  << ", ruas: " << (t6 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
 //                  << ", vis: " << (t7 - t2) * 1.0 / CLOCKS_PER_SEC * 1000 << std::endl;

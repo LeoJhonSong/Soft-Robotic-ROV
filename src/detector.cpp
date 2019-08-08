@@ -263,8 +263,15 @@ void Detector::delete_tubelets(unsigned char cl){
     this->ides_set.at(cl).clear();
 }
 
-void Detector::uart_send(unsigned char cls, Uart& uart){
-    torch::Tensor dets = this->output[0][cls][0];
+int Detector::uart_send(unsigned char cls, Uart& uart){
+    int selected_cls = cls;
+    if (selected_cls>4){
+        torch::Tensor scores = this->output[0].slice(1, 0, 1).slice(2, 0, 1);
+        selected_cls = scores.argmax().item<unsigned char>();
+    }
+    torch::Tensor dets = this->output[0][selected_cls][0];
+    if (dets[0].item<float>()<0.3 || dets[6].item<int>()<5)
+        return 0;
     std::vector<char> send_list;
     send_list.push_back(110+cls);
     send_list.push_back((char)(dets[1].item<float>()*100));
@@ -272,10 +279,11 @@ void Detector::uart_send(unsigned char cls, Uart& uart){
     send_list.push_back((char)(dets[3].item<float>()*100));
     send_list.push_back((char)(dets[4].item<float>()*100));
     send_list.push_back(127);
-    uart.send(send_list);
+    int senf_byte = uart.send(send_list);
+    return senf_byte;
 }
 
-void Detector::visual_detect(const torch::Tensor& loc, const torch::Tensor& conf, std::vector<float> conf_thresh, float tub_thresh, bool reset, cv::Mat& img, cv::VideoWriter& writer){
+void Detector::visual_detect(const torch::Tensor& loc, const torch::Tensor& conf, const std::vector<float> conf_thresh, float tub_thresh, bool reset, cv::Mat& img, cv::VideoWriter& writer){
     if(this->tub>0)
         this->detect(loc, conf, conf_thresh, tub_thresh, reset);
     else this->detect(loc, conf, conf_thresh);

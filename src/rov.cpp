@@ -201,43 +201,80 @@ void TCP_Server::sendMsg(int move)
 }
 
 extern bool run_rov_flag;
-extern int rov_key;
+extern int rov_key, send_byte;
+extern bool rov_half_speed, land, dive_ready;
 TCP_Server server;
 void run_rov(){
-    while(run_rov_flag) {
-        std::cout << "run_rov: try to recive" << std:: endl;
+    int land_count = 0;
+    int land_count_thresh = 10;
+    float pre_depth = 0;
+    float depth_diff_thresh = 1.0;
+    if (run_rov_flag > 0) {
+        std::cout << "rov_runner: try to first recive" << std::endl;
         server.recvMsg();
-        std::cout << "run_rov: recived" << std:: endl;
+        std::cout << "rov_runner: first recive done, current depth: " << server.depth << std::endl;
+    }
+    while(run_rov_flag) {
         switch (rov_key) {
             case 82: // up
-                server.sendMsg(SEND_HALF_FORWARD);
+                std::cout << "rov_runner: up" << std::endl;
+                if (rov_half_speed) server.sendMsg(SEND_HALF_FORWARD);
+                else server.sendMsg(SEND_FORWARD);
                 sleep(1);
                 server.sendMsg(SEND_SLEEP);
                 break;
             case 81: // left
-                server.sendMsg(SEND_HALF_LEFT);
+                if (rov_half_speed) server.sendMsg(SEND_HALF_LEFT);
+                else server.sendMsg(SEND_LEFT);
                 sleep(1);
                 server.sendMsg(SEND_SLEEP);
                 break;
             case 84: // down
-                server.sendMsg(SEND_HALF_BACKWARD);
+                if (rov_half_speed) server.sendMsg(SEND_HALF_BACKWARD);
+                else server.sendMsg(SEND_BACKWARD);
                 sleep(1);
                 server.sendMsg(SEND_SLEEP);
                 break;
             case 83: // right
-                server.sendMsg(SEND_HALF_RIGHT);
+                if (rov_half_speed) server.sendMsg(SEND_HALF_RIGHT);
+                else server.sendMsg(SEND_RIGHT);
                 sleep(1);
                 server.sendMsg(SEND_SLEEP);
                 break;
             case 44: // ,
-                server.sendMsg(SEND_HALF_DOWN);
+                if (rov_half_speed) server.sendMsg(SEND_HALF_DOWN);
+                else server.sendMsg(SEND_DOWN);
                 sleep(1);
                 server.sendMsg(SEND_SLEEP);
                 break;
             case 46: // .
-                server.sendMsg(SEND_HALF_UP);
+                if (rov_half_speed) server.sendMsg(SEND_HALF_UP);
+                else server.sendMsg(SEND_UP);
                 sleep(1);
                 server.sendMsg(SEND_SLEEP);
+                break;
+            case 59: // ;
+                std::cout << "rov_runner: move down until dive_ready=True" << std::endl;
+                dive_ready = false;
+                while((!dive_ready) && land_count<60) {
+                    if (rov_half_speed) server.sendMsg(SEND_HALF_DOWN);
+                    else server.sendMsg(SEND_DOWN);
+                    sleep(1);
+                    server.recvMsg();
+                    std::cout << "rov_runner: current depth" << server.depth << std::endl;
+                    float depth_diff = server.depth - pre_depth;
+                    if (depth_diff < depth_diff_thresh) land_count++;
+                    else if(land) {
+                        land = false;
+                        land_count = 0;
+                    }
+                    if (land_count >= land_count_thresh) land = true;
+                    pre_depth = server.depth;
+                }
+                dive_ready = true;
+                land = false;
+                send_byte = -1;
+                land_count = 0;
                 break;
             default:
                 server.sendMsg(SEND_SLEEP);

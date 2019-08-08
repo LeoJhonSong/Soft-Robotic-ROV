@@ -37,13 +37,13 @@ public:
 //            std::vector<float>, float, bool);
     void detect(const torch::Tensor&, const torch::Tensor&, std::vector<float>);
     void detect(const torch::Tensor&, const torch::Tensor&, std::vector<float>, float, bool);
-    void visual_detect(const torch::Tensor&, const torch::Tensor&, std::vector<float>, float, bool, cv::Mat&, cv::VideoWriter&);
+    void visual_detect(const torch::Tensor&, const torch::Tensor&, const std::vector<float>, float, bool, cv::Mat&, cv::VideoWriter&);
     std::tuple<torch::Tensor, int> nms(const torch::Tensor&, const torch::Tensor&);
     torch::Tensor iou(const torch::Tensor&, unsigned char);
     void visualization(cv::Mat&, cv::VideoWriter&);
     void init_tubelets();
     void delete_tubelets(unsigned char);
-    void uart_send(unsigned char cls, Uart&);
+    int uart_send(unsigned char cls, Uart&);
     ~Detector(){
     };
 };
