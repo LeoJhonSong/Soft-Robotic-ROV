@@ -1,0 +1,48 @@
+digraph G {
+
+  subgraph cluster_0 {
+    node [style=filled;]
+    a[label="边下潜边移动? 下潜一段调整一下?\n或者先直接坐底, 然后再调整?"]
+    b[label="计算出当前移动最小的\n抓取范围内目标最多的抓取范围,\n即前往目前目标最密集处?\n还是将置信值最高的一个作为抓取目标?"]
+    b -> a
+    label = "移动至适当位置坐底";
+    color=blue
+  }
+  k -> b[label="视野内有目标"]
+  subgraph cluster_1 {
+    node [style=filled]
+    c[label="路径规划\n因为目前摄像头向前的视野不够多,\n路径规划我觉得走直线就可以"]
+    d[label="定深\n没有距离i传感器似乎无法实现定深?\n或者上升到足够高的高度巡航?"]
+    c -> d
+    d -> c
+    l[label="实时检测目标"]
+    l -> c[label="视野内无目标"]
+    c -> l
+    l -> a[label="视野内有目标"]
+    label = "定深巡航";
+    color=blue
+  }
+  subgraph cluster_2 {
+    node [style=filled];
+    a -> e[label="当深度一定时间内波动稳定在5cm以内时判断为坐底"]
+    f -> e[label="是"]
+    e[label="识别首选目标相对位置,\n抓取并放入网框"]
+    f[label="识别抓取范围内是否还有目标"]
+    e-> f
+    label = "抓取";
+    color=blue
+  }
+  start -> g
+  g[label="全速下潜"]
+  g -> h[label="根据深度判断是否坐底"]
+  h[label="记录此时深度作为海底深度,\n算出气压补偿"]
+  h -> i
+  e -> i[label="否"]
+  i[label="根据深度传感器反馈上浮0.5m"]
+
+  i -> k
+  k[label="原地半速转圈扫描"]
+  k -> c[label="视野内无目标"]
+
+  start [shape=Mdiamond];
+}
