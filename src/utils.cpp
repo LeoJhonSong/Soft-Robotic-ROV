@@ -2,7 +2,7 @@
 // Created by sean on 7/11/19.
 //
 
-#include <utils.h>
+#include "utils.h"
 
 
 cv::Mat tensor2im(torch::Tensor tensor) {
@@ -21,7 +21,7 @@ void clip(int& n, int lower, int upper) {
 }
 
 extern bool rov_half_speed, dive_ready, land;
-extern int send_byte;
+extern int send_byte, rov_key;
 void parse_key(int key, bool& quit, bool& reset_id, std::vector<float>& conf_thresh, int& FLAGS_K, int& FLAGS_R, CFilt& filter, bool& auto_rov){
     switch (key){
         case 32:  // space
@@ -73,18 +73,18 @@ void parse_key(int key, bool& quit, bool& reset_id, std::vector<float>& conf_thr
             clip(conf_thresh.at(3), 0.001, 1.0);
             std::cout << "main: conf_thresh: " << conf_thresh << std::endl;
             break;
-        case 107:  // l
-            FLAGS_K += 10;
-            clip(FLAGS_K, 0, 300);
-            filter.get_wf(FLAGS_K, FLAGS_R);
-            std::cout << "main: K: " << FLAGS_K << std::endl;
-            break;
-        case 108:  // k
-            FLAGS_K -= 10;
-            clip(FLAGS_K, 0, 300);
-            filter.get_wf(FLAGS_K, FLAGS_R);
-            std::cout << "main: K: " << FLAGS_K << std::endl;
-            break;
+//        case 107:  // l
+//            FLAGS_K += 10;
+//            clip(FLAGS_K, 0, 300);
+//            filter.get_wf(FLAGS_K, FLAGS_R);
+//            std::cout << "main: K: " << FLAGS_K << std::endl;
+//            break;
+//        case 108:  // k
+//            FLAGS_K -= 10;
+//            clip(FLAGS_K, 0, 300);
+//            filter.get_wf(FLAGS_K, FLAGS_R);
+//            std::cout << "main: K: " << FLAGS_K << std::endl;
+//            break;
         case 114:  // r
             reset_id = true;
             break;
@@ -111,17 +111,19 @@ void parse_key(int key, bool& quit, bool& reset_id, std::vector<float>& conf_thr
             }
             break;
         case 98:  // b
-            if (dive_ready) {
-                std::cout << "main: manually dive_ready=false, land=true, send_byte=-1" << std::endl;
-                dive_ready = false;
-                land = true;
-                send_byte = -1;
-            }else{
-                std::cout << "main: manually dive_ready=true, land=false, send_byte=-1" << std::endl;
-                dive_ready = true;
-                land = false;
-                send_byte = -1;
-            }
+//            if (dive_ready) {
+//                std::cout << "main: manually dive_ready=false, land=true, send_byte=-1" << std::endl;
+//                dive_ready = false;
+//                land = true;
+//                send_byte = -1;
+//                rov_key = 99;
+//            }else{
+            std::cout << "main: manually dive_ready=true, land=false, send_byte=-1" << std::endl;
+            dive_ready = true;
+            land = false;
+            send_byte = -1;
+            rov_key = 99;
+//            }
             break;
         default:
             break;

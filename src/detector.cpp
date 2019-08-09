@@ -214,7 +214,7 @@ void Detector::visualization(cv::Mat& img, cv::VideoWriter& writer){
             int x2 = boxes[i][2].item<int>();
             int y2 = boxes[i][3].item<int>();
             float ratio = (float)(x2-x1)*(float)(y2-y1)/(float)(img.cols*img.rows);
-            if(ratio>0.2 || ratio<0.001) continue;
+            if(ratio>0.1 || ratio<0.005) continue;
             cv::rectangle(img, cv::Point(x1, y1), cv::Point(x2, y2), this->color.at(j-1), 2, 1, 0);
             stream.str("");
             stream << std::fixed << std::setprecision(2) << scores[i].item<float>();

@@ -127,7 +127,7 @@ void TCP_Server::recvMsg(void)
 
     if(receive[4] == '\xaa'){ isOneLeak = 1; }
     if(receive[7] == '\xaa'){ isTwoLeak = 1; }
-    depth = (int(receive[8]) * 256 + int(receive[9])) / 100.0;  // the unit is meter
+    depth = (int(receive[8]) * 256 + int(receive[9]));  // the unit is meter
     // std::cout << isOneLeak << std::endl;
     // std::cout << isTwoLeak << std::endl;
     // std::cout << depth << std::endl;
@@ -203,12 +203,13 @@ void TCP_Server::sendMsg(int move)
 extern bool run_rov_flag;
 extern int rov_key, send_byte;
 extern bool rov_half_speed, land, dive_ready;
-TCP_Server server;
 void run_rov(){
+    TCP_Server server;
     int land_count = 0;
-    int land_count_thresh = 10;
+    int land_count_thresh = 30;
     float pre_depth = 0;
-    float depth_diff_thresh = 1.0;
+    float depth_diff_thresh = 3.0;
+    float depth_diff = 0.0;
     if (run_rov_flag > 0) {
         std::cout << "rov_runner: try to first recive" << std::endl;
         server.recvMsg();
@@ -216,71 +217,77 @@ void run_rov(){
     }
     while(run_rov_flag) {
         switch (rov_key) {
-            case 82: // up
-                std::cout << "rov_runner: up" << std::endl;
+            case 105: // up
+//                std::cout << "rov_runner: forward" << std::endl;
+//                std::cout << "rov_runner: " << time(nullptr) << std::endl;
                 if (rov_half_speed) server.sendMsg(SEND_HALF_FORWARD);
                 else server.sendMsg(SEND_FORWARD);
-                sleep(1);
-                server.sendMsg(SEND_SLEEP);
+//                sleep(1);
+//                server.sendMsg(SEND_SLEEP);
                 break;
-            case 81: // left
-                if (rov_half_speed) server.sendMsg(SEND_HALF_LEFT);
-                else server.sendMsg(SEND_LEFT);
-                sleep(1);
-                server.sendMsg(SEND_SLEEP);
+            case 106: // left
+//                std::cout << "rov_runner: left" << std::endl;
+                if (rov_half_speed) server.sendMsg(SEND_HALF_TURN_LEFT);
+                else server.sendMsg(SEND_TURN_LEFT);
+//                sleep(1);
+//                server.sendMsg(SEND_SLEEP);
                 break;
-            case 84: // down
+            case 107: // down
+//                std::cout << "rov_runner: backward" << std::endl;
                 if (rov_half_speed) server.sendMsg(SEND_HALF_BACKWARD);
                 else server.sendMsg(SEND_BACKWARD);
-                sleep(1);
-                server.sendMsg(SEND_SLEEP);
+//                sleep(1);
+//                server.sendMsg(SEND_SLEEP);
                 break;
-            case 83: // right
-                if (rov_half_speed) server.sendMsg(SEND_HALF_RIGHT);
-                else server.sendMsg(SEND_RIGHT);
-                sleep(1);
-                server.sendMsg(SEND_SLEEP);
+            case 108: // right
+//                std::cout << "rov_runner: right" << std::endl;
+                if (rov_half_speed) server.sendMsg(SEND_HALF_TURN_RIGHT);
+                else server.sendMsg(SEND_TURN_RIGHT);
+//                sleep(1);
+//                server.sendMsg(SEND_SLEEP);
                 break;
             case 44: // ,
-                if (rov_half_speed) server.sendMsg(SEND_HALF_DOWN);
-                else server.sendMsg(SEND_DOWN);
-                sleep(1);
-                server.sendMsg(SEND_SLEEP);
+//                std::cout << "rov_runner: down" << std::endl;
+//                if (rov_half_speed) server.sendMsg(SEND_HALF_DOWN);
+                server.sendMsg(SEND_DOWN);
+//                sleep(1);
+//                server.sendMsg(SEND_SLEEP);
                 break;
             case 46: // .
+//                std::cout << "rov_runner: up" << std::endl;
                 if (rov_half_speed) server.sendMsg(SEND_HALF_UP);
                 else server.sendMsg(SEND_UP);
-                sleep(1);
-                server.sendMsg(SEND_SLEEP);
+//                sleep(1);
+//                server.sendMsg(SEND_SLEEP);
                 break;
             case 59: // ;
                 std::cout << "rov_runner: move down until dive_ready=True" << std::endl;
                 dive_ready = false;
-                while((!dive_ready) && land_count<60) {
-                    if (rov_half_speed) server.sendMsg(SEND_HALF_DOWN);
-                    else server.sendMsg(SEND_DOWN);
-                    sleep(1);
+                while((!dive_ready) && land_count<200) {
+                    server.sendMsg(SEND_DOWN);
                     server.recvMsg();
-                    std::cout << "rov_runner: current depth" << server.depth << std::endl;
-                    float depth_diff = server.depth - pre_depth;
+                    if (server.depth > 0) {
+//                        std::cout << "rov_runner: current depth: " << server.depth << std::endl;
+                        depth_diff = server.depth - pre_depth;
+                        pre_depth = server.depth;
+                    }
                     if (depth_diff < depth_diff_thresh) land_count++;
                     else if(land) {
                         land = false;
                         land_count = 0;
                     }
                     if (land_count >= land_count_thresh) land = true;
-                    pre_depth = server.depth;
                 }
                 dive_ready = true;
                 land = false;
                 send_byte = -1;
                 land_count = 0;
                 break;
-            default:
+            case 99: // c
                 server.sendMsg(SEND_SLEEP);
                 break;
         }
-        rov_key = -1;
     }
+    server.sendMsg(SEND_SLEEP);
     std::cout << "run_rov quit" << std::endl;
 }

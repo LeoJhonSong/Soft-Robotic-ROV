@@ -27,13 +27,13 @@
 DEFINE_int32(K, 100, "turbulence intensity. The greater, the intensive");
 DEFINE_int32(R, 40, "Signal to Noise Ratio. The greater, the more serious of noise");
 DEFINE_uint32(RUAS, 0, "0: skip; 1: clahe; 2: wiener+clahe");
-DEFINE_uint32(NET_PHASE, 0, "0: skip; 1: netG; 2: netG+RefineDet; 3: RefineDet" );
+DEFINE_uint32(NET_PHASE, 2, "0: skip; 1: netG; 2: netG+RefineDet; 3: RefineDet" );
 DEFINE_uint32(SSD_DIM, 320, "" );
-DEFINE_uint32(NETG_DIM, 320, "" );
+DEFINE_uint32(NETG_DIM, 256, "" );
 DEFINE_uint32(TUB, 0, "" );
-DEFINE_int32(MODE, -1, "-1: load video; >0 load camera" );
+DEFINE_int32(MODE, -2, "-1: load video; >0 load camera" );
 DEFINE_int32(UART, 0, "-1: not use it; >0 use it" );
-DEFINE_int32(WITH_ROV, 0, "0: not use it; >0 use it" );
+DEFINE_int32(WITH_ROV, 1, "0: not use it; >0 use it" );
 
 char EXT[] = "MJPG";
 int ex1 = EXT[0] | (EXT[1] << 8) | (EXT[2] << 16) | (EXT[3] << 24);
@@ -45,24 +45,35 @@ std::string video_name = "./record/" + std::to_string(1900 + ltm->tm_year) + "_"
 
 // run_rov thread
 bool run_rov_flag = true;
-int rov_key;
+int rov_key = 99;
 bool rov_half_speed = true;
 bool land = false;
-int send_byte = 0;
+int send_byte = -1;
 bool dive_ready = true;
+unsigned char max_attempt = 0;
 
 // raw_write thread
 std::queue<cv::Mat> frame_queue;
 int frame_w, frame_h;
 bool raw_write_flag = true;
 
-// run_net thread
-std::queue<cv::Mat> processed_frame;
-std::queue<std::tuple<cv::Mat, torch::Tensor, torch::Tensor>> from_net;
-bool run_net_flag = true;
-unsigned char loc_idex = 0;
-void run_net() {
-    // load models
+void init_loop(){
+    std::cout << "main: uart fail to send, start a new loop" << std::endl;
+    rov_key = 99;
+    land = false;
+    send_byte = -1;
+    max_attempt = 0;
+    dive_ready = true;
+}
+
+int main(int argc, char* argv[]) {
+    gflags::ParseCommandLineFlags(&argc, &argv, true);
+    // log
+//    FLAGS_log_dir=".";
+//    FLAGS_logtostderr = 1;
+//    google::InitGoogleLogging("test");
+//    LOG(INFO) << "Hello, World!";
+// load models
     torch::NoGradGuard no_grad_guard;
     std::string model_path;
 
@@ -73,53 +84,6 @@ void run_net() {
 
     std::shared_ptr<torch::jit::script::Module> net = torch::jit::load(model_path);
     net->to(at::kCUDA);
-    cv::Mat img_float, img_vis;
-    torch::Tensor img_tensor, fake_B, loc, conf;
-    std::vector<torch::jit::IValue> net_input, net_output;
-    while (run_net_flag) {
-        if (!processed_frame.empty()) {
-            if (FLAGS_NET_PHASE < 3) {
-                cv::normalize(processed_frame.front(), img_float, -1, 1, cv::NORM_MINMAX, CV_32F);
-            } else if (FLAGS_NET_PHASE == 3) {
-                processed_frame.front().convertTo(img_float, CV_32F);
-                img_float = img_float - 128.0;
-            }
-            img_tensor = torch::from_blob(img_float.data, {1, FLAGS_NETG_DIM, FLAGS_NETG_DIM, 3}).to(torch::kCUDA);
-            img_tensor = img_tensor.permute({0, 3, 1, 2});
-            net_input.emplace_back(img_tensor);
-            if (FLAGS_NET_PHASE == 1) {
-                fake_B = net->forward(net_input).toTensor();
-                loc_idex = 1;
-                cudaDeviceSynchronize();
-            } else if (FLAGS_NET_PHASE > 1) {
-                net_output = net->forward(net_input).toTuple()->elements();
-                cudaDeviceSynchronize();
-                if (FLAGS_NET_PHASE == 2) {
-                    fake_B = net_output.at(0).toTensor();
-                    loc_idex = 1;
-                } else if (FLAGS_NET_PHASE == 3) loc_idex = 0;
-                loc = net_output.at(loc_idex).toTensor().to(torch::kCPU);
-                conf = net_output.at(loc_idex + 1).toTensor().to(torch::kCPU);
-            }
-            if (loc_idex==1) img_vis = tensor2im(fake_B);
-            else img_vis = processed_frame.front();
-            net_input.pop_back();
-            from_net.push(std::tuple<cv::Mat, torch::Tensor, torch::Tensor>{img_vis, loc, conf});
-            processed_frame.pop();
-        }
-
-    }
-    std::cout << "run_net thread qiut" << std::endl;
-}
-
-int main(int argc, char* argv[]) {
-    gflags::ParseCommandLineFlags(&argc, &argv, true);
-    // log
-//    FLAGS_log_dir=".";
-//    FLAGS_logtostderr = 1;
-//    google::InitGoogleLogging("test");
-//    LOG(INFO) << "Hello, World!";
-
 
     // load detector
     unsigned int num_classes = 5;
@@ -138,12 +102,20 @@ int main(int argc, char* argv[]) {
 
     // load video
     cv::VideoCapture capture;
-    if(FLAGS_MODE == -1){
-        capture.open("/home/sean/data/UWdevkit/snippets/echinus.mp4");
+    while(!capture.isOpened()) {
+        try{
+            if (FLAGS_MODE == -1) {
+                capture.open("/home/sean/data/UWdevkit/snippets/echinus.mp4");
 //        capture.set(CV_CAP_PROP_POS_FRAMES, 200);
+            } else if (FLAGS_MODE == -2) capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
+            else capture.open(FLAGS_MODE);
+        }
+        catch(const char* msg) {
+            continue;
+        }
     }
-    else if(FLAGS_MODE == -2) capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
-    else capture.open(FLAGS_MODE);
+    std::cout << capture.isOpened() << std::endl;
+//    sleep(10);
     frame_w = (int)capture.get(CV_CAP_PROP_FRAME_WIDTH);
     frame_h = (int)capture.get(CV_CAP_PROP_FRAME_HEIGHT);
     cv::Size vis_size(640, 360);
@@ -179,20 +151,21 @@ int main(int argc, char* argv[]) {
     int wait_mm = 1;
     if (FLAGS_TUB == 0 && FLAGS_MODE==-1) wait_mm = 10;
     bool auto_rov = false;
+    unsigned char loc_idex;
     clock_t t_send;
 
     // multi thread
-    if (FLAGS_NET_PHASE == 0)
-        run_net_flag = false;
-    std::thread net_runner(run_net);
+//    if (FLAGS_NET_PHASE == 0)
+//        run_net_flag = false;
+//    std::thread net_runner(run_net);
     if (FLAGS_WITH_ROV == 0)
         run_rov_flag = false;
     std::thread rov_runner(run_rov);
     std::thread raw_writer(raw_write);
-    std::cout << capture.isOpened() << std::endl;
 
     while(capture.isOpened() && !quit){
         bool read_ret = capture.read(frame);
+//        std::cout << std::strerror(errno) << std::endl;
         if(!read_ret) break;
         frame_num ++;
         frame_queue.push(frame);
@@ -203,17 +176,46 @@ int main(int argc, char* argv[]) {
             filter.wiener_gpu(frame);
         }
         cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
-        processed_frame.push(frame);
+//        processed_frame.push(frame);
 //        std::cout << "main, processed_frame size: " << processed_frame.size() << std::endl;
-        if (processed_frame.size()>=5) processed_frame.pop();
+//        if (processed_frame.size()>=5) processed_frame.pop();
 
-        if (!from_net.empty()) {
-            cv::cvtColor(std::get<0>(from_net.front()), img_vis, cv::COLOR_BGR2RGB);
+        if (FLAGS_NET_PHASE > 0) {
+            if (FLAGS_NET_PHASE < 3) {
+                cv::normalize(frame, img_float, -1, 1, cv::NORM_MINMAX, CV_32F);
+            } else if (FLAGS_NET_PHASE == 3) {
+                frame.convertTo(img_float, CV_32F);
+                img_float = img_float - 128.0;
+            }
+            img_tensor = torch::from_blob(img_float.data, {1, FLAGS_NETG_DIM, FLAGS_NETG_DIM, 3}).to(torch::kCUDA);
+            img_tensor = img_tensor.permute({0, 3, 1, 2});
+            net_input.emplace_back(img_tensor);
+            if (FLAGS_NET_PHASE == 1) {
+                fake_B = net->forward(net_input).toTensor();
+                loc_idex = 1;
+                cudaDeviceSynchronize();
+            } else if (FLAGS_NET_PHASE > 1) {
+                net_output = net->forward(net_input).toTuple()->elements();
+                cudaDeviceSynchronize();
+                if (FLAGS_NET_PHASE == 2) {
+                    fake_B = net_output.at(0).toTensor();
+                    loc_idex = 1;
+                } else if (FLAGS_NET_PHASE == 3) loc_idex = 0;
+                loc = net_output.at(loc_idex).toTensor().to(torch::kCPU);
+                conf = net_output.at(loc_idex + 1).toTensor().to(torch::kCPU);
+            }
+            if (loc_idex==1) img_vis = tensor2im(fake_B);
+            else img_vis = frame;
+            net_input.pop_back();
+//            from_net.push(std::tuple<cv::Mat, torch::Tensor, torch::Tensor>{img_vis, loc, conf});
+//            processed_frame.pop();
+//        if (!from_net.empty()) {
+            cv::cvtColor(img_vis, img_vis, cv::COLOR_BGR2RGB);
             cv::resize(img_vis, img_vis, vis_size);
 
-            Detect.visual_detect(std::get<1>(from_net.front()), std::get<2>(from_net.front()), conf_thresh, tub_thresh, reset_id, img_vis, writer);
+            Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, writer);
             if (reset_id) reset_id = false;
-            if (FLAGS_UART > 0 && land && send_byte == -1) {
+            if (FLAGS_UART > 0 && land && (!dive_ready) && send_byte == -1) {
                 send_byte = Detect.uart_send(FLAGS_UART, uart);
                 std::cout << "main: try to uart send, return " << send_byte << std::endl;
                 if (send_byte == 6) {
@@ -221,15 +223,12 @@ int main(int argc, char* argv[]) {
                     t_send = clock();
                 }
                 else if(send_byte == 0) {
-                    std::cout << "main: uart fail to send, start a new loop" << std::endl;
-                    dive_ready = true;
-                    land = false;
-                    send_byte = -1;
+                    std::cout << "main: uart fail to send" << std::endl;
+                    init_loop();
                 }
             }
-            from_net.pop();
         }
-        else if (FLAGS_NET_PHASE==0) {
+        else{
             cv::cvtColor(frame.clone(), img_vis, cv::COLOR_BGR2RGB);
             cv::resize(img_vis, img_vis, vis_size);
             cv::imshow("ResDet", img_vis);
@@ -237,15 +236,22 @@ int main(int argc, char* argv[]) {
         }
         if (send_byte == 6){
             float t_after_send = (clock() - t_send) * 1.0 / CLOCKS_PER_SEC;
-            std::cout << "main: t after send: " << t_after_send << std::endl;
-            if (t_after_send > 20) {
-                std::cout << "main: grasping done, start a new grasping" << std::endl;
+//            std::cout << "main: t after send: " << t_after_send << std::endl;
+            if (t_after_send > 30) {
                 send_byte = -1;
+                if (++max_attempt>3) {
+                    std::cout << "main: max_attempt>3 grasping done" << std::endl;
+                    init_loop();
+                }
             }
         }
         int key = cv::waitKey(wait_mm);
-        if (!auto_rov)
-            rov_key = key;
+        if (!auto_rov) {
+            if (key != -1) {
+                rov_key = key;
+            }
+//                std::cout << rov_key << std::endl;
+        }
 //        std::cout << key << std::endl;
         parse_key(key, quit, reset_id, conf_thresh, FLAGS_K, FLAGS_R, filter, auto_rov);
 //        std::cout << "total: " << (t2 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
@@ -260,8 +266,8 @@ int main(int argc, char* argv[]) {
     writer.release();
     raw_write_flag = false;
     raw_writer.join();
-    run_net_flag = false;
-    net_runner.join();
+//    run_net_flag = false;
+//    net_runner.join();
     run_rov_flag = false;
     rov_runner.join();
     writer.release();
