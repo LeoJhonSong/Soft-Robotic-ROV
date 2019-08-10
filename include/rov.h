@@ -62,6 +62,7 @@ class TCP_Server {
         int isOneLeak = 0;
         int isTwoLeak = 0;
         float depth = 0;
+        float adjust_rate = 1.0;  // density_rate = sea_water_density / standard_water_density
 
         TCP_Server();
         ~TCP_Server();

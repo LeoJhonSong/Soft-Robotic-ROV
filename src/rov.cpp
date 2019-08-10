@@ -127,7 +127,8 @@ void TCP_Server::recvMsg(void)
 
     if(receive[4] == '\xaa'){ isOneLeak = 1; }
     if(receive[7] == '\xaa'){ isTwoLeak = 1; }
-    depth = (int(receive[8]) * 256 + int(receive[9]));  // the unit is meter
+    depth = (int(receive[8]) * 256 + int(receive[9]));  // the unit is cm
+    depth = depth / adjust_rate;
     // std::cout << isOneLeak << std::endl;
     // std::cout << isTwoLeak << std::endl;
     // std::cout << depth << std::endl;
@@ -211,9 +212,9 @@ void run_rov(){
     float depth_diff_thresh = 3.0;
     float depth_diff = 0.0;
     if (run_rov_flag > 0) {
-        std::cout << "rov_runner: try to first recive" << std::endl;
+        std::cout << "rov_runner: try to first receive" << std::endl;
         server.recvMsg();
-        std::cout << "rov_runner: first recive done, current depth: " << server.depth << std::endl;
+        std::cout << "rov_runner: first receive done, current depth: " << server.depth << std::endl;
     }
     while(run_rov_flag) {
         switch (rov_key) {
