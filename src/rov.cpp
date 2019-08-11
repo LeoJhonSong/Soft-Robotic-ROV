@@ -3,6 +3,10 @@
 //
 
 #include "rov.h"
+#include "utils.h"
+#include "color.h"
+
+#include <random>
 
 TCP_Server::TCP_Server(void)
 // initial the socket
@@ -201,88 +205,148 @@ void TCP_Server::sendMsg(int move)
     auto bytes_sent = send(newFD, response.data(), response.length(), 0);
 }
 
+TCP_Server server;
 extern bool run_rov_flag;
 extern int rov_key, send_byte;
-extern bool rov_half_speed, land, dive_ready;
+extern bool rov_half_speed, land, manual_stop, grasping_done;
+extern std::vector<int> target_loc;
+extern cv::Size vis_size;
 void run_rov(){
-    TCP_Server server;
     int land_count = 0;
-    int land_count_thresh = 30;
+    int count_thresh = 50;
     float pre_depth = 0;
     float depth_diff_thresh = 3.0;
-    float depth_diff = 0.0;
+    float depth_diff = 100.0;
+    float max_depth = 0.0;
+//    bool first_diving = true;
+    float cruising_altitude = 40.0;
+//    int floating_stable_count = 0;
+//    int aming_stable_count = 0;
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(0, 5);
     if (run_rov_flag > 0) {
+<<<<<<< HEAD
         std::cout << "rov_runner: try to first receive" << std::endl;
         server.recvMsg();
         std::cout << "rov_runner: first receive done, current depth: " << server.depth << std::endl;
+=======
+        print(BOLDGREEN, "ROV: try to first recive");
+        server.recvMsg();
+        print(BOLDGREEN, "ROV: first recive done, current depth: " << server.depth);
+>>>>>>> 501a95b67ba6d6eb9beb8aa9b6e9bd6fc669c6c6
     }
+    int pos = 1000;
+    int neg = 50;
     while(run_rov_flag) {
         switch (rov_key) {
-            case 105: // up
-//                std::cout << "rov_runner: forward" << std::endl;
-//                std::cout << "rov_runner: " << time(nullptr) << std::endl;
+            case 105: // k
                 if (rov_half_speed) server.sendMsg(SEND_HALF_FORWARD);
                 else server.sendMsg(SEND_FORWARD);
-//                sleep(1);
-//                server.sendMsg(SEND_SLEEP);
                 break;
-            case 106: // left
-//                std::cout << "rov_runner: left" << std::endl;
+            case 106: // j
                 if (rov_half_speed) server.sendMsg(SEND_HALF_TURN_LEFT);
                 else server.sendMsg(SEND_TURN_LEFT);
-//                sleep(1);
-//                server.sendMsg(SEND_SLEEP);
                 break;
-            case 107: // down
-//                std::cout << "rov_runner: backward" << std::endl;
+            case 107: // k
                 if (rov_half_speed) server.sendMsg(SEND_HALF_BACKWARD);
                 else server.sendMsg(SEND_BACKWARD);
-//                sleep(1);
-//                server.sendMsg(SEND_SLEEP);
                 break;
-            case 108: // right
-//                std::cout << "rov_runner: right" << std::endl;
+            case 108: // l
                 if (rov_half_speed) server.sendMsg(SEND_HALF_TURN_RIGHT);
                 else server.sendMsg(SEND_TURN_RIGHT);
-//                sleep(1);
-//                server.sendMsg(SEND_SLEEP);
                 break;
             case 44: // ,
-//                std::cout << "rov_runner: down" << std::endl;
-//                if (rov_half_speed) server.sendMsg(SEND_HALF_DOWN);
                 server.sendMsg(SEND_DOWN);
-//                sleep(1);
-//                server.sendMsg(SEND_SLEEP);
                 break;
             case 46: // .
-//                std::cout << "rov_runner: up" << std::endl;
                 if (rov_half_speed) server.sendMsg(SEND_HALF_UP);
                 else server.sendMsg(SEND_UP);
-//                sleep(1);
-//                server.sendMsg(SEND_SLEEP);
                 break;
             case 59: // ;
-                std::cout << "rov_runner: move down until dive_ready=True" << std::endl;
-                dive_ready = false;
-                while((!dive_ready) && land_count<200) {
+                print(BOLDGREEN, "ROV: diving !!!");
+                grasping_done = false;
+                while(!manual_stop && !grasping_done && land_count<200) {
                     server.sendMsg(SEND_DOWN);
                     server.recvMsg();
                     if (server.depth > 0) {
-//                        std::cout << "rov_runner: current depth: " << server.depth << std::endl;
                         depth_diff = server.depth - pre_depth;
                         pre_depth = server.depth;
+                        if (land) {
+//                            print(BOLDGREEN, "ROV: update max depth = " << max_depth);
+                            max_depth = server.depth;
+                        }
+                        if (depth_diff < depth_diff_thresh) land_count++;
+                        else if(land) {
+                            land = false;
+                            land_count = 0;
+                        }
+                        if (land_count >= count_thresh){
+//                            print(BOLDGREEN, "ROV: landed at " << server.depth);
+                            land = true;
+                        }
                     }
-                    if (depth_diff < depth_diff_thresh) land_count++;
-                    else if(land) {
-                        land = false;
-                        land_count = 0;
-                    }
-                    if (land_count >= land_count_thresh) land = true;
                 }
-                dive_ready = true;
-                land = false;
-                send_byte = -1;
                 land_count = 0;
+                land = false;
+//                first_diving = false;
+                if(manual_stop) rov_key = 99;
+                else rov_key = 39;
+                break;
+            case 39: // '
+                print(BOLDBLUE,  "ROV: try to stably floating at depth = " << max_depth-cruising_altitude);
+                for (unsigned char i=0; i<100; i++)
+                    server.sendMsg(SEND_UP);
+                delay(3);
+                for (unsigned char i=0; i<100; i++)
+                    server.sendMsg(SEND_SLEEP);
+                delay(2);
+                while(true) {
+                    server.recvMsg();
+                    if (server.depth > 0){
+                        print(BOLDBLUE, "ROV: floating at " << server.depth);
+                        break;
+                    }
+                }
+//                init_state();
+                if(manual_stop) rov_key = 99;
+                else rov_key = 47;
+                break;
+            case 47:  // /
+                print(BOLDMAGENTA, "ROV: move to stably aming at a target");
+                while((!manual_stop)) {
+                    if (target_loc.at(2) == 0 || target_loc.at(3) == 0) {
+                        delay(5);
+                        switch (dis(gen)){
+                            case 0: print(BOLDMAGENTA, "ROV: random turn right"); server.sendMsg(SEND_HALF_TURN_RIGHT); break;
+                            case 1: print(BOLDMAGENTA, "ROV: random turn right"); server.sendMsg(SEND_HALF_TURN_LEFT); break;
+                            case 2: print(BOLDMAGENTA, "ROV: random forward"); server.sendMsg(SEND_HALF_FORWARD); break;
+                            case 3: print(BOLDMAGENTA, "ROV: random backward"); server.sendMsg(SEND_HALF_BACKWARD); break;
+                            case 4: print(BOLDMAGENTA, "ROV: random left"); server.sendMsg(SEND_HALF_LEFT); break;
+                            case 5: print(BOLDMAGENTA, "ROV: random right"); server.sendMsg(SEND_HALF_RIGHT); break;
+                        }
+                    } else {
+                        delay(1);
+                        if (target_loc.at(0) < (float) vis_size.width * 0.4) {
+                            print(BOLDMAGENTA, "ROV: left");
+                            server.sendMsg(SEND_HALF_LEFT);
+                        } else if (target_loc.at(0) > (float) vis_size.width * 0.6) {
+                            print(BOLDMAGENTA, "ROV: right");
+                            server.sendMsg(SEND_HALF_RIGHT);
+                        } else if (target_loc.at(1) < (float) vis_size.height * 0.4) {
+                            print(BOLDMAGENTA, "ROV: forward");
+                            server.sendMsg(SEND_HALF_FORWARD);
+                        } else if (target_loc.at(1) > (float) vis_size.height * 0.6) {
+                            print(BOLDMAGENTA, "ROV: backward");
+                            server.sendMsg(SEND_HALF_BACKWARD);
+                        } else {
+                            print(BOLDMAGENTA, "ROV: down");
+                            break;
+                        }
+                    }
+                }
+                if(manual_stop) rov_key = 99;
+                else rov_key = 59;
                 break;
             case 99: // c
                 server.sendMsg(SEND_SLEEP);
@@ -290,5 +354,5 @@ void run_rov(){
         }
     }
     server.sendMsg(SEND_SLEEP);
-    std::cout << "run_rov quit" << std::endl;
+    print(WHITE, "ROV: run_rov quit");
 }

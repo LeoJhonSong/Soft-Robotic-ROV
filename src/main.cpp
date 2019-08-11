@@ -6,6 +6,7 @@
 #include "uart.h"
 #include "ruas.h"
 #include "rov.h"
+#include "color.h"
 
 #include <cuda_runtime.h>
 
@@ -32,8 +33,9 @@ DEFINE_uint32(SSD_DIM, 320, "" );
 DEFINE_uint32(NETG_DIM, 256, "" );
 DEFINE_uint32(TUB, 0, "" );
 DEFINE_int32(MODE, -2, "-1: load video; >0 load camera" );
-DEFINE_int32(UART, 0, "-1: not use it; >0 use it" );
-DEFINE_int32(WITH_ROV, 1, "0: not use it; >0 use it" );
+DEFINE_bool(UART, false, "-1: not use it; >0 use it" );
+DEFINE_bool(WITH_ROV, false, "0: not use it; >0 use it" );
+DEFINE_bool(TRACK, false, "0: not use it; >0 use it" );
 
 char EXT[] = "MJPG";
 int ex1 = EXT[0] | (EXT[1] << 8) | (EXT[2] << 16) | (EXT[3] << 24);
@@ -41,6 +43,7 @@ time_t now = time(nullptr);
 tm *ltm = localtime(&now);
 std::string video_name = "./record/" + std::to_string(1900 + ltm->tm_year) + "_" + std::to_string(1+ltm->tm_mon)+ "_" + std::to_string(ltm->tm_mday)
                          + "_" + std::to_string(ltm->tm_hour) + "_" + std::to_string(ltm->tm_min) + "_" + std::to_string(ltm->tm_sec);
+cv::Size vis_size(640, 360);
 
 
 // run_rov thread
@@ -49,22 +52,15 @@ int rov_key = 99;
 bool rov_half_speed = true;
 bool land = false;
 int send_byte = -1;
-bool dive_ready = true;
 unsigned char max_attempt = 0;
+std::vector<int> target_loc;
+bool manual_stop = false;
+bool grasping_done = false;
 
 // raw_write thread
 std::queue<cv::Mat> frame_queue;
 int frame_w, frame_h;
 bool raw_write_flag = true;
-
-void init_loop(){
-    std::cout << "main: uart fail to send, start a new loop" << std::endl;
-    rov_key = 99;
-    land = false;
-    send_byte = -1;
-    max_attempt = 0;
-    dive_ready = true;
-}
 
 int main(int argc, char* argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
@@ -89,10 +85,10 @@ int main(int argc, char* argv[]) {
     unsigned int num_classes = 5;
     int top_k = 200;
     float nms_thresh = 0.3;
-    std::vector<float> conf_thresh = {0.3, 0.3, 0.5, 0.5};
+    std::vector<float> conf_thresh = {0.3, 0.3, 0.6, 0.5};
     float tub_thresh = 0.1;
     bool reset_id = false;
-    Detector Detect(num_classes, top_k, nms_thresh, FLAGS_TUB, FLAGS_SSD_DIM);
+    Detector Detect(num_classes, top_k, nms_thresh, FLAGS_TUB, FLAGS_SSD_DIM, FLAGS_TRACK);
 
     // load filter
     CFilt filter(FLAGS_SSD_DIM, FLAGS_SSD_DIM, 3);
@@ -114,17 +110,14 @@ int main(int argc, char* argv[]) {
             continue;
         }
     }
-    std::cout << capture.isOpened() << std::endl;
-//    sleep(10);
     frame_w = (int)capture.get(CV_CAP_PROP_FRAME_WIDTH);
     frame_h = (int)capture.get(CV_CAP_PROP_FRAME_HEIGHT);
-    cv::Size vis_size(640, 360);
 
     //out video
     cv::VideoWriter writer;
     writer.open(video_name + ".mp4", ex1, 25, vis_size, true);
     if(!writer.isOpened()){
-        std::cout << "Can not open the output video for write" << std::endl;
+        print(BOLDRED, "ERROR: Can not open the output video for write");
     }
 
     // intermediate variable
@@ -139,35 +132,29 @@ int main(int argc, char* argv[]) {
         bool uart_open_flag, uart_init_flag;
         uart_open_flag = uart.openFile();
         if (!uart_open_flag)
-            std::cout << "UART fails to open " << std::endl;
+            print(BOLDRED, "ERROR: UART fails to open ");
         uart_init_flag = uart.initPort();
         if (!uart_init_flag)
-            std::cout << "UART fails to be inited " << std::endl;
+            print(BOLDRED, "ERROR: UART fails to be inited ");
     }
 
+    // auxiliary
     bool quit = false;
-    clock_t t_start= clock();
-    unsigned int frame_num = 0;
-    int wait_mm = 1;
-    if (FLAGS_TUB == 0 && FLAGS_MODE==-1) wait_mm = 10;
-    bool auto_rov = false;
     unsigned char loc_idex;
-    clock_t t_send;
+    time_t t_send;
 
     // multi thread
 //    if (FLAGS_NET_PHASE == 0)
 //        run_net_flag = false;
 //    std::thread net_runner(run_net);
-    if (FLAGS_WITH_ROV == 0)
+    if (!FLAGS_WITH_ROV)
         run_rov_flag = false;
     std::thread rov_runner(run_rov);
     std::thread raw_writer(raw_write);
 
     while(capture.isOpened() && !quit){
         bool read_ret = capture.read(frame);
-//        std::cout << std::strerror(errno) << std::endl;
         if(!read_ret) break;
-        frame_num ++;
         frame_queue.push(frame);
         cv::resize(frame, frame, cv::Size(FLAGS_NETG_DIM, FLAGS_NETG_DIM));
         if(FLAGS_RUAS == 1){
@@ -212,55 +199,50 @@ int main(int argc, char* argv[]) {
 //        if (!from_net.empty()) {
             cv::cvtColor(img_vis, img_vis, cv::COLOR_BGR2RGB);
             cv::resize(img_vis, img_vis, vis_size);
-
-            Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, writer);
-            if (reset_id) reset_id = false;
-            if (FLAGS_UART > 0 && land && (!dive_ready) && send_byte == -1) {
-                send_byte = Detect.uart_send(FLAGS_UART, uart);
-                std::cout << "main: try to uart send, return " << send_byte << std::endl;
-                if (send_byte == 6) {
-                    std::cout << "main: uart send successfully, clock start" << std::endl;
-                    t_send = clock();
+            target_loc = Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, writer);
+            if(land){
+//                Detect.release_track();
+                if (FLAGS_UART && send_byte == -1) {
+                    send_byte = Detect.uart_send(FLAGS_UART, uart);
+                    print(BOLDCYAN, "MAIN: try to uart send, return " << send_byte);
+                    if (send_byte == 6) {
+                        print(BOLDCYAN, "MAIN: uart send successfully, clock start");
+                        t_send = time(nullptr);
+                    }
+                    else if(send_byte == 0) {
+                        print(BOLDCYAN,  "MAIN: uart fail to send");
+                        land = false;
+                        grasping_done = true;
+                        max_attempt = 0;
+                        send_byte = -1;
+                    }
                 }
-                else if(send_byte == 0) {
-                    std::cout << "main: uart fail to send" << std::endl;
-                    init_loop();
-                }
-            }
-        }
-        else{
+            } // else Detect.enable_track();
+        }else{
             cv::cvtColor(frame.clone(), img_vis, cv::COLOR_BGR2RGB);
             cv::resize(img_vis, img_vis, vis_size);
             cv::imshow("ResDet", img_vis);
             writer << img_vis;
         }
         if (send_byte == 6){
-            float t_after_send = (clock() - t_send) * 1.0 / CLOCKS_PER_SEC;
-//            std::cout << "main: t after send: " << t_after_send << std::endl;
-            if (t_after_send > 30) {
+//            float t_after_send = ;
+            if ((time(nullptr) - t_send) > 30) {
                 send_byte = -1;
-                if (++max_attempt>3) {
-                    std::cout << "main: max_attempt>3 grasping done" << std::endl;
-                    init_loop();
+                if (++max_attempt>2) {
+                    print(BOLDCYAN, "MAIN: max_attempt>2 grasping done");
+                    land = false;
+                    grasping_done = true;
+                    max_attempt = 0;
                 }
             }
         }
-        int key = cv::waitKey(wait_mm);
-        if (!auto_rov) {
-            if (key != -1) {
-                rov_key = key;
-            }
-//                std::cout << rov_key << std::endl;
-        }
-//        std::cout << key << std::endl;
-        parse_key(key, quit, reset_id, conf_thresh, FLAGS_K, FLAGS_R, filter, auto_rov);
+        int key = cv::waitKey(1);
+        if (key != -1)  rov_key = key;
+        parse_key(key, quit, reset_id, conf_thresh, FLAGS_K, FLAGS_R, filter);
 //        std::cout << "total: " << (t2 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
 //                  << ", ruas: " << (t6 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
 //                  << ", vis: " << (t7 - t2) * 1.0 / CLOCKS_PER_SEC * 1000 << std::endl;
-
     }
-    clock_t t_end= clock();
-    std::cout << "frame amount: " << frame_num  << ", FPS: " << (double)frame_num / ((t_end - t_start) * 1.0 / CLOCKS_PER_SEC) << std::endl;
 
     uart.closeFile();
     writer.release();

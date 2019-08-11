@@ -7,5 +7,6 @@
 --SSD_DIM 320 \
 --NETG_DIM 320 \
 --TUB 1 \
---UART 5 \
---WITH_ROV 1
+--UART=true \
+--WITH_ROV=true \
+--TRACK=true
