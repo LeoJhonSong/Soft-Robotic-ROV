@@ -6,6 +6,7 @@
 #include "uart.h"
 #include "ruas.h"
 #include "rov.h"
+#include "color.h"
 
 #include <cuda_runtime.h>
 
@@ -54,6 +55,7 @@ int send_byte = -1;
 unsigned char max_attempt = 0;
 std::vector<int> target_loc;
 bool manual_stop = false;
+bool grasping_done = false;
 
 // raw_write thread
 std::queue<cv::Mat> frame_queue;
@@ -83,7 +85,7 @@ int main(int argc, char* argv[]) {
     unsigned int num_classes = 5;
     int top_k = 200;
     float nms_thresh = 0.3;
-    std::vector<float> conf_thresh = {0.3, 0.3, 0.5, 0.5};
+    std::vector<float> conf_thresh = {0.3, 0.3, 0.6, 0.5};
     float tub_thresh = 0.1;
     bool reset_id = false;
     Detector Detect(num_classes, top_k, nms_thresh, FLAGS_TUB, FLAGS_SSD_DIM, FLAGS_TRACK);
@@ -115,7 +117,7 @@ int main(int argc, char* argv[]) {
     cv::VideoWriter writer;
     writer.open(video_name + ".mp4", ex1, 25, vis_size, true);
     if(!writer.isOpened()){
-        std::cout << "Can not open the output video for write" << std::endl;
+        print(BOLDRED, "ERROR: Can not open the output video for write");
     }
 
     // intermediate variable
@@ -130,16 +132,16 @@ int main(int argc, char* argv[]) {
         bool uart_open_flag, uart_init_flag;
         uart_open_flag = uart.openFile();
         if (!uart_open_flag)
-            std::cout << "UART fails to open " << std::endl;
+            print(BOLDRED, "ERROR: UART fails to open ");
         uart_init_flag = uart.initPort();
         if (!uart_init_flag)
-            std::cout << "UART fails to be inited " << std::endl;
+            print(BOLDRED, "ERROR: UART fails to be inited ");
     }
 
     // auxiliary
     bool quit = false;
     unsigned char loc_idex;
-    clock_t t_send;
+    time_t t_send;
 
     // multi thread
 //    if (FLAGS_NET_PHASE == 0)
@@ -200,16 +202,19 @@ int main(int argc, char* argv[]) {
             target_loc = Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, writer);
             if(land){
 //                Detect.release_track();
-                if (FLAGS_UART  && send_byte == -1) {
+                if (FLAGS_UART && send_byte == -1) {
                     send_byte = Detect.uart_send(FLAGS_UART, uart);
-                    std::cout << "main: try to uart send, return " << send_byte << std::endl;
+                    print(BOLDCYAN, "MAIN: try to uart send, return " << send_byte);
                     if (send_byte == 6) {
-                        std::cout << "main: uart send successfully, clock start" << std::endl;
-                        t_send = clock();
+                        print(BOLDCYAN, "MAIN: uart send successfully, clock start");
+                        t_send = time(nullptr);
                     }
                     else if(send_byte == 0) {
-                        std::cout << "main: uart fail to send" << std::endl;
-                        rov_key = 39;
+                        print(BOLDCYAN,  "MAIN: uart fail to send");
+                        land = false;
+                        grasping_done = true;
+                        max_attempt = 0;
+                        send_byte = -1;
                     }
                 }
             } // else Detect.enable_track();
@@ -220,12 +225,14 @@ int main(int argc, char* argv[]) {
             writer << img_vis;
         }
         if (send_byte == 6){
-            float t_after_send = (clock() - t_send) * 1.0 / CLOCKS_PER_SEC;
-            if (t_after_send > 30) {
+//            float t_after_send = ;
+            if ((time(nullptr) - t_send) > 30) {
                 send_byte = -1;
-                if (++max_attempt>3) {
-                    std::cout << "main: max_attempt>3 grasping done" << std::endl;
-                    rov_key = 39;
+                if (++max_attempt>2) {
+                    print(BOLDCYAN, "MAIN: max_attempt>2 grasping done");
+                    land = false;
+                    grasping_done = true;
+                    max_attempt = 0;
                 }
             }
         }

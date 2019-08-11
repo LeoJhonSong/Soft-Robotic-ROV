@@ -3,6 +3,7 @@
 //
 
 #include "detector.h"
+#include "color.h"
 
 Detector::Detector(unsigned int num_classes, int top_k, float nms_thresh, unsigned char tub, int ssd_dim, bool track){
     this->num_classes = num_classes;
@@ -38,15 +39,15 @@ Detector::Detector(unsigned int num_classes, int top_k, float nms_thresh, unsign
 //}
 
 void Detector::log_params(){
-    std::cout << "num_classes: " << num_classes << std::endl;
-    std::cout << "top_k: " << top_k << std::endl;
-    std::cout << "nms_thresh: " << nms_thresh << std::endl;
-    std::cout << "tub: " << tub << std::endl;
-    std::cout << "ssd_dim: " << ssd_dim << std::endl;
-    std::cout << "out size: " << output.sizes() << std::endl;
-    std::cout << "small_size_filter: " << small_size_filter << std::endl;
-    std::cout << "large_size_filter: " << small_size_filter << std::endl;
-    std::cout<< "tubelets class size: " << this->tubelets.size() << std::endl;
+    print(WHITE, "num_classes: " << num_classes);
+    print(WHITE, "top_k: " << top_k);
+    print(WHITE, "nms_thresh: " << nms_thresh);
+    print(WHITE, "tub: " << tub);
+    print(WHITE, "ssd_dim: " << ssd_dim);
+    print(WHITE, "out size: " << output.sizes());
+    print(WHITE, "small_size_filter: " << small_size_filter);
+    print(WHITE, "large_size_filter: " << small_size_filter);
+    print(WHITE, "tubelets class size: " << this->tubelets.size());
 }
 
 void Detector::detect(const torch::Tensor& loc, const torch::Tensor& conf, std::vector<float> conf_thresh){
@@ -326,7 +327,7 @@ std::vector<int> Detector::visualization(cv::Mat& img, cv::VideoWriter& writer){
             torch::Tensor matched_times = dets.slice(1, 6, 7).squeeze(1);
             for (unsigned char i = 0; i < boxes.size(0); i++) {
                 if (this->track && this->track_cl == 0 && scores[i].item<float>() > 0.7 &&
-                    matched_times[i].item<int>() > 50) {
+                    matched_times[i].item<int>() > 30) {
                     this->track_cl = j;
                     this->track_id = ids[i].item<int>();
                 }
@@ -421,7 +422,7 @@ int Detector::uart_send(unsigned char cls, Uart& uart){
     send_list.push_back((char)(dets[3].item<float>()*100));
     send_list.push_back((char)(dets[4].item<float>()*100));
     send_list.push_back(127);
-    std::cout<< "main: try to send loc " << send_list << std::endl;
+//    print(YELLOW, "DETECTOR: try to send loc " << send_list);
     int senf_byte = uart.send(send_list);
     return senf_byte;
 }
