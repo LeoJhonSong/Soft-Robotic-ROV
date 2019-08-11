@@ -135,7 +135,7 @@ int main(int argc, char* argv[]) {
             print(BOLDRED, "ERROR: UART fails to open ");
         uart_init_flag = uart.initPort();
         if (!uart_init_flag)
-            print(BOLDRED, "ERROR: UART fails to be inited ");
+            print(BOLDRED, "ERROR: UART fails to be initialed ");
     }
 
     // auxiliary
@@ -200,6 +200,7 @@ int main(int argc, char* argv[]) {
             cv::cvtColor(img_vis, img_vis, cv::COLOR_BGR2RGB);
             cv::resize(img_vis, img_vis, vis_size);
             target_loc = Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, writer);
+            // 已判定坐底, 尝试给软体臂程序发送目标坐标
             if(land){
 //                Detect.release_track();
                 if (FLAGS_UART && send_byte == -1) {

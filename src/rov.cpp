@@ -250,18 +250,13 @@ void run_rov(){
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> dis(0, 5);
     if (run_rov_flag > 0) {
-<<<<<<< HEAD
-        std::cout << "rov_runner: try to first receive" << std::endl;
-        server.recvMsg();
-        std::cout << "rov_runner: first receive done, current depth: " << server.depth << std::endl;
-=======
         print(BOLDGREEN, "ROV: try to first recive");
         server.recvMsg();
         print(BOLDGREEN, "ROV: first recive done, current depth: " << server.depth);
->>>>>>> 501a95b67ba6d6eb9beb8aa9b6e9bd6fc669c6c6
     }
     int pos = 1000;
     int neg = 50;
+    // 键盘键值与ROV动作映射
     while(run_rov_flag) {
         switch (rov_key) {
             case 105: // k
@@ -288,23 +283,30 @@ void run_rov(){
                 else server.sendMsg(SEND_UP);
                 break;
             case 59: // ;
+                // 启动自主抓取, 由坐底开始
                 print(BOLDGREEN, "ROV: diving !!!");
                 grasping_done = false;
-                while(!manual_stop && !grasping_done && land_count<200) {
+                while(!manual_stop && !grasping_done) {
                     server.sendMsg(SEND_DOWN);
                     server.recvMsg();
                     if (server.depth > 0) {
                         depth_diff = server.depth - pre_depth;
                         pre_depth = server.depth;
+                        // 更新海底深度
                         if (land) {
 //                            print(BOLDGREEN, "ROV: update max depth = " << max_depth);
                             max_depth = server.depth;
                         }
-                        if (depth_diff < depth_diff_thresh) land_count++;
-                        else if(land) {
+                        // 深度持续稳定时间计时
+                        if (depth_diff < depth_diff_thresh){
+                            land_count++;
+                        }
+                        // 当深度变化幅度超过阈值时判定为不再坐底并归零深度持续稳定时间
+                        else {
                             land = false;
                             land_count = 0;
                         }
+                        // land_count超过阈值count_thresh时判定为坐底
                         if (land_count >= count_thresh){
 //                            print(BOLDGREEN, "ROV: landed at " << server.depth);
                             land = true;
@@ -318,6 +320,7 @@ void run_rov(){
                 else rov_key = 39;
                 break;
             case 39: // '
+                // 定深
                 print(BOLDBLUE,  "ROV: try to stably floating at depth = " << max_depth-cruising_altitude);
                 for (unsigned char i=0; i<100; i++)
                     server.sendMsg(SEND_UP);
