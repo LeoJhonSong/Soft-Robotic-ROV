@@ -68,3 +68,48 @@
 ![坐底2](doc/水域参考视频截图/坐底2.png)
 ![坐底3](doc/水域参考视频截图/坐底3.png)
 ![坐底4](doc/水域参考视频截图/坐底4.png)
+
+## TCP_Server类
+
+### 成员函数
+
+|函数名|功能|
+|-|-|
+|(构造函数)|创建监听socket, 绑定端口并开始监听端口|
+|(析构函数)|关闭业务socket, 关闭监听socket|
+|**void recvMsg( void )**|如果未建立业务socket则在accept()处阻塞, 直到建立业务socket. 接收ROV发来的24位数据并处理第4位 (舱1是否漏水, 存至 `isOneLeak`), 第7位 (舱2是否漏水, 存至 `isTwoLeak`), 第8, 9位 (深度信息, 存至 `depth`)数据.|
+|**void sendMsg( int move )**|按传递的参数`move`对应的动作 (见下表) 发送指令给ROV|
+
+⚠️ accept()在 **recvMsg()** 中意味着必须先执行一次recvMsg()才能和ROV建立连接.
+
+另外值得注意的是**accept()**和**recv()**在未接收到ROV数据时会一直等待, 即阻塞, 直到接收到数据程序才会继续.
+
+### sendMsg()中move值与动作与可用宏定义对应表
+
+|动作|move的值|宏定义名|
+|-|-|-|
+|开灯|SEND_LIGHTS_ON|0|
+|全速前进|SEND_FORWARD|1|
+|全速后退|SEND_BACKWARD|2|
+|全速左|SEND_LEFT|3|
+|全速右|SEND_RIGHT|4|
+|全速左转|SEND_TURN_LEFT|5|
+|全速右转|SEND_TURN_RIGHT|6|
+|全速上升|SEND_UP|7|
+|全速下降|SEND_DOWN|8|
+|半速前进|SEND_HALF_FORWARD|9|
+|半速后退|SEND_HALF_BACKWARD|10|
+|半速左|SEND_HALF_LEFT|11|
+|半速右|SEND_HALF_RIGHT|12|
+|半速左转|SEND_HALF_TURN_LEFT|13|
+|半速右转|SEND_HALF_TURN_RIGHT|14|
+|半速上升|SEND_HALF_UP|15|
+|半速下降|SEND_HALF_DOWN|16|
+|无动作|SEND_SLEEP|17|
+|向前微调|SEND_ADJUST_FORWARD|18|
+|向后微调|SEND_ADJUST_BACKWARD|19|
+|向左微调|SEND_ADJUST_LEFT|20|
+|向右微调|SEND_ADJUST_RIGHT|21|
+|微左转|SEND_ADJUST_TURN_LEFT|22|
+|微右转|SEND_ADJUST_TURN_RIGHT|23|
+

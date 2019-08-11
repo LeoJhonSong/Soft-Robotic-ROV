@@ -141,59 +141,83 @@ void TCP_Server::recvMsg(void)
 void TCP_Server::sendMsg(int move)
 // send move commands
 // moves:
-//    FORWARD BACKWARD LEFT RIGHT TURN_LEFT TURN_RIGHT UP DOWN HALF_FORWARD HALF_BACKWARD HALF_LEFT HALF_RIGHT HALF_TURN_LEFT HALF_TURN_RIGHT HALF_UP HALF_DOWN
-//    0       1        2    3     4         5    6     7  8    9            10            11        12         13             14              15
+//    LIGHTS_ON FORWARD BACKWARD LEFT RIGHT TURN_LEFT TURN_RIGHT UP DOWN HALF_FORWARD HALF_BACKWARD HALF_LEFT HALF_RIGHT HALF_TURN_LEFT HALF_TURN_RIGHT HALF_UP HALF_DOWN SLEEP ADJUST_FORWARD ADJUST_BACKWARD ADJUST_LEFT ADJUST_RIGHT ADJUST_TURN_LEFT ADJUST_TURN_RIGHT
+//    0         1       2        3    4     5         6          7  8    9            10            11        12         13             14              15      16        17    18             19              20          21           22               23
 {
     std::string response;
     switch(move)
     {
         case 0:
-            response.assign(MOVE_FORWARD, 27);
+            response.assign(SEND_LIGHTS_ON, 27);
             break;
         case 1:
-            response.assign(MOVE_BACKWARD, 27);
+            response.assign(MOVE_FORWARD, 27);
             break;
         case 2:
-            response.assign(MOVE_LEFT, 27);
+            response.assign(MOVE_BACKWARD, 27);
             break;
         case 3:
-            response.assign(MOVE_RIGHT, 27);
+            response.assign(MOVE_LEFT, 27);
             break;
         case 4:
-            response.assign(MOVE_TURN_LEFT, 27);
+            response.assign(MOVE_RIGHT, 27);
             break;
         case 5:
-            response.assign(MOVE_TURN_RIGHT, 27);
+            response.assign(MOVE_TURN_LEFT, 27);
             break;
         case 6:
-            response.assign(MOVE_UP, 27);
+            response.assign(MOVE_TURN_RIGHT, 27);
             break;
         case 7:
-            response.assign(MOVE_DOWN, 27);
+            response.assign(MOVE_UP, 27);
             break;
         case 8:
-            response.assign(MOVE_HALF_FORWARD, 27);
+            response.assign(MOVE_DOWN, 27);
             break;
         case 9:
-            response.assign(MOVE_HALF_BACKWARD, 27);
+            response.assign(MOVE_HALF_FORWARD, 27);
             break;
         case 10:
-            response.assign(MOVE_HALF_LEFT, 27);
+            response.assign(MOVE_HALF_BACKWARD, 27);
             break;
         case 11:
-            response.assign(MOVE_HALF_RIGHT, 27);
+            response.assign(MOVE_HALF_LEFT, 27);
             break;
         case 12:
-            response.assign(MOVE_HALF_TURN_LEFT, 27);
+            response.assign(MOVE_HALF_RIGHT, 27);
             break;
         case 13:
-            response.assign(MOVE_HALF_TURN_RIGHT, 27);
+            response.assign(MOVE_HALF_TURN_LEFT, 27);
             break;
         case 14:
-            response.assign(MOVE_HALF_UP, 27);
+            response.assign(MOVE_HALF_TURN_RIGHT, 27);
             break;
         case 15:
+            response.assign(MOVE_HALF_UP, 27);
+            break;
+        case 16:
             response.assign(MOVE_HALF_DOWN, 27);
+            break;
+        case 17:
+            response.assign(SEND_SLEEP, 27);
+            break;
+        case 18:
+            response.assign(MOVE_ADJUST_FORWARD, 27);
+            break;
+        case 19:
+            response.assign(MOVE_ADJUST_BACKWARD, 27);
+            break;
+        case 20:
+            response.assign(MOVE_ADJUST_LEFT, 27);
+            break;
+        case 21:
+            response.assign(MOVE_ADJUST_RIGHT, 27);
+            break;
+        case 22:
+            response.assign(MOVE_ADJUST_TURN_LEFT, 27);
+            break;
+        case 23:
+            response.assign(MOVE_ADJUST_TURN_RIGHT, 27);
             break;
         default:
             response.assign(MOVE_SLEEP, 27);
