@@ -230,14 +230,16 @@ void TCP_Server::sendMsg(int move)
     auto bytes_sent = send(newFD, response.data(), response.length(), 0);
 }
 
-bool TCP_Server::is_landed()
+bool TCP_Server::is_landed(bool land_flag)
+    // 结合上一时刻是否位于海底和深度波动判断当前是否位于海底
 {
     depth_diff = depth - pre_depth;
     pre_depth = depth;
     // 更新海底深度
-    if (land) {
-        //                            print(BOLDGREEN, "ROV: update max depth = " << max_depth);
+    if (land_flag)
+    {
         max_depth = depth;
+        print(BOLDGREEN, "ROV: update max depth = " << max_depth);
     }
     // 深度持续稳定时间计时
     if (depth_diff < depth_diff_thresh){
@@ -324,25 +326,25 @@ void run_rov(){
                         // pre_depth = server.depth;
                         // 更新海底深度
                         // if (land) {
-                            //                            print(BOLDGREEN, "ROV: update max depth = " << max_depth);
-                            // max_depth = server.depth;
+                        //                            print(BOLDGREEN, "ROV: update max depth = " << max_depth);
+                        // max_depth = server.depth;
                         // }
                         // 深度持续稳定时间计时
                         // if (depth_diff < depth_diff_thresh){
-                            // land_count++;
+                        // land_count++;
                         // }
                         // 当深度变化幅度超过阈值时判定为不在海底并归零深度持续稳定时间
                         // else {
-                            // land = false;
-                            // land_count = 0;
+                        // land = false;
+                        // land_count = 0;
                         // }
                         // land_count超过阈值count_thresh时判定为坐底
                         // 当land_count和count_thresh过小时会产生噪声
                         // if (land_count >= count_thresh){
-                            // print(BOLDGREEN, "ROV: landed at " << server.depth);
-                            // land = true;
+                        // print(BOLDGREEN, "ROV: landed at " << server.depth);
+                        // land = true;
                         // }
-                        land = is_landed();
+                        land = is_landed(land);
                     }
                 }
                 land_count = 0;

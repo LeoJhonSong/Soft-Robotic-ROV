@@ -100,7 +100,7 @@ class TCP_Server {
         ~TCP_Server();
         void recvMsg();
         void sendMsg(int move);
-        bool is_landed();
+        bool is_landed(bool land_flag);
     private:
         int is_new = 0;
         int sockFD;
