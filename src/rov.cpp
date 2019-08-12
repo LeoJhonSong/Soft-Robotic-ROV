@@ -266,11 +266,18 @@ extern bool rov_half_speed, land, manual_stop, grasping_done;
 extern std::vector<int> target_loc;
 extern cv::Size vis_size;
 
+// 微调ROI阈值
+float width_thresh = 0.2;
+float height_thresh = 0.3;
+// 目标漂移值
+float drift_width = 0.0;
+float drift_height = 0.0;
+
 void run_rov(){
     //    bool first_diving = true;
     // float cruising_altitude = 40.0;
     //    int floating_stable_count = 0;
-    //    int aming_stable_count = 0;
+    //    int aiming_stable_count = 0;
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> dis(0, 5);
@@ -344,10 +351,10 @@ void run_rov(){
                         // print(BOLDGREEN, "ROV: landed at " << server.depth);
                         // land = true;
                         // }
-                        land = is_landed(land);
+                        land = server.is_landed(land);
                     }
                 }
-                land_count = 0;
+                server.land_count = 0;
                 land = false;  // 结束坐底
                 // first_diving = false;
                 if(manual_stop){ rov_key = 99; }
@@ -382,6 +389,7 @@ void run_rov(){
                 while((!manual_stop))
                 {
                     // 视野内有扇贝或海参时跳转case43开始微调并坐底
+                    // target_loc.at 2, 3位为目标的width, height
                     if (target_loc.at(2) != 0 && target_loc.at(3) != 0)
                     {
                         rov_key = 43;
@@ -404,16 +412,16 @@ void run_rov(){
                 {
                     // TODO
                     delay(1);
-                    // if (target_loc.at(0) < (float) vis_size.width * 0.2) {
+                    // if (target_loc.at(0) < (float) vis_size.width * 0.4) {
                     // print(BOLDMAGENTA, "ROV: left");
                     // server.sendMsg(SEND_HALF_LEFT);
-                    // } else if (target_loc.at(0) > (float) vis_size.width * 0.2) {
+                    // } else if (target_loc.at(0) > (float) vis_size.width * 0.6) {
                     // print(BOLDMAGENTA, "ROV: right");
                     // server.sendMsg(SEND_HALF_RIGHT);
-                    // } else if (target_loc.at(1) < (float) vis_size.height * 0.3) {
+                    // } else if (target_loc.at(1) < (float) vis_size.height * 0.4) {
                     // print(BOLDMAGENTA, "ROV: forward");
                     // server.sendMsg(SEND_HALF_FORWARD);
-                    // } else if (target_loc.at(1) > (float) vis_size.height * 0.3) {
+                    // } else if (target_loc.at(1) > (float) vis_size.height * 0.6) {
                     // print(BOLDMAGENTA, "ROV: backward");
                     // server.sendMsg(SEND_HALF_BACKWARD);
                     // } else {
@@ -422,20 +430,50 @@ void run_rov(){
                     // }
                     // 当目标丢失时跳回定深
                     // FIXME: 直接跳转导致定深高度可能高了一些.
-                    // 当目标在阈值内时全速下潜
+                    if (target_loc.at(2) == 0 || target_loc.at(3) == 0) { rov_key = 39; break; }
+                    // 先判定是否有左右漂移及漂移值, 向左为正
+                    // 要注意图像坐标系原点在图像左上角
+                    if(target_loc.at(0) < (float) vis_size.width * (0.5 - width_thresh / 2) || target_loc.at(0) > (float) vis_size.width * (0.5 + width_thresh / 2))
+                    {
+                        drift_width = vis_size.width * 0.5 - target_loc.at(0);
+                    }
+                    else { drift_width = 0; }
+                    // 然后判断是否有前后漂移及漂移值, 向上为正
+                    if(target_loc.at(1) < (float) vis_size.height * (0.5 - height_thresh / 2) || target_loc.at(0) > (float) vis_size.height * (0.5 + height_thresh / 2))
+                    {
+                        drift_height = vis_size.height * 0.5 - target_loc.at(1);
+                    }
+                    else { drift_height = 0; }
+                    // 比较左右漂移值和前后漂移值大小, 优先微调漂移更严重方向
+                    // 当目标在ROI内时全速下潜
+                    if(drift_width == 0 && drift_height == 0) { server.sendMsg(SEND_DOWN); print(BOLDMAGENTA, "ROV: down");}
                     // 当目标在视野内但漂移出阈值框, 全速坐底的同时微调水平位置
-                    // 当判定为坐底时break并跳到case59 定深
+                    // 目标在视野中偏左则左转, 偏右则右转, 偏前则前移, 偏后则后移
+                    // 注意左右偏移时用转动来微调
+                    if(drift_width*drift_width >= drift_height*drift_height)
+                    {
+                        if(drift_width > 0) { server.sendMsg(SEND_ADJUST_LEFT); }
+                        else { server.sendMsg(SEND_ADJUST_RIGHT); }
+                    }
+                    else
+                    {
+                        if(drift_height > 0) { server.sendMsg(SEND_ADJUST_FORWARD); }
+                        else { server.sendMsg(SEND_ADJUST_BACKWARD); }
+                    }
+                    // 当判定为坐底后break并跳到case59 坐底
                     // FIXME: 这样的话当坐底后目标在阈值框外也会尝试抓取, 但因为阈值框较小因此确实应当尝试抓取
+                    land = server.is_landed(land);
+                    if(land) { rov_key = 59; break; }
                 }
                 if(manual_stop) rov_key = 99;
-                else rov_key = 59;
+                else rov_key = 59;  // 跳回坐底
                 break;
             case 99: // c
                 // 急停
                 server.sendMsg(SEND_SLEEP);
                 break;
             default:
-                server.sendMsg(SEMD_SLEEP);
+                server.sendMsg(SEND_SLEEP);
                 break;
         }
     }
