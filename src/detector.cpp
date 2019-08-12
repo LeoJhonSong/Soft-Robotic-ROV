@@ -5,38 +5,34 @@
 #include "detector.h"
 #include "color.h"
 
+extern bool save_a_frame;
+extern std::queue<cv::Mat> det_frame_queue;
+
+Detector::~Detector()=default;
+
+
 Detector::Detector(unsigned int num_classes, int top_k, float nms_thresh, unsigned char tub, int ssd_dim, bool track){
     this->num_classes = num_classes;
     this->top_k = top_k;
     this->nms_thresh = nms_thresh;
     this->tub = tub;
     this->ssd_dim = ssd_dim;
-    this->small_size_filter = 0.005;
+    this->small_size_filter = 0.00;
     this->large_size_filter = 0.1;
-    this->track = track;
     this->track_cl = 0;
     this->track_id = -1;
+    this->frame_num = 0;
+    this->track = false;
     if(this->tub > 0) {
+        this->track = track;
         this->init_tubelets();
         this->hold_len = 5;
     }
     this->output = torch::zeros({1, this->num_classes, this->top_k, 7}, torch::kFloat);
     this->log_params();
+
 }
 
-//void Detector::init_detector(unsigned int num_classes_, int top_k_, float nms_thresh_, unsigned char tub_, int ssd_dim_){
-//    this->num_classes = num_classes_;
-//    this->top_k = top_k_;
-//    this->nms_thresh = nms_thresh_;
-//    this->tub = tub_;
-//    this->ssd_dim = ssd_dim_;
-//    if(this->tub > 0) {
-//        this->init_tubelets();
-//        this->hold_len = 10;
-//    }
-//    this->output = torch::zeros({1, this->num_classes, this->top_k, 7}, torch::kFloat);
-//    this->log_params();
-//}
 
 void Detector::log_params(){
     print(WHITE, "num_classes: " << num_classes);
@@ -49,6 +45,7 @@ void Detector::log_params(){
     print(WHITE, "large_size_filter: " << small_size_filter);
     print(WHITE, "tubelets class size: " << this->tubelets.size());
 }
+
 
 void Detector::detect(const torch::Tensor& loc, const torch::Tensor& conf, std::vector<float> conf_thresh){
     this->output.zero_();
@@ -71,6 +68,7 @@ void Detector::detect(const torch::Tensor& loc, const torch::Tensor& conf, std::
 //    return this->output;
 }
 
+
 void Detector::detect(const torch::Tensor& loc, const torch::Tensor& conf, std::vector<float> conf_thresh, float tub_thresh){
     this->output.zero_();
     for(unsigned char cl=1; cl<this->num_classes; cl++){
@@ -88,7 +86,7 @@ void Detector::detect(const torch::Tensor& loc, const torch::Tensor& conf, std::
 
         torch::Tensor nms_score = scores.index_select(0, keep);
         torch::Tensor nms_box = boxes.index_select(0, keep);
-        torch::Tensor identity = torch::ones({count}).fill_(-1);
+        torch::Tensor identity = torch::zeros({count}).fill_(-1);
         torch::Tensor matched_times = torch::zeros({count});
         if(count == 0){
             this->delete_tubelets(cl);
@@ -110,8 +108,8 @@ void Detector::detect(const torch::Tensor& loc, const torch::Tensor& conf, std::
         torch::Tensor new_id_mask = identity.eq(-1);
         if(new_id_mask.sum().item<int32_t >()>0){
             int current = this->history_max_ides[cl].item<int32_t >() + 1;
-            torch::Tensor new_id = torch::arange(current, current + new_id_mask.sum().item<int >() );
-            this->history_max_ides[cl] = new_id[new_id.size(0)-1];
+            torch::Tensor new_id = torch::arange(current, current + new_id_mask.sum().item<int >());
+            this->history_max_ides[cl] = new_id[-1];
             int nid = 0;
             for(unsigned char m=0; m<identity.size(0); m++)
                 if(new_id_mask[m].item<int >() > 0) identity[m] = new_id[nid++];
@@ -123,9 +121,7 @@ void Detector::detect(const torch::Tensor& loc, const torch::Tensor& conf, std::
             } else {
                 this->ides_set.at(cl).erase(curr_id);
                 int id_matched_times = std::min(std::get<2>(this->tubelets.at(cl)[curr_id]) + 1, 100);
-                this->tubelets.at(cl)[curr_id] = std::tuple<torch::Tensor, int, int>{nms_box[tc].unsqueeze(0).mul(this->ssd_dim),
-                                                                                     this->hold_len + 1,
-                                                                                     id_matched_times};
+                this->tubelets.at(cl)[curr_id] = std::tuple<torch::Tensor, int, int>{nms_box[tc].unsqueeze(0).mul(this->ssd_dim), this->hold_len + 1, id_matched_times};
             }
         }
         this->output[0][cl].slice(0, 0, count) = torch::cat({nms_score.unsqueeze(1), nms_box, identity.unsqueeze(1), matched_times.unsqueeze(1)}, 1);
@@ -133,8 +129,8 @@ void Detector::detect(const torch::Tensor& loc, const torch::Tensor& conf, std::
         int non_matched_size = 0;
         for(auto s:this->ides_set.at(cl) ) {
             torch::Tensor no_matched_box = std::get<0>(this->tubelets.at(cl)[s])[0];
-            if (no_matched_box.lt(0.1).sum().item<uint8_t >()>0 || no_matched_box.gt(0.9).sum().item<uint8_t >()>0 || std::get<2>(this->tubelets.at(cl)[s])<5 ) continue;
-            this->output[0][cl].slice(0, count + non_matched_size, count + non_matched_size+1) = torch::cat({torch::zeros({1}).fill_(0.01), std::get<0>(this->tubelets.at(cl)[s])[0], torch::zeros({1}).fill_(s), torch::zeros({1}).fill_(std::get<2>(this->tubelets.at(cl)[s]))}, 0);
+            if (no_matched_box.lt(0.1*this->ssd_dim).sum().item<uint8_t >()>0 || no_matched_box.gt(0.9*this->ssd_dim).sum().item<uint8_t >()>0 || std::get<2>(this->tubelets.at(cl)[s])<5 ) continue;
+            this->output[0][cl].slice(0, count + non_matched_size, count + non_matched_size+1) = torch::cat({torch::zeros({1}).fill_(0.01), std::get<0>(this->tubelets.at(cl)[s])[0].div(this->ssd_dim), torch::zeros({1}).fill_(s), torch::zeros({1}).fill_(std::get<2>(this->tubelets.at(cl)[s]))}, 0);
             non_matched_size++;
         }
         this->delete_tubelets(cl);
@@ -210,6 +206,7 @@ std::tuple<torch::Tensor, int> Detector::nms(const torch::Tensor& boxes, const t
     return nms_result;
 }
 
+
 std::tuple<torch::Tensor, int> Detector::prev_nms(const torch::Tensor& boxes, const torch::Tensor& scores, const torch::Tensor& prev_box){
     torch::Tensor keep = torch::zeros(scores.sizes()).to(torch::kLong);
     int count = 0;
@@ -263,6 +260,7 @@ std::tuple<torch::Tensor, int> Detector::prev_nms(const torch::Tensor& boxes, co
     return nms_result;
 }
 
+
 torch::Tensor Detector::iou(const torch::Tensor& boxes, unsigned char cl){
     std::map<int, std::tuple<torch::Tensor, int, int>> tubs = this->tubelets.at(cl);
     int tubs_size = tubs.size();
@@ -288,10 +286,11 @@ torch::Tensor Detector::iou(const torch::Tensor& boxes, unsigned char cl){
 }
 
 
-std::vector<int> Detector::visualization(cv::Mat& img, cv::VideoWriter& writer){
+std::vector<int> Detector::visualization(cv::Mat& img, std::ofstream& log_file){
+    ++this->frame_num;
     std::stringstream stream;
     std::vector<int> loc;
-    if (this->track_cl > 0){
+    if (this->track && this->track_cl > 0){
         torch::Tensor dets = this->output[0][this->track_cl][0];
         torch::Tensor scores = dets[0];
         torch::Tensor ids = dets[5];
@@ -307,6 +306,11 @@ std::vector<int> Detector::visualization(cv::Mat& img, cv::VideoWriter& writer){
                     this->color.at(this->track_cl));
         cv::putText(img, "track_id: " + std::to_string(this->track_id), cv::Point(img.cols-120, 10), 1,
                     1, this->color.at(this->track_cl), 2);
+        if (save_a_frame)
+            log_file << this->frame_num << ", " << (int) this->track_cl << ", " << std::setprecision(2)
+                     << scores.item<float>() << ", " << dets[1].item<float>() << ", " << dets[2].item<float>() << ", "
+                     << dets[3].item<float>() << ", " << dets[4].item<float>() << ", "
+                     << ids.item<int>() << ", " << dets[6].item<int>() << std::endl;
     }else {
         loc = {0, 0, 0, 0};
         for (unsigned char j = 1; j < this->output.size(1); j++) {
@@ -326,10 +330,12 @@ std::vector<int> Detector::visualization(cv::Mat& img, cv::VideoWriter& writer){
             torch::Tensor ids = dets.slice(1, 5, 6).squeeze(1);
             torch::Tensor matched_times = dets.slice(1, 6, 7).squeeze(1);
             for (unsigned char i = 0; i < boxes.size(0); i++) {
-                if (this->track && this->track_cl == 0 && scores[i].item<float>() > 0.7 &&
-                    matched_times[i].item<int>() > 30) {
+                int id = ids[i].item<int>();
+                float score = scores[i].item<float>();
+                int matched_time = matched_times[i].item<int>();
+                if (this->track && this->track_cl == 0 && score > 0.7 && matched_time > 30) {
                     this->track_cl = j;
-                    this->track_id = ids[i].item<int>();
+                    this->track_id = id;
                 }
                 int x1 = boxes[i][0].item<int>();
                 int y1 = boxes[i][1].item<int>();
@@ -337,25 +343,32 @@ std::vector<int> Detector::visualization(cv::Mat& img, cv::VideoWriter& writer){
                 int y2 = boxes[i][3].item<int>();
                 cv::rectangle(img, cv::Point(x1, y1), cv::Point(x2, y2), this->color.at(j), 2, 1, 0);
                 stream.str("");
-                stream << std::fixed << std::setprecision(2) << scores[i].item<float>();
-                cv::putText(img, std::to_string(ids[i].item<int>()) + ", " + stream.str(), cv::Point(x1, y1 - 5), 1, 1,
+                stream << std::fixed << std::setprecision(2) << score;
+                cv::putText(img, std::to_string(id) + ", " + stream.str(), cv::Point(x1, y1 - 5), 1, 1,
                             this->color.at(j));
+                this->stable_ides_set.at(j).insert(id);
+                if (save_a_frame)
+                    log_file << this->frame_num << ", " << (int) j << ", " << std::setprecision(2)
+                             << score << ", " << boxes[i][0].item<float>() / img.cols << ", "
+                             << boxes[i][1].item<float>() / img.rows << ", " << boxes[i][2].item<float>() / img.cols
+                             << ", " << boxes[i][3].item<float>() / img.rows << ", "
+                             << id << ", " << matched_time << std::endl;
             }
         }
     }
     if (this->tub > 0) {
-        cv::putText(img, "trepang: " + std::to_string(this->history_max_ides[1].item<int>() + 1), cv::Point(10, 10), 1,
+        cv::putText(img, "trepang: " + std::to_string(this->stable_ides_set.at(1).size()), cv::Point(10, 10), 1,
                     1, this->color.at(1), 2);
-        cv::putText(img, "urchin: " + std::to_string(this->history_max_ides[2].item<int>() + 1), cv::Point(10, 25), 1,
+        cv::putText(img, "urchin: " + std::to_string(this->stable_ides_set.at(2).size()), cv::Point(10, 25), 1,
                     1, this->color.at(2), 2);
-        cv::putText(img, "shell: " + std::to_string(this->history_max_ides[3].item<int>() + 1), cv::Point(10, 40), 1, 1,
+        cv::putText(img, "shell: " + std::to_string(this->stable_ides_set.at(3).size()), cv::Point(10, 40), 1, 1,
                     this->color.at(3), 2);
-        cv::putText(img, "starfish: " + std::to_string(this->history_max_ides[4].item<int>() + 1), cv::Point(10, 55), 1,
+        cv::putText(img, "starfish: " + std::to_string(this->stable_ides_set.at(4).size()), cv::Point(10, 55), 1,
                     1, this->color.at(4), 2);
-
     }
     cv::imshow("ResDet", img);
-    writer << img;
+    det_frame_queue.push(img);
+    save_a_frame = false;
     return loc;
 }
 
@@ -368,9 +381,12 @@ void Detector::init_tubelets(){
         this->ides.at(i).clear();
         this->ides_set.emplace_back(std::set<int>{});
         this->ides_set.at(i).clear();
+        this->stable_ides_set.emplace_back(std::set<int>{});
+        this->stable_ides_set.at(i).clear();
     }
-    this->history_max_ides = torch::ones({num_classes}).fill_(-1);
+    this->history_max_ides = torch::zeros({num_classes}).fill_(-1);
 }
+
 
 void Detector::delete_tubelets(unsigned char cl){
     std::vector<int> delet_list;
@@ -385,6 +401,7 @@ void Detector::delete_tubelets(unsigned char cl){
     this->ides.at(cl).clear();
     this->ides_set.at(cl).clear();
 }
+
 
 void Detector::delete_tubelets(){
     std::vector<int> delet_list;
@@ -403,11 +420,11 @@ void Detector::delete_tubelets(){
     }
 }
 
+
 int Detector::uart_send(unsigned char cls, Uart& uart){
-    int selected_cls;
+    int selected_cls = cls;
     if (this->track_cl > 0)
         selected_cls = this->track_cl;
-    else selected_cls = cls;
     if (selected_cls>4){
         torch::Tensor scores = this->output[0].slice(1, 0, 1).slice(2, 0, 1);
         selected_cls = scores.argmax().item<unsigned char>();
@@ -427,7 +444,8 @@ int Detector::uart_send(unsigned char cls, Uart& uart){
     return senf_byte;
 }
 
-std::vector<int> Detector::visual_detect(const torch::Tensor& loc, const torch::Tensor& conf, const std::vector<float>& conf_thresh, float tub_thresh, bool& reset, cv::Mat& img, cv::VideoWriter& writer){
+
+std::vector<int> Detector::visual_detect(const torch::Tensor& loc, const torch::Tensor& conf, const std::vector<float>& conf_thresh, float tub_thresh, bool& reset, cv::Mat& img, std::ofstream& log_file){
     if(this->tub>0) {
         if(reset){
             this->reset_tracking_state();
@@ -443,7 +461,7 @@ std::vector<int> Detector::visual_detect(const torch::Tensor& loc, const torch::
             this->detect(loc, conf, conf_thresh, tub_thresh);
     }
     else this->detect(loc, conf, conf_thresh);
-    return this->visualization(img, writer);
+    return this->visualization(img, log_file);
 }
 
 void Detector::reset_tracking_state(){

@@ -3,11 +3,10 @@
 --K 100 \
 --R 50 \
 --NET_PHASE 3 \
---MODE -2 \
+--MODE -1 \
 --SSD_DIM 320 \
 --NETG_DIM 320 \
 --TUB 1 \
---UART=true \
---WITH_ROV=true \
---TRACK=true
-
+--UART=false \
+--WITH_ROV=false \
+--TRACK=false

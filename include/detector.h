@@ -24,6 +24,7 @@ private:
     std::vector<std::map<int, std::tuple<torch::Tensor, int, int>>> tubelets;
     std::vector<std::vector<std::pair<int, int>>> ides;
     std::vector<std::set<int>> ides_set;
+    std::vector<std::set<int>> stable_ides_set;
     torch::Tensor history_max_ides;
     unsigned int hold_len;
     float large_size_filter;
@@ -31,32 +32,28 @@ private:
     bool track;
     unsigned char track_cl;
     int track_id;
+    unsigned long long frame_num;
     //    unsigned feature_size;
     std::vector<cv::Scalar> color{cv::Scalar(0,0,0), cv::Scalar(255,255,0), cv::Scalar(0, 255,255), cv::Scalar(0,0,255), cv::Scalar(255,0,255)};
 public:
     Detector(unsigned int, int, float, unsigned char, int, bool);
-//    void init_detector(unsigned int, int, float, unsigned char, int);
     void log_params();
-//    torch::Tensor detect(const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
-//            std::vector<float>, float, bool);
     void detect(const torch::Tensor&, const torch::Tensor&, std::vector<float>);
     void detect(const torch::Tensor&, const torch::Tensor&, std::vector<float>, float);
     void detect_track(const torch::Tensor&, const torch::Tensor&, std::vector<float>);
-    std::vector<int> visual_detect(const torch::Tensor&, const torch::Tensor&, const std::vector<float>&, float, bool&, cv::Mat&, cv::VideoWriter&);
+    std::vector<int> visual_detect(const torch::Tensor&, const torch::Tensor&, const std::vector<float>&, float, bool&, cv::Mat&, std::ofstream&);
     std::tuple<torch::Tensor, int> nms(const torch::Tensor&, const torch::Tensor&);
     std::tuple<torch::Tensor, int> prev_nms(const torch::Tensor&, const torch::Tensor&, const torch::Tensor&);
     torch::Tensor iou(const torch::Tensor&, unsigned char);
-    std::vector<int> visualization(cv::Mat&, cv::VideoWriter&);
+    std::vector<int> visualization(cv::Mat&, std::ofstream&);
     void init_tubelets();
     void delete_tubelets(unsigned char);
     void delete_tubelets();
     int uart_send(unsigned char cls, Uart&);
-    int uart_send(Uart&);
     void reset_tracking_state();
 //    void enable_track();
 //    void release_track();
-    ~Detector(){
-    };
+    ~Detector();
 };
 
 
