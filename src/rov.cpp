@@ -9,7 +9,7 @@
 #include <random>
 
 TCP_Server::TCP_Server(void)
-// initial the socket
+    // initial the socket
 {
     auto &portNum = LOCAL_PORT;  // set local port number to 9090
     const unsigned int backLog = 8;  // number of connections allowed on the incoming queue
@@ -51,7 +51,7 @@ TCP_Server::TCP_Server(void)
             ++numOfAddr;
         }
 
-            // if address is ipv6 address
+        // if address is ipv6 address
         else {
             ipVer              = "IPv6";
             sockaddr_in6 *ipv6 = reinterpret_cast<sockaddr_in6 *>(p->ai_addr);
@@ -106,7 +106,7 @@ TCP_Server::TCP_Server(void)
 }
 
 TCP_Server::~TCP_Server(void)
-// release the socket
+    // release the socket
 {
     close(newFD);
     close(sockFD);
@@ -114,7 +114,7 @@ TCP_Server::~TCP_Server(void)
 }
 
 void TCP_Server::recvMsg(void)
-// receive message from the ROV
+    // receive message from the ROV
 {
     if(!is_new)
     {
@@ -139,10 +139,10 @@ void TCP_Server::recvMsg(void)
 }
 
 void TCP_Server::sendMsg(int move)
-// send move commands
-// moves:
-//    LIGHTS_ON FORWARD BACKWARD LEFT RIGHT TURN_LEFT TURN_RIGHT UP DOWN HALF_FORWARD HALF_BACKWARD HALF_LEFT HALF_RIGHT HALF_TURN_LEFT HALF_TURN_RIGHT HALF_UP HALF_DOWN SLEEP ADJUST_FORWARD ADJUST_BACKWARD ADJUST_LEFT ADJUST_RIGHT ADJUST_TURN_LEFT ADJUST_TURN_RIGHT
-//    0         1       2        3    4     5         6          7  8    9            10            11        12         13             14              15      16        17    18             19              20          21           22               23
+    // send move commands
+    // moves:
+    //    LIGHTS_ON FORWARD BACKWARD LEFT RIGHT TURN_LEFT TURN_RIGHT UP DOWN HALF_FORWARD HALF_BACKWARD HALF_LEFT HALF_RIGHT HALF_TURN_LEFT HALF_TURN_RIGHT HALF_UP HALF_DOWN SLEEP ADJUST_FORWARD ADJUST_BACKWARD ADJUST_LEFT ADJUST_RIGHT ADJUST_TURN_LEFT ADJUST_TURN_RIGHT
+    //    0         1       2        3    4     5         6          7  8    9            10            11        12         13             14              15      16        17    18             19              20          21           22               23
 {
     std::string response;
     switch(move)
@@ -235,29 +235,31 @@ extern int rov_key, send_byte;
 extern bool rov_half_speed, land, manual_stop, grasping_done;
 extern std::vector<int> target_loc;
 extern cv::Size vis_size;
+
 void run_rov(){
     int land_count = 0;
     int count_thresh = 50;
     float pre_depth = 0;
-    float depth_diff_thresh = 3.0;
+    float depth_diff_thresh = 6.0;  // unit is cm
     float depth_diff = 100.0;
     float max_depth = 0.0;
-//    bool first_diving = true;
-    float cruising_altitude = 40.0;
-//    int floating_stable_count = 0;
-//    int aming_stable_count = 0;
+    //    bool first_diving = true;
+    // float cruising_altitude = 40.0;
+    //    int floating_stable_count = 0;
+    //    int aming_stable_count = 0;
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> dis(0, 5);
+    // 确认上位机与ROV通信建立成功并开灯
     if (run_rov_flag > 0) {
-        print(BOLDGREEN, "ROV: try to first recive");
+        print(BOLDGREEN, "ROV: try to first receive");
         server.recvMsg();
-        print(BOLDGREEN, "ROV: first recive done, current depth: " << server.depth);
+        print(BOLDGREEN, "ROV: first receive done, current depth: " << server.depth);
+        server.sendMsg(SEND_LIGHTS_ON);
     }
-    int pos = 1000;
-    int neg = 50;
-    // 键盘键值与ROV动作映射
+    // 进入ROV动作控制循环
     while(run_rov_flag) {
+        // 键盘键值与ROV动作映射
         switch (rov_key) {
             case 105: // k
                 if (rov_half_speed) server.sendMsg(SEND_HALF_FORWARD);
@@ -294,7 +296,7 @@ void run_rov(){
                         pre_depth = server.depth;
                         // 更新海底深度
                         if (land) {
-//                            print(BOLDGREEN, "ROV: update max depth = " << max_depth);
+                            //                            print(BOLDGREEN, "ROV: update max depth = " << max_depth);
                             max_depth = server.depth;
                         }
                         // 深度持续稳定时间计时
@@ -307,21 +309,23 @@ void run_rov(){
                             land_count = 0;
                         }
                         // land_count超过阈值count_thresh时判定为坐底
+                        // 当land_count和count_thresh过小时会产生噪声
                         if (land_count >= count_thresh){
-//                            print(BOLDGREEN, "ROV: landed at " << server.depth);
+                            //                            print(BOLDGREEN, "ROV: landed at " << server.depth);
                             land = true;
                         }
                     }
                 }
                 land_count = 0;
                 land = false;
-//                first_diving = false;
+                //                first_diving = false;
                 if(manual_stop) rov_key = 99;
                 else rov_key = 39;
                 break;
             case 39: // '
                 // 定深
-                print(BOLDBLUE,  "ROV: try to stably floating at depth = " << max_depth-cruising_altitude);
+                print(BOLDBLUE,  "ROV: try to stably floating");
+                // 全速上浮3个单位时间, 悬停2个单位时间等ROV静止后获取当前深度
                 for (unsigned char i=0; i<100; i++)
                     server.sendMsg(SEND_UP);
                 delay(3);
@@ -335,48 +339,64 @@ void run_rov(){
                         break;
                     }
                 }
-//                init_state();
+                // init_state();
                 if(manual_stop) rov_key = 99;
                 else rov_key = 47;
                 break;
             case 47:  // /
-                print(BOLDMAGENTA, "ROV: move to stably aming at a target");
-                while((!manual_stop)) {
-                    if (target_loc.at(2) == 0 || target_loc.at(3) == 0) {
-                        delay(5);
-                        switch (dis(gen)){
-                            case 0: print(BOLDMAGENTA, "ROV: random turn right"); server.sendMsg(SEND_HALF_TURN_RIGHT); break;
-                            case 1: print(BOLDMAGENTA, "ROV: random turn right"); server.sendMsg(SEND_HALF_TURN_LEFT); break;
-                            case 2: print(BOLDMAGENTA, "ROV: random forward"); server.sendMsg(SEND_HALF_FORWARD); break;
-                            case 3: print(BOLDMAGENTA, "ROV: random backward"); server.sendMsg(SEND_HALF_BACKWARD); break;
-                            case 4: print(BOLDMAGENTA, "ROV: random left"); server.sendMsg(SEND_HALF_LEFT); break;
-                            case 5: print(BOLDMAGENTA, "ROV: random right"); server.sendMsg(SEND_HALF_RIGHT); break;
-                        }
-                    } else {
-                        delay(1);
-                        if (target_loc.at(0) < (float) vis_size.width * 0.4) {
-                            print(BOLDMAGENTA, "ROV: left");
-                            server.sendMsg(SEND_HALF_LEFT);
-                        } else if (target_loc.at(0) > (float) vis_size.width * 0.6) {
-                            print(BOLDMAGENTA, "ROV: right");
-                            server.sendMsg(SEND_HALF_RIGHT);
-                        } else if (target_loc.at(1) < (float) vis_size.height * 0.4) {
-                            print(BOLDMAGENTA, "ROV: forward");
-                            server.sendMsg(SEND_HALF_FORWARD);
-                        } else if (target_loc.at(1) > (float) vis_size.height * 0.6) {
-                            print(BOLDMAGENTA, "ROV: backward");
-                            server.sendMsg(SEND_HALF_BACKWARD);
-                        } else {
-                            print(BOLDMAGENTA, "ROV: down");
-                            break;
-                        }
+                // 视野内无目标时遍历水域
+                // TODO
+                print(BOLDMAGENTA, "ROV: cruising");
+                while((!manual_stop))
+                {
+                    // 视野内有扇贝或海参时跳转case43开始微调并坐底
+                    if (target_loc.at(2) != 0 && target_loc.at(3) != 0)
+                    {
+                        rov_key = 43;
+                        break;
                     }
+                    // delay(5);
+                    // switch (dis(gen))
+                    // {
+                    // case 0: print(BOLDMAGENTA, "ROV: random turn right"); server.sendMsg(SEND_HALF_TURN_RIGHT); break;
+                    // case 1: print(BOLDMAGENTA, "ROV: random turn right"); server.sendMsg(SEND_HALF_TURN_LEFT); break;
+                    // case 2: print(BOLDMAGENTA, "ROV: random forward"); server.sendMsg(SEND_HALF_FORWARD); break;
+                    // case 3: print(BOLDMAGENTA, "ROV: random backward"); server.sendMsg(SEND_HALF_BACKWARD); break;
+                    // case 4: print(BOLDMAGENTA, "ROV: random left"); server.sendMsg(SEND_HALF_LEFT); break;
+                    // case 5: print(BOLDMAGENTA, "ROV: random right"); server.sendMsg(SEND_HALF_RIGHT); break;
+                    // }
                 }
-                if(manual_stop) rov_key = 99;
-                else rov_key = 59;
-                break;
+            case 43:  // +
+                // 实时微调水平位置并全速下潜
+                while((!manual_stop))
+                {
+                    delay(1);
+                    if (target_loc.at(0) < (float) vis_size.width * 0.2) {
+                        print(BOLDMAGENTA, "ROV: left");
+                        server.sendMsg(SEND_HALF_LEFT);
+                    } else if (target_loc.at(0) > (float) vis_size.width * 0.2) {
+                        print(BOLDMAGENTA, "ROV: right");
+                        server.sendMsg(SEND_HALF_RIGHT);
+                    } else if (target_loc.at(1) < (float) vis_size.height * 0.3) {
+                        print(BOLDMAGENTA, "ROV: forward");
+                        server.sendMsg(SEND_HALF_FORWARD);
+                    } else if (target_loc.at(1) > (float) vis_size.height * 0.3) {
+                        print(BOLDMAGENTA, "ROV: backward");
+                        server.sendMsg(SEND_HALF_BACKWARD);
+                    } else {
+                        print(BOLDMAGENTA, "ROV: down");
+                        break;
+                    }
+                    if(manual_stop) rov_key = 99;
+                    else rov_key = 59;
+                    break;
+                }
+
             case 99: // c
                 server.sendMsg(SEND_SLEEP);
+                break;
+            default:
+                server.sendMsg(SEMD_SLEEP);
                 break;
         }
     }
