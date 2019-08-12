@@ -3,8 +3,8 @@
 //
 
 #include "utils.h"
-//#include <sys/time.h>
 #include "color.h"
+#include <chrono>
 
 cv::Mat tensor2im(torch::Tensor tensor) {
     tensor = tensor[0].add(1.0).div(2.0).mul(255.0).permute({1,2,0}).to(torch::kU8).to(torch::kCPU);
@@ -179,14 +179,7 @@ void delay(int s)
     while (time(nullptr) - now < s);
 }
 
-//struct timeval start, t_delay;
-//double time_diff_ms;
-//void delay(int ms)
-//{
-//    gettimeofday(&start, nullptr);
-//    while(time_diff_ms < ms)
-//    {
-//        gettimeofday(&t_delay, nullptr);
-//        time_diff_ms = (t_delay.tv_sec-start.tv_sec) * 1000 + (t_delay.tv_usec-start.tv_usec)/1000;
-//    }
-//}
+void delay_ms(int ms){
+    std::chrono::milliseconds now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+    while (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - now.count() < ms);
+}

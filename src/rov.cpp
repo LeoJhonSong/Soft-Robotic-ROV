@@ -395,12 +395,12 @@ void run_rov() {
             case 39:  // '
                 // 定深
                 print(BOLDBLUE, "ROV: try to stably floating");
-                // 全速上浮3个单位时间, 悬停2个单位时间等ROV静止后获取当前深度
+                // 全速上浮3s, 悬停2s等ROV静止后获取当前深度
                 for (unsigned char i = 0; i < 100; i++) server.sendMsg(SEND_UP);
-                delay(3);
+                delay_ms(3000);
                 for (unsigned char i = 0; i < 100; i++)
                     server.sendMsg(SEND_SLEEP);
-                delay(2);
+                delay_ms(2000);
                 while (true) {
                     server.recvMsg();
                     if (server.depth > 0) {
@@ -438,27 +438,27 @@ void run_rov() {
                     switch (cruise_state) {
                         case 0:  // f2r
                             server.sendMsg(SEND_HALF_FORWARD);
-                            delay(1.5);  // 1.5s
+                            delay_ms(1500);  // 1.5s
                             server.sendMsg(SEND_HALF_TURN_RIGHT);
-                            delay(0.5);  // FIXME
+                            delay_ms(500);  // FIXME
                             break;
                         case 1:  // r2f
                             server.sendMsg(SEND_HALF_FORWARD);
-                            delay(3.0);  // 3s
+                            delay_ms(3000);  // 3s
                             server.sendMsg(SEND_HALF_TURN_LEFT);
-                            delay(0.5);  // FIXME
+                            delay_ms(500);  // FIXME
                             break;
                         case 2:  // f2l
                             server.sendMsg(SEND_HALF_FORWARD);
-                            delay(1.5);
+                            delay_ms(1500);
                             server.sendMsg(SEND_HALF_TURN_LEFT);
-                            delay(0.5);  // FIXME
+                            delay_ms(500);  // FIXME
                             break;
                         case 3:  // l2f
                             server.sendMsg(SEND_HALF_FORWARD);
-                            delay(3.0);
+                            delay_ms(3000);
                             server.sendMsg(SEND_TURN_RIGHT);
-                            delay(0.5);  // FIXME
+                            delay_ms(500);  // FIXME
                             break;
                         default:
                             break;
@@ -468,7 +468,7 @@ void run_rov() {
                 // 实时微调水平位置并全速下潜
                 while ((!manual_stop)) {
                     // FIXME: delay may too long
-                    delay(1);
+                    delay_ms(100);  // 0.1s
                     // 当目标丢失时跳出循环到case59 坐底
                     if (target_loc.at(2) == 0 || target_loc.at(3) == 0) {
                         break;

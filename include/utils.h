@@ -20,3 +20,4 @@ void parse_key(int, bool&, bool&, std::vector<float>&, int&, int&, CFilt&);
 void video_write();
 void init_state();
 void delay(int ms);
+void delay_ms(int ms);
