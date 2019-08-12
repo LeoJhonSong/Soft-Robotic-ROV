@@ -272,6 +272,8 @@ float height_thresh = 0.3;
 // 目标漂移值
 float drift_width = 0.0;
 float drift_height = 0.0;
+// 微调时是否下潜
+bool is_dive_ok = false;
 
 void run_rov(){
     //    bool first_diving = true;
@@ -410,7 +412,7 @@ void run_rov(){
                 // 实时微调水平位置并全速下潜
                 while((!manual_stop))
                 {
-                    // TODO
+                    // FIXME: delay may too long
                     delay(1);
                     // if (target_loc.at(0) < (float) vis_size.width * 0.4) {
                     // print(BOLDMAGENTA, "ROV: left");
@@ -428,9 +430,8 @@ void run_rov(){
                     // print(BOLDMAGENTA, "ROV: down");
                     // break;
                     // }
-                    // 当目标丢失时跳回定深
-                    // FIXME: 直接跳转导致定深高度可能高了一些.
-                    if (target_loc.at(2) == 0 || target_loc.at(3) == 0) { rov_key = 39; break; }
+                    // 当目标丢失时跳出循环到case59 坐底
+                    if (target_loc.at(2) == 0 || target_loc.at(3) == 0) { break; }
                     // 先判定是否有左右漂移及漂移值, 向左为正
                     // 要注意图像坐标系原点在图像左上角
                     if(target_loc.at(0) < (float) vis_size.width * (0.5 - width_thresh / 2) || target_loc.at(0) > (float) vis_size.width * (0.5 + width_thresh / 2))
@@ -446,37 +447,54 @@ void run_rov(){
                     else { drift_height = 0; }
                     // 比较左右漂移值和前后漂移值大小, 优先微调漂移更严重方向
                     // 当目标在ROI内时全速下潜
-                    if(drift_width == 0 && drift_height == 0) { server.sendMsg(SEND_DOWN); print(BOLDMAGENTA, "ROV: down");}
+                    if(drift_width == 0 && drift_height == 0) { server.sendMsg(SEND_DOWN); is_dive_ok = true; print(BOLDMAGENTA, "ROV: down");}
+                    // FIXME: 方法2: 先水平微调好再全速下潜的同时微调水平位置
                     // 当目标在视野内但漂移出阈值框, 全速坐底的同时微调水平位置
                     // 目标在视野中偏左则左转, 偏右则右转, 偏前则前移, 偏后则后移
                     // 注意左右偏移时用转动来微调
                     if(drift_width*drift_width >= drift_height*drift_height)
                     {
-                        if(drift_width > 0) { server.sendMsg(SEND_ADJUST_LEFT); }
-                        else { server.sendMsg(SEND_ADJUST_RIGHT); }
+                        if(drift_width > 0)
+                        {
+                            if(!is_dive_ok) { server.sendMsg(SEND_ADJUST_TURN_LEFT); }
+                            else { server.sendMsg(SEND_DIVE_TURN_LEFT); }
+                            // server.sendMsg(SEND_DIVE_TURN_LEFT);
+                        }
+                        else
+                        {
+                            if(!is_dive_ok) { server.sendMsg(SEND_ADJUST_TURN_RIGHT); }
+                            else { server.sendMsg(SEND_DIVE_TURN_RIGHT); }
+                            // server.sendMsg(SEND_DIVE_TURN_RIGHT);
+                        }
+                        if(drift_height > 0)
+                        {
+                            if(!is_dive_ok) { server.sendMsg(SEND_ADJUST_FORWARD); }
+                            else { server.sendMsg(SEND_DIVE_FORWARD); }
+                            // server.sendMsg(SEND_DIVE_FORWARD);
+                        }
+                        else
+                        {
+                            if(!is_dive_ok) { server.sendMsg(SEND_ADJUST_BACKWARD); }
+                            else { server.sendMsg(SEND_DIVE_BACKWARD); }
+                            // server.sendMsg(SEND_DIVE_BACKWARD);
+                        }
+                        // 当判定为坐底后break并跳到case59 坐底
+                        // FIXME: 这样的话当坐底后目标在阈值框外也会尝试抓取, 但因为阈值框较小因此确实应当尝试抓取
+                        land = server.is_landed(land);
+                        if(land) { is_dive_ok = false; break; }
                     }
-                    else
-                    {
-                        if(drift_height > 0) { server.sendMsg(SEND_ADJUST_FORWARD); }
-                        else { server.sendMsg(SEND_ADJUST_BACKWARD); }
-                    }
-                    // 当判定为坐底后break并跳到case59 坐底
-                    // FIXME: 这样的话当坐底后目标在阈值框外也会尝试抓取, 但因为阈值框较小因此确实应当尝试抓取
-                    land = server.is_landed(land);
-                    if(land) { rov_key = 59; break; }
+                    if(manual_stop) rov_key = 99;
+                    else rov_key = 59;  // 跳回坐底
+                    break;
+                    case 99: // c
+                    // 急停
+                    server.sendMsg(SEND_SLEEP);
+                    break;
+                    default:
+                    server.sendMsg(SEND_SLEEP);
+                    break;
                 }
-                if(manual_stop) rov_key = 99;
-                else rov_key = 59;  // 跳回坐底
-                break;
-            case 99: // c
-                // 急停
-                server.sendMsg(SEND_SLEEP);
-                break;
-            default:
-                server.sendMsg(SEND_SLEEP);
-                break;
         }
+        server.sendMsg(SEND_SLEEP);
+        print(WHITE, "ROV: run_rov quit");
     }
-    server.sendMsg(SEND_SLEEP);
-    print(WHITE, "ROV: run_rov quit");
-}

@@ -2,46 +2,49 @@ digraph G {
 
   subgraph cluster_0 {
     node [style=filled;]
-    a[label="全速下潜"]
+    x[label="持续下潜"]
+    x -> a[label="当深度一定时间\n内波动稳定在5cm\n以内时判断为坐底"]
+    a[label="坐底,\n记录此时深度作为海底深度,\n算出气压补偿"]
     b[label="以视野内置信度最高的为目标,\n前后或左右移动使目标中心在阈值框内"]
-    b -> a[label="目标中心在阈值框内"]
+    b -> x[label="目标丢失"]
+    y -> x[label="目标丢失"]
+    y[label="全速下潜的同时实时前后或左右微调"]
+    b -> y[label="目标中心在阈值框内"]
+    y -> a[label="当深度一定时间\n内波动稳定在5cm\n以内时判断为坐底"]
+    fontcolor = "blue"
     label = "移动至适当位置坐底";
     color=blue
   }
   subgraph cluster_1 {
     node [style=filled]
-    c[label="路径规划\n因为摄像头向前的视野不够多,\n路径规划无法依靠视觉,\n只能像扫地机一样遍历"]
+    c[label="路径规划\n因为摄像头向前的视野不够多,\n路径规划无法依靠视觉,\n采取蛇形走位遍历水域"]
     d[label="定深\n因为目标水域水底较为平坦,\n采取上升一段时间后停止上升,\n然后利用ROV自带深度闭环实现定深"]
     d -> c
     l[label="实时检测目标"]
-    l -> c[label="视野内无目标"]
+    l -> c[label="视野\n内无目标"]
     c -> l
     l -> b[label="视野内有目标"]
-    b -> c[label="目标丢失"]
+    fontcolor = "blue"
     label = "定深巡航";
     color=blue
   }
   subgraph cluster_2 {
     node [style=filled];
-    a -> f[label="当深度一定\n时间内波动\n稳定在5cm以内时\n判断为坐底"]
-    f -> e[label="是而和\n上一目标\n是不同目标"]
+    a -> f
+    f -> e[label="有, 且和\n上一目标\n是不同目标"]
     e[label="给手臂程序传递目标相对位置,\n抓取并放入网框"]
     f[label="识别抓取范围内是否有可抓目标"]
     i[label="判断是否达到抓取\n同一目标次数上限"]
-    f -> i[label="是而和\n上一目标\n是同一目标"]
+    f -> i[label="有, 且和\n上一目标\n是同一目标"]
     e-> f
-    i -> e[label="未达到抓取次数上限"]
-    i -> f[label="是, 更换\n抓取目标"]
-    label = "抓取";
+    i -> e[label="未达到\n抓取次数\n上限"]
+    i -> f[label="达到抓取\n次数上限,\n更换抓取目标"]
+    fontcolor = "blue"
+    label = "抓取"
     color=blue
   }
-  start -> g
-  g[label="全速下潜"]
-  g -> h[label="当深度一定\n时间内波动\n稳定在5cm以内时\n判断为坐底"]
-  h[label="记录此时深度作为海底深度,\n算出气压补偿"]
-  h -> d
-  f -> d[label="否"]
-  e -> d[label="否"]
+  start -> x
+  f -> d[label="无可抓目标"]
 
-  start [shape=Mdiamond];
+  start [style="filled"; color="red"; fontcolor="white";];
 }
