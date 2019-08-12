@@ -132,6 +132,7 @@ void TCP_Server::recvMsg(void)
     if(receive[4] == '\xaa'){ isOneLeak = 1; }
     if(receive[7] == '\xaa'){ isTwoLeak = 1; }
     depth = (int(receive[8]) * 256 + int(receive[9]));  // the unit is cm
+    // 此处adjust_rate即README中修正参数k
     depth = depth / adjust_rate;
     // std::cout << isOneLeak << std::endl;
     // std::cout << isTwoLeak << std::endl;
@@ -229,6 +230,33 @@ void TCP_Server::sendMsg(int move)
     auto bytes_sent = send(newFD, response.data(), response.length(), 0);
 }
 
+bool TCP_Server::is_landed()
+{
+    depth_diff = depth - pre_depth;
+    pre_depth = depth;
+    // 更新海底深度
+    if (land) {
+        //                            print(BOLDGREEN, "ROV: update max depth = " << max_depth);
+        max_depth = depth;
+    }
+    // 深度持续稳定时间计时
+    if (depth_diff < depth_diff_thresh){
+        land_count++;
+    }
+    // 当深度变化幅度超过阈值时判定为不在海底并归零深度持续稳定时间
+    else {
+        land_count = 0;
+        return 0;
+    }
+    // land_count超过阈值count_thresh时判定为坐底
+    // 当land_count和count_thresh过小时会产生噪声
+    if (land_count >= count_thresh){
+        print(BOLDGREEN, "ROV: landed at " << depth);
+        return 1;
+    }
+
+}
+
 TCP_Server server;
 extern bool run_rov_flag;
 extern int rov_key, send_byte;
@@ -237,12 +265,6 @@ extern std::vector<int> target_loc;
 extern cv::Size vis_size;
 
 void run_rov(){
-    int land_count = 0;
-    int count_thresh = 50;
-    float pre_depth = 0;
-    float depth_diff_thresh = 6.0;  // unit is cm
-    float depth_diff = 100.0;
-    float max_depth = 0.0;
     //    bool first_diving = true;
     // float cruising_altitude = 40.0;
     //    int floating_stable_count = 0;
@@ -257,7 +279,7 @@ void run_rov(){
         print(BOLDGREEN, "ROV: first receive done, current depth: " << server.depth);
         server.sendMsg(SEND_LIGHTS_ON);
     }
-    // 进入ROV动作控制循环
+    // 进入ROV动作控制循环, 整个比赛过程中都应当处于这个循环中
     while(run_rov_flag) {
         // 键盘键值与ROV动作映射
         switch (rov_key) {
@@ -285,42 +307,50 @@ void run_rov(){
                 else server.sendMsg(SEND_UP);
                 break;
             case 59: // ;
-                // 启动自主抓取, 由坐底开始
+                // 坐底. 从这一步开始为自主控制.
                 print(BOLDGREEN, "ROV: diving !!!");
                 grasping_done = false;
-                while(!manual_stop && !grasping_done) {
+                // 当未人为操作且软体臂抓取未完成时持续坐底
+                while(!manual_stop && !grasping_done)
+                {
                     server.sendMsg(SEND_DOWN);
                     server.recvMsg();
-                    if (server.depth > 0) {
-                        depth_diff = server.depth - pre_depth;
-                        pre_depth = server.depth;
+                    // 用depth > 0滤掉因为上位机端刷新数据过快而并非每次都能接收到数据产生的0
+                    // (每次刷新数据前都会用memset归零接收ROV数据的变量)
+                    if (server.depth > 0)
+                        // 判定是否到达海底
+                    {
+                        // depth_diff = server.depth - pre_depth;
+                        // pre_depth = server.depth;
                         // 更新海底深度
-                        if (land) {
+                        // if (land) {
                             //                            print(BOLDGREEN, "ROV: update max depth = " << max_depth);
-                            max_depth = server.depth;
-                        }
+                            // max_depth = server.depth;
+                        // }
                         // 深度持续稳定时间计时
-                        if (depth_diff < depth_diff_thresh){
-                            land_count++;
-                        }
-                        // 当深度变化幅度超过阈值时判定为不再坐底并归零深度持续稳定时间
-                        else {
-                            land = false;
-                            land_count = 0;
-                        }
+                        // if (depth_diff < depth_diff_thresh){
+                            // land_count++;
+                        // }
+                        // 当深度变化幅度超过阈值时判定为不在海底并归零深度持续稳定时间
+                        // else {
+                            // land = false;
+                            // land_count = 0;
+                        // }
                         // land_count超过阈值count_thresh时判定为坐底
                         // 当land_count和count_thresh过小时会产生噪声
-                        if (land_count >= count_thresh){
-                            //                            print(BOLDGREEN, "ROV: landed at " << server.depth);
-                            land = true;
-                        }
+                        // if (land_count >= count_thresh){
+                            // print(BOLDGREEN, "ROV: landed at " << server.depth);
+                            // land = true;
+                        // }
+                        land = is_landed();
                     }
                 }
                 land_count = 0;
-                land = false;
-                //                first_diving = false;
-                if(manual_stop) rov_key = 99;
-                else rov_key = 39;
+                land = false;  // 结束坐底
+                // first_diving = false;
+                if(manual_stop){ rov_key = 99; }
+                // 开始上浮并定深
+                else { rov_key = 39; }
                 break;
             case 39: // '
                 // 定深
@@ -370,29 +400,36 @@ void run_rov(){
                 // 实时微调水平位置并全速下潜
                 while((!manual_stop))
                 {
+                    // TODO
                     delay(1);
-                    if (target_loc.at(0) < (float) vis_size.width * 0.2) {
-                        print(BOLDMAGENTA, "ROV: left");
-                        server.sendMsg(SEND_HALF_LEFT);
-                    } else if (target_loc.at(0) > (float) vis_size.width * 0.2) {
-                        print(BOLDMAGENTA, "ROV: right");
-                        server.sendMsg(SEND_HALF_RIGHT);
-                    } else if (target_loc.at(1) < (float) vis_size.height * 0.3) {
-                        print(BOLDMAGENTA, "ROV: forward");
-                        server.sendMsg(SEND_HALF_FORWARD);
-                    } else if (target_loc.at(1) > (float) vis_size.height * 0.3) {
-                        print(BOLDMAGENTA, "ROV: backward");
-                        server.sendMsg(SEND_HALF_BACKWARD);
-                    } else {
-                        print(BOLDMAGENTA, "ROV: down");
-                        break;
-                    }
-                    if(manual_stop) rov_key = 99;
-                    else rov_key = 59;
-                    break;
+                    // if (target_loc.at(0) < (float) vis_size.width * 0.2) {
+                    // print(BOLDMAGENTA, "ROV: left");
+                    // server.sendMsg(SEND_HALF_LEFT);
+                    // } else if (target_loc.at(0) > (float) vis_size.width * 0.2) {
+                    // print(BOLDMAGENTA, "ROV: right");
+                    // server.sendMsg(SEND_HALF_RIGHT);
+                    // } else if (target_loc.at(1) < (float) vis_size.height * 0.3) {
+                    // print(BOLDMAGENTA, "ROV: forward");
+                    // server.sendMsg(SEND_HALF_FORWARD);
+                    // } else if (target_loc.at(1) > (float) vis_size.height * 0.3) {
+                    // print(BOLDMAGENTA, "ROV: backward");
+                    // server.sendMsg(SEND_HALF_BACKWARD);
+                    // } else {
+                    // print(BOLDMAGENTA, "ROV: down");
+                    // break;
+                    // }
+                    // 当目标丢失时跳回定深
+                    // FIXME: 直接跳转导致定深高度可能高了一些.
+                    // 当目标在阈值内时全速下潜
+                    // 当目标在视野内但漂移出阈值框, 全速坐底的同时微调水平位置
+                    // 当判定为坐底时break并跳到case59 定深
+                    // FIXME: 这样的话当坐底后目标在阈值框外也会尝试抓取, 但因为阈值框较小因此确实应当尝试抓取
                 }
-
+                if(manual_stop) rov_key = 99;
+                else rov_key = 59;
+                break;
             case 99: // c
+                // 急停
                 server.sendMsg(SEND_SLEEP);
                 break;
             default:

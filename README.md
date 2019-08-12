@@ -17,18 +17,21 @@
 
 ## 需要注意的问题
 
-- 抓取范围半径约10cm
-- 抓手抓取一次大致耗时18s
-- 深度传感器以开启时压强校零, 因此要在下水前开机才能测得水的绝对高度.
+- 抓取范围半径约**10cm**
+- 抓手抓取一次大致耗时**18s**, 但可以更快
+- 深度传感器以**ROV开启时压强**校零, 因此要在**下水前开机**才能测得水的绝对高度,
+  即准确的压强补偿
 - 深度传感器记录的是压强, 当工作水域密度和传感器内置密度不同时传感器给出的深度不准
 
-   解决办法: 现场测量定量水的重量得出修正参数.
+   解决办法: 现场测量定量水的重量得出修正参数`k`.
 
    $$\rho_{sea}g_{local}V=k\rho_0g_0V$$
+   $$P_{sensor}=\rho_{sea}g_{local}h_{real}=k\rho_0g_0h_{real}=\rho_0g_0h_{inaccurate}$$
    $$k=\frac{G_{sea}}{G_{standard}}$$
-   $$h=\frac{h}{k}'$$
+   $$h_{real}=\frac{h_{inaccurate}}{k}$$
 
-🔗[海水密度参考资料](doc/海水密度.png)
+   📑 [海水密度参考资料](doc/海水密度.png)  
+   📑 [高精度深度传感器参考资料](doc/基于MEMS微系统的深度计系统构建及精度控制.pdf)
 
 - 移动时深度传感器数据变化剧烈, 可以考虑制作如下整流罩 (灰色), 能极大减小水流干扰
 
@@ -116,10 +119,10 @@
 |半速上升|SEND_HALF_UP|15|
 |半速下降|SEND_HALF_DOWN|16|
 |悬停|SEND_SLEEP|17|
-|向前微调|SEND_ADJUST_FORWARD|18|
-|向后微调|SEND_ADJUST_BACKWARD|19|
-|向左微调|SEND_ADJUST_LEFT|20|
-|向右微调|SEND_ADJUST_RIGHT|21|
-|微左转|SEND_ADJUST_TURN_LEFT|22|
-|微右转|SEND_ADJUST_TURN_RIGHT|23|
+|全速坐底并向前微调|SEND_ADJUST_FORWARD|18|
+|全速坐底并向后微调|SEND_ADJUST_BACKWARD|19|
+|全速坐底并向左微调|SEND_ADJUST_LEFT|20|
+|全速坐底并向右微调|SEND_ADJUST_RIGHT|21|
+|全速坐底并微左转|SEND_ADJUST_TURN_LEFT|22|
+|全速坐底并微右转|SEND_ADJUST_TURN_RIGHT|23|
 
