@@ -347,5 +347,5 @@ void run_rov(){
         }
     }
     server.sendMsg(SEND_SLEEP);
-    print(WHITE, "ROV: run_rov quit");
+    print(RED, "QUIT: run_rov quit");
 }
