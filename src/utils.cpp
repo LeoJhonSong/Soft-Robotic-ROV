@@ -128,6 +128,7 @@ void parse_key(int key, bool& quit, bool& reset_id, std::vector<float>& conf_thr
 }
 
 extern std::queue<cv::Mat> frame_queue, det_frame_queue;
+extern std::queue<std::pair<cv::Mat, unsigned int>> img_queue;
 extern int frame_w, frame_h, ex1, send_byte, rov_key;
 extern bool video_write_flag, grasping_done, land;
 extern std::string save_path;
@@ -136,13 +137,13 @@ extern cv::Size vis_size;
 void video_write(){
     //raw video
     cv::VideoWriter writer_raw;
-    writer_raw.open("./record/" + save_path + "/" + save_path + "_raw.mp4", ex1, 20, cv::Size(frame_w, frame_h), true);
+    writer_raw.open("./record/" + save_path + "/" + save_path + "_raw.avi", ex1, 20, cv::Size(frame_w, frame_h), true);
     if(!writer_raw.isOpened()){
         print(BOLDRED, "ERROR: Can not open the output video for raw write");
     }
     //det video
     cv::VideoWriter writer_det;
-    writer_det.open("./record/" + save_path + "/" + save_path + "_det.mp4", ex1, 20, vis_size, true);
+    writer_det.open("./record/" + save_path + "/" + save_path + "_det.avi", ex1, 20, vis_size, true);
     if(!writer_det.isOpened()){
         print(BOLDRED, "ERROR: Can not open the output video for det write");
     }
@@ -155,6 +156,10 @@ void video_write(){
         if (!det_frame_queue.empty()) {
             writer_det << det_frame_queue.front();
             det_frame_queue.pop();
+        }
+        if (!img_queue.empty()) {
+            cv::imwrite("./record/" + save_path + "/" + std::to_string(img_queue.front().second) + ".jpg", img_queue.front().first);
+            img_queue.pop();
         }
     }
     print(RED, "QUIT: video write thread quit");

@@ -41,6 +41,7 @@ DEFINE_bool(UART, false, "-1: not use it; >0 use it" );
 DEFINE_bool(WITH_ROV, false, "0: not use it; >0 use it" );
 DEFINE_bool(TRACK, false, "0: not use it; >0 use it" );
 
+
 // for video_write thread
 char EXT[] = "MJPG";
 int ex1 = EXT[0] | (EXT[1] << 8) | (EXT[2] << 16) | (EXT[3] << 24);
@@ -51,6 +52,8 @@ std::string save_path =  std::to_string(1900 + ltm->tm_year) + "_" + std::to_str
 cv::Size vis_size(640, 360);
 bool save_a_frame;
 std::queue<cv::Mat> frame_queue, det_frame_queue;
+std::queue<std::pair<cv::Mat, unsigned int>> img_queue;
+
 int frame_w, frame_h;
 bool video_write_flag = true;
 
@@ -68,7 +71,6 @@ bool grasping_done = false;
 
 int main(int argc, char* argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
-
     // make record dir and file
     if(nullptr==opendir(("./record/" + save_path).c_str()))
         mkdir(("./record/" + save_path).c_str(), S_IRWXU|S_IRWXG|S_IRWXO);
@@ -189,7 +191,7 @@ int main(int argc, char* argv[]) {
             // detect
             cv::cvtColor(img_vis, img_vis, cv::COLOR_BGR2RGB);
             cv::resize(img_vis, img_vis, vis_size);
-            target_loc = Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, writer);
+            target_loc = Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, log_file);
             // 已判定坐底, 尝试给软体臂程序发送目标坐标
             if(land){
                 if (FLAGS_UART && send_byte == -1) {

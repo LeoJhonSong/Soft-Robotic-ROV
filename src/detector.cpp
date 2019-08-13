@@ -7,6 +7,7 @@
 
 extern bool save_a_frame;
 extern std::queue<cv::Mat> det_frame_queue;
+extern std::queue<std::pair<cv::Mat, int>> img_queue;
 
 Detector::~Detector()=default;
 
@@ -288,6 +289,9 @@ torch::Tensor Detector::iou(const torch::Tensor& boxes, unsigned char cl){
 
 std::vector<int> Detector::visualization(cv::Mat& img, std::ofstream& log_file){
     ++this->frame_num;
+    if (save_a_frame) {
+        img_queue.push(std::pair<cv::Mat, unsigned int>{img.clone(), this->frame_num});
+    }
     std::stringstream stream;
     std::vector<int> loc;
     if (this->track && this->track_cl > 0){
