@@ -291,13 +291,17 @@ void run_rov() {
     if (run_rov_flag > 0) { // 确认上位机与ROV通信建立成功并开灯
         print(BOLDGREEN, "ROV: try to first receive");
         server.recvMsg();
-        print(BOLDGREEN,
-              "ROV: first receive done, current depth: " << server.depth);
-        server.sendMsg(SEND_LIGHTS_ON);
+        print(BOLDGREEN, "ROV: first receive done, current depth: " << server.depth);
+//        server.sendMsg(SEND_LIGHTS_ON);
     }
     while (run_rov_flag) { // 进入ROV动作控制循环, 整个比赛过程中都应当处于这个循环中
         switch (rov_key) { // 键盘键值与ROV动作映射
+            case 99:  // c
+                print(RED, "DEBUG: sleep");
+                server.sendMsg(SEND_SLEEP);
+                break;
             case 105:  // k
+                print(RED, "DEBUG: for");
                 if (rov_half_speed)
                     server.sendMsg(SEND_HALF_FORWARD);
                 else
@@ -401,6 +405,7 @@ void run_rov() {
                             break;
                     }
                 }
+                break;
             case 43:  // + 实时微调水平位置并全速下潜
                 while ((!manual_stop)) {
                     // FIXME: delay may too long
@@ -470,23 +475,16 @@ void run_rov() {
                         is_dive_ok = false;
                         break;
                     }
-                    if (manual_stop)
-                        rov_key = 99;
-                    else
-                        rov_key = 59;  // 跳回坐底
-                    break;
-                    case 99:  // c
-                        // 急停
-                        server.sendMsg(SEND_SLEEP);
-                        break;
-                    default:
-                        server.sendMsg(SEND_SLEEP);
-                        break;
                 }
+                if (manual_stop) rov_key = 99;
+                else rov_key = 59;  // 跳回坐底
+                break;
+//            default:
+//                server.sendMsg(SEND_SLEEP);
+//                break;
         }
-        server.sendMsg(SEND_SLEEP);
-        print(WHITE, "ROV: run_rov quit");
     }
-    server.sendMsg(SEND_SLEEP);
+    for (unsigned char i=0; i<10; i++)
+        server.sendMsg(SEND_SLEEP);
     print(RED, "QUIT: run_rov quit");
 }

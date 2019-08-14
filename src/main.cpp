@@ -216,7 +216,7 @@ int main(int argc, char* argv[]) {
             cv::imshow("ResDet", img_vis);
         }
         if (send_byte == 6){
-            if ((time(nullptr) - t_send) > 30) {
+            if ((time(nullptr) - t_send) > 10) {
                 send_byte = -1;
                 if (++max_attempt>2) {
                     print(BOLDCYAN, "MAIN: max_attempt>2 grasping done");
