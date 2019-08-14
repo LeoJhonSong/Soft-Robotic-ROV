@@ -100,8 +100,6 @@ class TCP_Server {
         float pre_depth = 0.0;
         float depth_diff_thresh = 6.0;  // unit is cm
         float depth_diff = 100.0;
-        float max_depth = 0.0;
-
 
         TCP_Server();
         ~TCP_Server();

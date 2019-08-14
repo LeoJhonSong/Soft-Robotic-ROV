@@ -67,6 +67,8 @@ unsigned char max_attempt = 0;
 std::vector<int> target_loc;
 bool manual_stop = false;
 bool grasping_done = false;
+float max_depth = 0;
+float curr_depth = 0;
 
 
 int main(int argc, char* argv[]) {

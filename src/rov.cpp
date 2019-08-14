@@ -242,28 +242,22 @@ void TCP_Server::sendMsg(int move)
     auto bytes_sent = send(newFD, response.data(), response.length(), 0);
 }
 
-bool TCP_Server::is_landed(bool land_flag)
-// 结合上一时刻是否位于海底和深度波动判断当前是否位于海底
-{
+extern float max_depth, curr_depth;
+bool TCP_Server::is_landed(bool land){ // 结合上一时刻是否位于海底和深度波动判断当前是否位于海底
     this->depth_diff = this->depth - this->pre_depth;
     this->pre_depth = this->depth;
-    // 更新海底深度
-    if (land_flag) {
-        this->max_depth = this->depth;
+    if (land) { // 更新海底深度
+        max_depth = this->depth;
         print(BOLDGREEN, "ROV: update max depth = " << max_depth);
     }
-    // 深度持续稳定时间计时
-    if (this->depth_diff < this->depth_diff_thresh) {
+    if (this->depth_diff < this->depth_diff_thresh) { // 深度持续稳定时间计时
         this->land_count++;
     }
-    // 当深度变化幅度超过阈值时判定为不在海底并归零深度持续稳定时间
-    else {
+    else { // 当深度变化幅度超过阈值时判定为不在海底并归零深度持续稳定时间
         this->land_count = 0;
         return false;
     }
-    // land_count超过阈值count_thresh时判定为坐底
-    // 当land_count和count_thresh过小时会产生噪声
-    if (this->land_count >= this->count_thresh) {
+    if (this->land_count >= this->count_thresh) { // land_count超过阈值count_thresh时判定为坐底, 当land_count和count_thresh过小时会产生噪声
         print(BOLDGREEN, "ROV: landed at " << depth);
         return true;
     }
@@ -276,18 +270,17 @@ extern bool rov_half_speed, land, manual_stop, grasping_done;
 extern std::vector<int> target_loc;
 extern cv::Size vis_size;
 
-int cruise_state = 0; // 巡航状态
-float width_thresh = 0.2; // 微调ROI阈值
-float height_thresh = 0.3;
-float drift_width = 0.0; // 目标漂移值
-float drift_height = 0.0;
-bool is_dive_ok = false; // 微调时是否下潜
-
 
 void run_rov() {
     std::random_device rd;
-    std::mt19937 gen(rd());
+//    std::mt19937 gen(rd());
     std::uniform_int_distribution<> dis(0, 5);
+    int cruise_state = 0; // 巡航状态
+    float width_thresh = 0.2; // 微调ROI阈值
+    float height_thresh = 0.3;
+    float drift_width = 0.0; // 目标漂移值
+    float drift_height = 0.0;
+    bool is_dive_ok = false; // 微调时是否下潜
     if (run_rov_flag > 0) { // 确认上位机与ROV通信建立成功并开灯
         print(BOLDGREEN, "ROV: try to first receive");
         server.recvMsg();
@@ -295,6 +288,8 @@ void run_rov() {
 //        server.sendMsg(SEND_LIGHTS_ON);
     }
     while (run_rov_flag) { // 进入ROV动作控制循环, 整个比赛过程中都应当处于这个循环中
+        server.recvMsg();
+        if (server.depth > 0) curr_depth = server.depth;
         switch (rov_key) { // 键盘键值与ROV动作映射
             case 99:  // c
                 print(RED, "DEBUG: sleep");
@@ -302,37 +297,27 @@ void run_rov() {
                 break;
             case 105:  // k
                 print(RED, "DEBUG: for");
-                if (rov_half_speed)
-                    server.sendMsg(SEND_HALF_FORWARD);
-                else
-                    server.sendMsg(SEND_FORWARD);
+                if (rov_half_speed) server.sendMsg(SEND_HALF_FORWARD);
+                else server.sendMsg(SEND_FORWARD);
                 break;
             case 106:  // j
-                if (rov_half_speed)
-                    server.sendMsg(SEND_HALF_TURN_LEFT);
-                else
-                    server.sendMsg(SEND_TURN_LEFT);
+                if (rov_half_speed) server.sendMsg(SEND_HALF_TURN_LEFT);
+                else server.sendMsg(SEND_TURN_LEFT);
                 break;
             case 107:  // k
-                if (rov_half_speed)
-                    server.sendMsg(SEND_HALF_BACKWARD);
-                else
-                    server.sendMsg(SEND_BACKWARD);
+                if (rov_half_speed)  server.sendMsg(SEND_HALF_BACKWARD);
+                else server.sendMsg(SEND_BACKWARD);
                 break;
             case 108:  // l
-                if (rov_half_speed)
-                    server.sendMsg(SEND_HALF_TURN_RIGHT);
-                else
-                    server.sendMsg(SEND_TURN_RIGHT);
+                if (rov_half_speed) server.sendMsg(SEND_HALF_TURN_RIGHT);
+                else  server.sendMsg(SEND_TURN_RIGHT);
                 break;
             case 44:  // ,
                 server.sendMsg(SEND_DOWN);
                 break;
             case 46:  // .
-                if (rov_half_speed)
-                    server.sendMsg(SEND_HALF_UP);
-                else
-                    server.sendMsg(SEND_UP);
+                if (rov_half_speed) server.sendMsg(SEND_HALF_UP);
+                else server.sendMsg(SEND_UP);
                 break;
             case 59:  // ; 坐底. 从这一步开始为自主控制.
                 print(BOLDGREEN, "ROV: diving !!!");
@@ -340,21 +325,18 @@ void run_rov() {
                 while (!manual_stop && !grasping_done) { // 当未人为操作且软体臂抓取未完成时持续坐底
                     server.sendMsg(SEND_DOWN);
                     server.recvMsg();
-                    if (server.depth > 0)  // 用depth > 0滤掉因为上位机端刷新数据过快而并非每次都能接收到数据产生的0 (每次刷新数据前都会用memset归零接收ROV数据的变量)
-                        land = server.is_landed(land); // 判定是否到达海底
+                    if (server.depth > 0) land = server.is_landed(land); // 判定是否到达海底
                 }
                 server.land_count = 0;
                 land = false;  // 结束坐底
                 if (manual_stop) rov_key = 99;
                 else rov_key = 39; // 开始上浮并定深
                 break;
-            case 39:  // '  定深
+            case 39:  // '  定深, 全速上浮3s, 悬停2s等ROV静止后获取当前深度
                 print(BOLDBLUE, "ROV: try to stably floating");
-                // 全速上浮3s, 悬停2s等ROV静止后获取当前深度
-                for (unsigned char i = 0; i < 100; i++) server.sendMsg(SEND_UP);
+                for (unsigned char i = 0; i < 10; i++) server.sendMsg(SEND_UP);
                 delay_ms(3000);
-                for (unsigned char i = 0; i < 100; i++)
-                    server.sendMsg(SEND_SLEEP);
+                for (unsigned char i = 0; i < 10; i++) server.sendMsg(SEND_SLEEP);
                 delay_ms(2000);
                 while (true) {
                     server.recvMsg();
@@ -408,8 +390,7 @@ void run_rov() {
                 break;
             case 43:  // + 实时微调水平位置并全速下潜
                 while ((!manual_stop)) {
-                    // FIXME: delay may too long
-                    delay_ms(100);  // 0.1s
+                    delay_ms(100);  // 0.1s FIXME: delay may too long
                     if (target_loc.at(2) == 0 || target_loc.at(3) == 0)  // 当目标丢失时跳出循环到case59 坐底
                         break;
                     if (target_loc.at(0) < (float)vis_size.width * (0.5 - width_thresh / 2) || // 先判定是否有左右漂移及漂移值, 向左为正
@@ -430,44 +411,36 @@ void run_rov() {
                             if (!is_dive_ok){ // 当目标在视野内但漂移出阈值框, 全速坐底的同时微调水平位置
                                 server.sendMsg(SEND_ADJUST_TURN_LEFT);
                                 print(BOLDMAGENTA, "ROV: SEND_ADJUST_TURN_LEFT");
-                            }
-                            else {
+                            } else {
                                 server.sendMsg(SEND_DIVE_TURN_LEFT);
                                 print(BOLDMAGENTA, "ROV: SEND_DIVE_TURN_LEFT");
                             }
-                            // server.sendMsg(SEND_DIVE_TURN_LEFT);
                         } else {
                             if (!is_dive_ok) {
                                 server.sendMsg(SEND_ADJUST_TURN_RIGHT);
                                 print(BOLDMAGENTA, "ROV: SEND_ADJUST_TURN_RIGHT");
-                            }
-                            else {
+                            } else {
                                 server.sendMsg(SEND_DIVE_TURN_RIGHT);
                                 print(BOLDMAGENTA, "ROV: SEND_DIVE_TURN_RIGHT");
                             }
-                            // server.sendMsg(SEND_DIVE_TURN_RIGHT);
                         }
                     } else { // 偏前则前移, 偏后则后移
                         if (drift_height > 0) {
                             if (!is_dive_ok) {
                                 server.sendMsg(SEND_ADJUST_FORWARD);
                                 print(BOLDMAGENTA, "ROV: SEND_ADJUST_FORWARD");
-                            }
-                            else {
+                            } else {
                                 server.sendMsg(SEND_DIVE_FORWARD);
                                 print(BOLDMAGENTA, "ROV: SEND_DIVE_FORWARD");
                             }
-                            // server.sendMsg(SEND_DIVE_FORWARD);
                         } else {
                             if (!is_dive_ok) {
                                 server.sendMsg(SEND_ADJUST_BACKWARD);
                                 print(BOLDMAGENTA, "ROV: SEND_ADJUST_BACKWARD");
-                            }
-                            else {
+                            } else {
                                 server.sendMsg(SEND_DIVE_BACKWARD);
                                 print(BOLDMAGENTA, "ROV: SEND_DIVE_BACKWARD");
                             }
-                            // server.sendMsg(SEND_DIVE_BACKWARD);
                         }
                     }
                     land = server.is_landed(land);
@@ -477,11 +450,15 @@ void run_rov() {
                     }
                 }
                 if (manual_stop) rov_key = 99;
-                else rov_key = 59;  // 跳回坐底
+                else if(is_dive_ok) {
+                    rov_key = 59;  // 跳回坐底
+                    is_dive_ok = false;
+                }
+                else rov_key = 47;
                 break;
-//            default:
-//                server.sendMsg(SEND_SLEEP);
-//                break;
+            default:
+                server.sendMsg(SEND_SLEEP);
+                break;
         }
     }
     for (unsigned char i=0; i<10; i++)

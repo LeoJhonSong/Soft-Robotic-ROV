@@ -4,10 +4,12 @@
 
 #include "detector.h"
 #include "color.h"
+#include<cmath>
 
 extern bool save_a_frame;
 extern std::queue<cv::Mat> det_frame_queue;
 extern std::queue<std::pair<cv::Mat, int>> img_queue;
+extern float max_depth, curr_depth;
 
 Detector::~Detector()=default;
 
@@ -314,7 +316,7 @@ std::vector<int> Detector::visualization(cv::Mat& img, std::ofstream& log_file){
             log_file << this->frame_num << ", " << (int) this->track_cl << ", " << std::setprecision(2)
                      << scores.item<float>() << ", " << dets[1].item<float>() << ", " << dets[2].item<float>() << ", "
                      << dets[3].item<float>() << ", " << dets[4].item<float>() << ", "
-                     << ids.item<int>() << ", " << dets[6].item<int>() << std::endl;
+                     << ids.item<int>() << ", " << curr_depth << std::endl;
     }else {
         loc = {0, 0, 0, 0};
         for (unsigned char j = 1; j < this->output.size(1); j++) {
@@ -336,8 +338,8 @@ std::vector<int> Detector::visualization(cv::Mat& img, std::ofstream& log_file){
             for (unsigned char i = 0; i < boxes.size(0); i++) {
                 int id = ids[i].item<int>();
                 float score = scores[i].item<float>();
-                int matched_time = matched_times[i].item<int>();
-                if (this->track && this->track_cl == 0 && score > 0.7 && matched_time > 30) {
+//                int matched_time = matched_times[i].item<int>();
+                if (this->track && this->track_cl == 0 && score > 0.7 && matched_times[i].item<int>() > 30) {
                     this->track_cl = j;
                     this->track_id = id;
                 }
@@ -356,7 +358,7 @@ std::vector<int> Detector::visualization(cv::Mat& img, std::ofstream& log_file){
                              << score << ", " << boxes[i][0].item<float>() / img.cols << ", "
                              << boxes[i][1].item<float>() / img.rows << ", " << boxes[i][2].item<float>() / img.cols
                              << ", " << boxes[i][3].item<float>() / img.rows << ", "
-                             << id << ", " << matched_time << std::endl;
+                             << id << ", " << curr_depth << std::endl;
             }
         }
     }
@@ -442,8 +444,8 @@ int Detector::uart_send(unsigned char cls, Uart& uart){
     send_list.push_back((char)(dets[2].item<float>()*100));
     send_list.push_back((char)(dets[3].item<float>()*100));
     send_list.push_back((char)(dets[4].item<float>()*100));
-    send_list.push_back(127);
-//    print(YELLOW, "DETECTOR: try to send loc " << send_list);
+    send_list.push_back((char)(round(max_depth/10.0)));
+
     int senf_byte = uart.send(send_list);
     return senf_byte;
 }
