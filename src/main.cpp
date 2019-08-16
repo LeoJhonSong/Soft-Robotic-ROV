@@ -210,6 +210,12 @@ int main(int argc, char* argv[]) {
                         max_attempt = 0;
                         send_byte = -1;
                     }
+                } else {
+                    print(BOLDCYAN,  "MAIN: uart fail to send");
+                    land = false;
+                    grasping_done = true;
+                    max_attempt = 0;
+                    send_byte = -1;
                 }
             }
         }else{

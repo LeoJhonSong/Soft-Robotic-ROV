@@ -137,7 +137,7 @@ void TCP_Server::recvMsg(void)
     if (receive[7] == '\xaa') {
         isTwoLeak = 1;
     }
-    depth = (int(receive[8]) * 256 + int(receive[9]));  // the unit is cm
+    depth = (float)((int)(receive[8]) * 256 + (int)(receive[9]));  // the unit is cm
     // 此处adjust_rate即README中修正参数k
     depth = depth / adjust_rate;
     // std::cout << isOneLeak << std::endl;
@@ -210,7 +210,7 @@ void TCP_Server::sendMsg(int move)
             response.assign(MOVE_HALF_DOWN, 27);
             break;
         case 17:
-            response.assign(SEND_SLEEP, 27);
+            response.assign(MOVE_SLEEP, 27);
             break;
         case 18:
             response.assign(MOVE_ADJUST_FORWARD, 27);
@@ -247,20 +247,20 @@ bool TCP_Server::is_landed(bool land){ // 结合上一时刻是否位于海底�
     this->depth_diff = this->depth - this->pre_depth;
     this->pre_depth = this->depth;
     if (land) { // 更新海底深度
-        max_depth = this->depth;
-        print(BOLDGREEN, "ROV: update max depth = " << max_depth);
+
     }
     if (this->depth_diff < this->depth_diff_thresh) { // 深度持续稳定时间计时
         this->land_count++;
-    }
-    else { // 当深度变化幅度超过阈值时判定为不在海底并归零深度持续稳定时间
+    }  else { // 当深度变化幅度超过阈值时判定为不在海底并归零深度持续稳定时间
         this->land_count = 0;
         return false;
     }
     if (this->land_count >= this->count_thresh) { // land_count超过阈值count_thresh时判定为坐底, 当land_count和count_thresh过小时会产生噪声
-        print(BOLDGREEN, "ROV: landed at " << depth);
+        print(BOLDGREEN, "ROV: landed, update max depth " << depth);
+        max_depth = this->depth;
         return true;
     }
+    return false;
 }
 
 TCP_Server server;
@@ -292,11 +292,9 @@ void run_rov() {
         if (server.depth > 0) curr_depth = server.depth;
         switch (rov_key) { // 键盘键值与ROV动作映射
             case 99:  // c
-                print(RED, "DEBUG: sleep");
                 server.sendMsg(SEND_SLEEP);
                 break;
             case 105:  // k
-                print(RED, "DEBUG: for");
                 if (rov_half_speed) server.sendMsg(SEND_HALF_FORWARD);
                 else server.sendMsg(SEND_FORWARD);
                 break;
@@ -323,9 +321,12 @@ void run_rov() {
                 print(BOLDGREEN, "ROV: diving !!!");
                 grasping_done = false;
                 while (!manual_stop && !grasping_done) { // 当未人为操作且软体臂抓取未完成时持续坐底
+//                    delay(1);
                     server.sendMsg(SEND_DOWN);
                     server.recvMsg();
-                    if (server.depth > 0) land = server.is_landed(land); // 判定是否到达海底
+                    if (server.depth > 0) {
+                        land = server.is_landed(land); // 判定是否到达海底
+                    }
                 }
                 server.land_count = 0;
                 land = false;  // 结束坐底
@@ -335,9 +336,9 @@ void run_rov() {
             case 39:  // '  定深, 全速上浮3s, 悬停2s等ROV静止后获取当前深度
                 print(BOLDBLUE, "ROV: try to stably floating");
                 for (unsigned char i = 0; i < 10; i++) server.sendMsg(SEND_UP);
-                delay_ms(3000);
+                delay(3);
                 for (unsigned char i = 0; i < 10; i++) server.sendMsg(SEND_SLEEP);
-                delay_ms(2000);
+                delay(2);
                 while (true) {
                     server.recvMsg();
                     if (server.depth > 0) {
@@ -355,40 +356,42 @@ void run_rov() {
                         rov_key = 43;
                         break;
                     }
+                    server.sendMsg(SEND_SLEEP);
                     // 没有target就蛇形走位, 将状态分为f2r (forward to right), r2f, f2l, f2f四种, (首开尾闭), 依次进行 cruise_state依次为0, 1, 2, 3
-                    if (cruise_state < 3) ++cruise_state; // 循环cruise_state
-                    else cruise_state = 0;
-                    switch (cruise_state) { // cruise_state与动作映射
-                        case 0:  // f2r
-                            server.sendMsg(SEND_HALF_FORWARD);
-                            delay_ms(1500);  // 1.5s
-                            server.sendMsg(SEND_HALF_TURN_RIGHT);
-                            delay_ms(500);  // FIXME
-                            break;
-                        case 1:  // r2f
-                            server.sendMsg(SEND_HALF_FORWARD);
-                            delay_ms(3000);  // 3s
-                            server.sendMsg(SEND_HALF_TURN_LEFT);
-                            delay_ms(500);  // FIXME
-                            break;
-                        case 2:  // f2l
-                            server.sendMsg(SEND_HALF_FORWARD);
-                            delay_ms(1500);
-                            server.sendMsg(SEND_HALF_TURN_LEFT);
-                            delay_ms(500);  // FIXME
-                            break;
-                        case 3:  // l2f
-                            server.sendMsg(SEND_HALF_FORWARD);
-                            delay_ms(3000);
-                            server.sendMsg(SEND_TURN_RIGHT);
-                            delay_ms(500);  // FIXME
-                            break;
-                        default:
-                            break;
-                    }
+//                    if (cruise_state < 3) ++cruise_state; // 循环cruise_state
+//                    else cruise_state = 0;
+//                    switch (cruise_state) { // cruise_state与动作映射
+//                        case 0:  // f2r
+//                            server.sendMsg(SEND_HALF_FORWARD);
+//                            delay_ms(3000);  // 1.5s
+//                            server.sendMsg(SEND_HALF_TURN_RIGHT);
+//                            delay_ms(1000);  // FIXME
+//                            break;
+//                        case 1:  // r2f
+//                            server.sendMsg(SEND_HALF_FORWARD);
+//                            delay_ms(3000);  // 3s
+//                            server.sendMsg(SEND_HALF_TURN_LEFT);
+//                            delay_ms(1000);  // FIXME
+//                            break;
+//                        case 2:  // f2l
+//                            server.sendMsg(SEND_HALF_FORWARD);
+//                            delay_ms(3000);
+//                            server.sendMsg(SEND_HALF_TURN_LEFT);
+//                            delay_ms(1000);  // FIXME
+//                            break;
+//                        case 3:  // l2f
+//                            server.sendMsg(SEND_HALF_FORWARD);
+//                            delay_ms(3000);
+//                            server.sendMsg(SEND_TURN_RIGHT);
+//                            delay_ms(1000);  // FIXME
+//                            break;
+//                        default:
+//                            break;
+//                    }
                 }
                 break;
             case 43:  // + 实时微调水平位置并全速下潜
+                print(BOLDMAGENTA, "ROV: aming");
                 while ((!manual_stop)) {
                     delay_ms(100);  // 0.1s FIXME: delay may too long
                     if (target_loc.at(2) == 0 || target_loc.at(3) == 0)  // 当目标丢失时跳出循环到case59 坐底

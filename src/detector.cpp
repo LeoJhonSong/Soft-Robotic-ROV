@@ -20,7 +20,7 @@ Detector::Detector(unsigned int num_classes, int top_k, float nms_thresh, unsign
     this->nms_thresh = nms_thresh;
     this->tub = tub;
     this->ssd_dim = ssd_dim;
-    this->small_size_filter = 0.00;
+    this->small_size_filter = 0.005;
     this->large_size_filter = 0.1;
     this->track_cl = 0;
     this->track_id = -1;
@@ -45,7 +45,7 @@ void Detector::log_params(){
     print(WHITE, "ssd_dim: " << ssd_dim);
     print(WHITE, "out size: " << output.sizes());
     print(WHITE, "small_size_filter: " << small_size_filter);
-    print(WHITE, "large_size_filter: " << small_size_filter);
+    print(WHITE, "large_size_filter: " << large_size_filter);
     print(WHITE, "tubelets class size: " << this->tubelets.size());
 }
 
@@ -316,7 +316,7 @@ std::vector<int> Detector::visualization(cv::Mat& img, std::ofstream& log_file){
             log_file << this->frame_num << ", " << (int) this->track_cl << ", " << std::setprecision(2)
                      << scores.item<float>() << ", " << dets[1].item<float>() << ", " << dets[2].item<float>() << ", "
                      << dets[3].item<float>() << ", " << dets[4].item<float>() << ", "
-                     << ids.item<int>() << ", " << curr_depth << std::endl;
+                     << ids.item<int>() << ", " << max_depth - curr_depth << std::endl;
     }else {
         loc = {0, 0, 0, 0};
         for (unsigned char j = 1; j < this->output.size(1); j++) {
@@ -358,7 +358,7 @@ std::vector<int> Detector::visualization(cv::Mat& img, std::ofstream& log_file){
                              << score << ", " << boxes[i][0].item<float>() / img.cols << ", "
                              << boxes[i][1].item<float>() / img.rows << ", " << boxes[i][2].item<float>() / img.cols
                              << ", " << boxes[i][3].item<float>() / img.rows << ", "
-                             << id << ", " << curr_depth << std::endl;
+                             << id << ", " << max_depth - curr_depth << std::endl;
             }
         }
     }
