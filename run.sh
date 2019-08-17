@@ -7,6 +7,7 @@
 --SSD_DIM 320 \
 --NETG_DIM 320 \
 --TUB 1 \
---UART=false \
+--UART=true \
 --WITH_ROV=true \
---TRACK=true
+--TRACK=true \
+2> /dev/null

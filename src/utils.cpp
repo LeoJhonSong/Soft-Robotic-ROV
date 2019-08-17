@@ -130,7 +130,7 @@ void parse_key(int key, bool& quit, bool& reset_id, std::vector<float>& conf_thr
 extern std::queue<cv::Mat> frame_queue, det_frame_queue;
 extern std::queue<std::pair<cv::Mat, unsigned int>> img_queue;
 extern int frame_w, frame_h, ex1, send_byte, rov_key;
-extern bool video_write_flag, grasping_done, land;
+extern bool video_write_flag, grasping_done, land, second_dive;
 extern std::string save_path;
 extern unsigned char max_attempt;
 extern cv::Size vis_size;
@@ -173,6 +173,7 @@ void init_state(){
     send_byte = -1;
     max_attempt = 0;
     grasping_done = true;
+    second_dive = false;
 //    manual_stop = true;
 //    delay(1);
     manual_stop = true;

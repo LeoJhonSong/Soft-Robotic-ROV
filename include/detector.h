@@ -33,7 +33,8 @@ private:
     unsigned char track_cl;
     int track_id;
     unsigned int frame_num;
-    std::vector<cv::Scalar> color{cv::Scalar(0,0,0), cv::Scalar(255,255,0), cv::Scalar(0, 255,255), cv::Scalar(0,0,255), cv::Scalar(255,0,255)};
+    std::vector<char> send_list;
+    std::vector<cv::Scalar> color{cv::Scalar(255,0,0), cv::Scalar(255,255,0), cv::Scalar(0, 255,255), cv::Scalar(0,0,255), cv::Scalar(255,0,255)};
 public:
     Detector(unsigned int, int, float, unsigned char, int, bool);
     void log_params();

@@ -36,7 +36,7 @@ DEFINE_uint32(NET_PHASE, 2, "0: skip; 1: netG; 2: netG+RefineDet; 3: RefineDet" 
 DEFINE_uint32(SSD_DIM, 320, "" );
 DEFINE_uint32(NETG_DIM, 256, "" );
 DEFINE_uint32(TUB, 0, "" );
-DEFINE_int32(MODE, -2, "-1: load video; >0 load camera" );
+DEFINE_int32(MODE, 0, "-1: load video; >0 load camera" );
 DEFINE_bool(UART, false, "-1: not use it; >0 use it" );
 DEFINE_bool(WITH_ROV, false, "0: not use it; >0 use it" );
 DEFINE_bool(TRACK, false, "0: not use it; >0 use it" );
@@ -67,6 +67,7 @@ unsigned char max_attempt = 0;
 std::vector<int> target_loc;
 bool manual_stop = false;
 bool grasping_done = false;
+bool second_dive = false;
 float max_depth = 0;
 float curr_depth = 0;
 
@@ -196,22 +197,27 @@ int main(int argc, char* argv[]) {
             target_loc = Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, log_file);
             // 已判定坐底, 尝试给软体臂程序发送目标坐标
             if(land){
-                if (FLAGS_UART && send_byte == -1) {
-                    send_byte = Detect.uart_send(FLAGS_UART, uart);
-                    print(BOLDCYAN, "MAIN: try to uart send, return " << send_byte);
-                    if (send_byte == 6) {
-                        print(BOLDCYAN, "MAIN: uart send successfully, clock start");
-                        t_send = time(nullptr);
-                    }
-                    else if(send_byte == 0) {
-                        print(BOLDCYAN,  "MAIN: uart fail to send");
-                        land = false;
-                        grasping_done = true;
-                        max_attempt = 0;
-                        send_byte = -1;
+                if (FLAGS_UART) {
+                    if (send_byte == -1) {
+                        send_byte = Detect.uart_send(FLAGS_UART, uart);
+                        print(BOLDCYAN, "MAIN: try to uart send, return " << send_byte);
+                        if (send_byte == 6) {
+                            print(BOLDCYAN, "MAIN: uart send successfully, clock start");
+                            t_send = time(nullptr);
+                        } else {
+                            if (send_byte == 0) print(BOLDCYAN, "MAIN: uart fail to send");
+                            else if (send_byte == 1){
+                                print(BOLDCYAN, "MAIN: out of grasping area, try a second dive");
+                                second_dive = true;
+                            }
+                            land = false;
+                            grasping_done = true;
+                            max_attempt = 0;
+                            send_byte = -1;
+                        }
                     }
                 } else {
-                    print(BOLDCYAN,  "MAIN: uart fail to send");
+                    print(BOLDCYAN,  "MAIN: uart closed");
                     land = false;
                     grasping_done = true;
                     max_attempt = 0;
@@ -226,7 +232,7 @@ int main(int argc, char* argv[]) {
         if (send_byte == 6){
             if ((time(nullptr) - t_send) > 10) {
                 send_byte = -1;
-                if (++max_attempt>2) {
+                if (++max_attempt>1) {
                     print(BOLDCYAN, "MAIN: max_attempt>2 grasping done");
                     land = false;
                     grasping_done = true;

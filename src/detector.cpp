@@ -10,6 +10,7 @@ extern bool save_a_frame;
 extern std::queue<cv::Mat> det_frame_queue;
 extern std::queue<std::pair<cv::Mat, int>> img_queue;
 extern float max_depth, curr_depth;
+extern int send_byte;
 
 Detector::~Detector()=default;
 
@@ -291,74 +292,78 @@ torch::Tensor Detector::iou(const torch::Tensor& boxes, unsigned char cl){
 
 std::vector<int> Detector::visualization(cv::Mat& img, std::ofstream& log_file){
     ++this->frame_num;
-    if (save_a_frame) {
-        img_queue.push(std::pair<cv::Mat, unsigned int>{img.clone(), this->frame_num});
-    }
     std::stringstream stream;
     std::vector<int> loc;
-    if (this->track && this->track_cl > 0){
-        torch::Tensor dets = this->output[0][this->track_cl][0];
-        torch::Tensor scores = dets[0];
-        torch::Tensor ids = dets[5];
-        int x1 = (dets[1]* img.cols).item<int>();
-        int y1 = (dets[2]* img.rows).item<int>();
-        int x2 = (dets[3]* img.cols).item<int>();
-        int y2 = (dets[4]* img.rows).item<int>();
-        loc = {(x1+x2)/2, (y1+y2)/2, x2-x1, y2-y1};
-        cv::rectangle(img, cv::Point(x1, y1), cv::Point(x2, y2), this->color.at(this->track_cl), 2, 1, 0);
-        stream.str("");
-        stream << std::fixed << std::setprecision(2) << scores.item<float>();
-        cv::putText(img, std::to_string(ids.item<int>()) + ", " + stream.str(), cv::Point(x1, y1 - 5), 1, 1,
-                    this->color.at(this->track_cl));
-        cv::putText(img, "track_id: " + std::to_string(this->track_id), cv::Point(img.cols-120, 10), 1,
-                    1, this->color.at(this->track_cl), 2);
-        if (save_a_frame)
-            log_file << this->frame_num << ", " << (int) this->track_cl << ", " << std::setprecision(2)
-                     << scores.item<float>() << ", " << dets[1].item<float>() << ", " << dets[2].item<float>() << ", "
-                     << dets[3].item<float>() << ", " << dets[4].item<float>() << ", "
-                     << ids.item<int>() << ", " << max_depth - curr_depth << std::endl;
-    }else {
-        loc = {0, 0, 0, 0};
-        for (unsigned char j = 1; j < this->output.size(1); j++) {
-            torch::Tensor dets = this->output[0][j];
-            if (dets.sum().item<float>() == 0) continue;
-            torch::Tensor score_mask = dets.slice(1, 0, 1).gt(0.0).expand_as(dets);
-            torch::Tensor stable_mask = dets.slice(1, 6, 7).gt(5.0).expand_as(dets);
-            torch::Tensor mask = score_mask * stable_mask;
-            dets = dets.masked_select(mask);
-            dets = dets.view({dets.size(0) / mask.size(1), mask.size(1)});
-            torch::Tensor boxes = dets.slice(1, 1, 5);
-            boxes.slice(1, 0, 1) *= img.cols;
-            boxes.slice(1, 2, 3) *= img.cols;
-            boxes.slice(1, 1, 2) *= img.rows;
-            boxes.slice(1, 3, 4) *= img.rows;
-            torch::Tensor scores = dets.slice(1, 0, 1).squeeze(1);
-            torch::Tensor ids = dets.slice(1, 5, 6).squeeze(1);
-            torch::Tensor matched_times = dets.slice(1, 6, 7).squeeze(1);
-            for (unsigned char i = 0; i < boxes.size(0); i++) {
-                int id = ids[i].item<int>();
-                float score = scores[i].item<float>();
+    if (save_a_frame)
+        img_queue.push(std::pair<cv::Mat, unsigned int>{img.clone(), this->frame_num});
+    if (send_byte == 6)
+        cv::rectangle(img, cv::Point((float)this->send_list.at(1)/100*img.cols, (float)this->send_list.at(2)/100*img.rows), cv::Point((float)this->send_list.at(3)/100*img.cols, (float)this->send_list.at(4)/100*img.rows), this->color.at(0), 2, 1, 0);
+    else {
+        if (this->track && this->track_cl > 0) {
+            torch::Tensor dets = this->output[0][this->track_cl][0];
+            torch::Tensor scores = dets[0];
+            torch::Tensor ids = dets[5];
+            int x1 = (dets[1] * img.cols).item<int>();
+            int y1 = (dets[2] * img.rows).item<int>();
+            int x2 = (dets[3] * img.cols).item<int>();
+            int y2 = (dets[4] * img.rows).item<int>();
+            loc = {(x1 + x2) / 2, (y1 + y2) / 2, x2 - x1, y2 - y1};
+            cv::rectangle(img, cv::Point(x1, y1), cv::Point(x2, y2), this->color.at(this->track_cl), 2, 1, 0);
+            stream.str("");
+            stream << std::fixed << std::setprecision(2) << scores.item<float>();
+            cv::putText(img, std::to_string(ids.item<int>()) + ", " + stream.str(), cv::Point(x1, y1 - 5), 1, 1,
+                        this->color.at(this->track_cl));
+            cv::putText(img, "track_id: " + std::to_string(this->track_id), cv::Point(img.cols - 120, 10), 1,
+                        1, this->color.at(this->track_cl), 2);
+            if (save_a_frame)
+                log_file << this->frame_num << ", " << (int) this->track_cl << ", " << std::setprecision(2)
+                         << scores.item<float>() << ", " << dets[1].item<float>() << ", " << dets[2].item<float>()
+                         << ", "
+                         << dets[3].item<float>() << ", " << dets[4].item<float>() << ", "
+                         << ids.item<int>() << ", " << max_depth - curr_depth << std::endl;
+        } else {
+            loc = {0, 0, 0, 0};
+            for (unsigned char j = 1; j < this->output.size(1); j++) {
+                torch::Tensor dets = this->output[0][j];
+                if (dets.sum().item<float>() == 0) continue;
+                torch::Tensor score_mask = dets.slice(1, 0, 1).gt(0.0).expand_as(dets);
+                torch::Tensor stable_mask = dets.slice(1, 6, 7).gt(5.0).expand_as(dets);
+                torch::Tensor mask = score_mask * stable_mask;
+                dets = dets.masked_select(mask);
+                dets = dets.view({dets.size(0) / mask.size(1), mask.size(1)});
+                torch::Tensor boxes = dets.slice(1, 1, 5);
+                boxes.slice(1, 0, 1) *= img.cols;
+                boxes.slice(1, 2, 3) *= img.cols;
+                boxes.slice(1, 1, 2) *= img.rows;
+                boxes.slice(1, 3, 4) *= img.rows;
+                torch::Tensor scores = dets.slice(1, 0, 1).squeeze(1);
+                torch::Tensor ids = dets.slice(1, 5, 6).squeeze(1);
+                torch::Tensor matched_times = dets.slice(1, 6, 7).squeeze(1);
+                for (unsigned char i = 0; i < boxes.size(0); i++) {
+                    int id = ids[i].item<int>();
+                    float score = scores[i].item<float>();
 //                int matched_time = matched_times[i].item<int>();
-                if (this->track && this->track_cl == 0 && score > 0.7 && matched_times[i].item<int>() > 30) {
-                    this->track_cl = j;
-                    this->track_id = id;
+                    if (this->track && this->track_cl == 0 && score > 0.7 && matched_times[i].item<int>() > 30) {
+                        this->track_cl = j;
+                        this->track_id = id;
+                    }
+                    int x1 = boxes[i][0].item<int>();
+                    int y1 = boxes[i][1].item<int>();
+                    int x2 = boxes[i][2].item<int>();
+                    int y2 = boxes[i][3].item<int>();
+                    cv::rectangle(img, cv::Point(x1, y1), cv::Point(x2, y2), this->color.at(j), 2, 1, 0);
+                    stream.str("");
+                    stream << std::fixed << std::setprecision(2) << score;
+                    cv::putText(img, std::to_string(id) + ", " + stream.str(), cv::Point(x1, y1 - 5), 1, 1,
+                                this->color.at(j));
+                    this->stable_ides_set.at(j).insert(id);
+                    if (save_a_frame)
+                        log_file << this->frame_num << ", " << (int) j << ", " << std::setprecision(2)
+                                 << score << ", " << boxes[i][0].item<float>() / img.cols << ", "
+                                 << boxes[i][1].item<float>() / img.rows << ", " << boxes[i][2].item<float>() / img.cols
+                                 << ", " << boxes[i][3].item<float>() / img.rows << ", "
+                                 << id << ", " << max_depth - curr_depth << std::endl;
                 }
-                int x1 = boxes[i][0].item<int>();
-                int y1 = boxes[i][1].item<int>();
-                int x2 = boxes[i][2].item<int>();
-                int y2 = boxes[i][3].item<int>();
-                cv::rectangle(img, cv::Point(x1, y1), cv::Point(x2, y2), this->color.at(j), 2, 1, 0);
-                stream.str("");
-                stream << std::fixed << std::setprecision(2) << score;
-                cv::putText(img, std::to_string(id) + ", " + stream.str(), cv::Point(x1, y1 - 5), 1, 1,
-                            this->color.at(j));
-                this->stable_ides_set.at(j).insert(id);
-                if (save_a_frame)
-                    log_file << this->frame_num << ", " << (int) j << ", " << std::setprecision(2)
-                             << score << ", " << boxes[i][0].item<float>() / img.cols << ", "
-                             << boxes[i][1].item<float>() / img.rows << ", " << boxes[i][2].item<float>() / img.cols
-                             << ", " << boxes[i][3].item<float>() / img.rows << ", "
-                             << id << ", " << max_depth - curr_depth << std::endl;
             }
         }
     }
@@ -438,16 +443,19 @@ int Detector::uart_send(unsigned char cls, Uart& uart){
     torch::Tensor dets = this->output[0][selected_cls][0];
     if (dets[0].item<float>()<0.3 || dets[6].item<int>()<5)
         return 0;
-    std::vector<char> send_list;
-    send_list.push_back(110+cls);
-    send_list.push_back((char)(dets[1].item<float>()*100));
-    send_list.push_back((char)(dets[2].item<float>()*100));
-    send_list.push_back((char)(dets[3].item<float>()*100));
-    send_list.push_back((char)(dets[4].item<float>()*100));
-    send_list.push_back((char)(round(max_depth/10.0)));
-
-    int senf_byte = uart.send(send_list);
-    return senf_byte;
+//    float dist = std::sqrt(std::pow(((dets[1].item<float>()+dets[3].item<float>())/2-0.5), 2) + std::pow(((dets[2].item<float>()+dets[4].item<float>())/4-1), 2));
+//    print(RED, "DEBUG: " << dist);
+    if(std::abs((dets[1].item<float>()+dets[3].item<float>())/2-0.5) > 0.25 || std::abs((dets[2].item<float>()+dets[4].item<float>())/2-1) > 0.5)
+        return 1;
+    this->send_list.clear();
+    this->send_list.push_back(110+cls);
+    this->send_list.push_back((char)(dets[1].item<float>()*100));
+    this->send_list.push_back((char)(dets[2].item<float>()*100));
+    this->send_list.push_back((char)(dets[3].item<float>()*100));
+    this->send_list.push_back((char)(dets[4].item<float>()*100));
+    this->send_list.push_back((char)(round(max_depth/10.0)));
+    int send_byte = uart.send(this->send_list);
+    return send_byte;
 }
 
 

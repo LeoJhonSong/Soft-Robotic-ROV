@@ -23,6 +23,6 @@ Created by SONGZhuHeng on 2019.08.10
 #define BOLDCYAN    "\033[1m\033[36m"      /* Bold Cyan */
 #define BOLDWHITE   "\033[1m\033[37m"      /* Bold White */
 
-#define print(color, item) std::cout << color << item << std::endl
+#define print(color, item) std::cout << "\r" << color << item << std::endl
 
 #endif
