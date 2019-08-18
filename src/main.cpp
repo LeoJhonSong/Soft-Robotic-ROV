@@ -60,11 +60,11 @@ bool video_write_flag = true;
 // for run_rov thread
 bool run_rov_flag = true;
 int rov_key = 99;
-bool rov_half_speed = true;
+bool rov_half_speed = false;
 bool land = false;
 int send_byte = -1;
 unsigned char max_attempt = 0;
-std::vector<int> target_loc;
+std::vector<int> target_loc = {0,0,0,0};
 bool manual_stop = false;
 bool grasping_done = false;
 bool second_dive = false;
@@ -96,7 +96,7 @@ int main(int argc, char* argv[]) {
     int top_k = 200;
     float nms_thresh = 0.3;
     std::vector<float> conf_thresh = {0.3, 0.3, 0.6, 0.5};
-    float tub_thresh = 0.1;
+    float tub_thresh = 0.3;
     bool reset_id = false;
     Detector Detect(num_classes, top_k, nms_thresh, FLAGS_TUB, FLAGS_SSD_DIM, FLAGS_TRACK);
 
