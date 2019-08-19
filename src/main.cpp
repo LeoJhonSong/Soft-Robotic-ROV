@@ -95,7 +95,7 @@ int main(int argc, char* argv[]) {
     unsigned int num_classes = 5;
     int top_k = 200;
     float nms_thresh = 0.3;
-    std::vector<float> conf_thresh = {0.3, 0.3, 0.6, 0.5};
+    std::vector<float> conf_thresh = {0.3, 0.3, 0.5, 0.5};
     float tub_thresh = 0.3;
     bool reset_id = false;
     Detector Detect(num_classes, top_k, nms_thresh, FLAGS_TUB, FLAGS_SSD_DIM, FLAGS_TRACK);
@@ -112,7 +112,8 @@ int main(int argc, char* argv[]) {
         try{
             if (FLAGS_MODE == -1) {
                 capture.open("/home/sean/data/UWdevkit/snippets/echinus.mp4");
-//        capture.set(CV_CAP_PROP_POS_FRAMES, 200);
+//                capture.open("/home/sean/Documents/ResDet/bug/2019_8_19_14_23_10/2019_8_19_14_23_10_raw.avi");
+//                capture.set(CV_CAP_PROP_POS_FRAMES, 800);
             } else if (FLAGS_MODE == -2) capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
             else capture.open(FLAGS_MODE);
         }
@@ -195,6 +196,7 @@ int main(int argc, char* argv[]) {
             cv::cvtColor(img_vis, img_vis, cv::COLOR_BGR2RGB);
             cv::resize(img_vis, img_vis, vis_size);
             target_loc = Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, log_file);
+            print(BOLDRED, (float)target_loc[0]/vis_size.width << ", " << (float)target_loc[1]/vis_size.height << ", "<< (float)target_loc[2]/vis_size.width << ", " << (float)target_loc[3]/vis_size.height );
             // 已判定坐底, 尝试给软体臂程序发送目标坐标
             if(land){
                 if (FLAGS_UART) {
@@ -217,7 +219,7 @@ int main(int argc, char* argv[]) {
                         }
                     }
                 } else {
-                    print(BOLDCYAN,  "MAIN: uart closed");
+                    print(BOLDCYAN,  "MAIN: uart is closed");
                     land = false;
                     grasping_done = true;
                     max_attempt = 0;
@@ -230,7 +232,7 @@ int main(int argc, char* argv[]) {
             cv::imshow("ResDet", img_vis);
         }
         if (send_byte == 6){
-            if ((time(nullptr) - t_send) > 10) {
+            if ((time(nullptr) - t_send) > 50) {
                 send_byte = -1;
                 if (++max_attempt>1) {
                     print(BOLDCYAN, "MAIN: max_attempt>2 grasping done");

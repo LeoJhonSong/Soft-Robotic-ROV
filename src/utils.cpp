@@ -172,7 +172,7 @@ void init_state(){
     land = false;
     send_byte = -1;
     max_attempt = 0;
-    grasping_done = true;
+    grasping_done = false;
     second_dive = false;
 //    manual_stop = true;
 //    delay(1);

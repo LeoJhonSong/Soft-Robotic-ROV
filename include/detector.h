@@ -42,8 +42,8 @@ public:
     void detect(const torch::Tensor&, const torch::Tensor&, std::vector<float>, float);
     void detect_track(const torch::Tensor&, const torch::Tensor&, std::vector<float>);
     std::vector<int> visual_detect(const torch::Tensor&, const torch::Tensor&, const std::vector<float>&, float, bool&, cv::Mat&, std::ofstream&);
-    std::tuple<torch::Tensor, int> nms(const torch::Tensor&, const torch::Tensor&);
-    std::tuple<torch::Tensor, int> prev_nms(const torch::Tensor&, const torch::Tensor&, const torch::Tensor&);
+    std::tuple<torch::Tensor, int> nms(torch::Tensor&, torch::Tensor&);
+    std::tuple<torch::Tensor, int> prev_nms(torch::Tensor&, torch::Tensor&, const torch::Tensor&);
     torch::Tensor iou(const torch::Tensor&, unsigned char);
     std::vector<int> visualization(cv::Mat&, std::ofstream&);
     void init_tubelets();

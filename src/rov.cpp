@@ -174,10 +174,26 @@ void TCP_Server::sendMsg(bool is_close_loop, bool is_lights_on, int front_back, 
         int value;
         // 前后
         value = 127 - front_back * 128 / 100;
-        char a = (char)value;
+        if (value > MAX_SPEED)
+        {
+            value = MAX_SPEED;
+        }
+        else if (value < 0)
+        {
+            value = 0;
+        }
         response = response + (char)(value);
         // 侧移
-        response = response + (char)(127 - left_right * 128 / 100);
+        value = 127 - left_right * 128 / 100;
+        if (value > MAX_SPEED)
+        {
+            value = MAX_SPEED;
+        }
+        else if (value < 0)
+        {
+            value = 0;
+        }
+        response = response + (char)(value);
         // 航向角
         response = response + (char)(127 - course * 128 / 100);
         // 上升下潜
@@ -244,7 +260,7 @@ void run_rov() {
         print(BOLDGREEN, "ROV: try to first receive");
         server.recvMsg();
         print(BOLDGREEN, "ROV: first receive done, current depth: " << server.depth);
-//        server.sendMsg(SEND_LIGHTS_ON);
+        server.sendMsg(SEND_LIGHTS_ON);
     }
     while (run_rov_flag) { // 进入ROV动作控制循环, 整个比赛过程中都应当处于这个循环中
         server.recvMsg();
@@ -303,7 +319,7 @@ void run_rov() {
                 print(BOLDBLUE, "ROV: try to stably floating, second_dive? " << second_dive << ", second_dive_lost? " << second_dive_lost);
                 if (second_dive) {
                     if (!second_dive_lost) {
-                        for (unsigned char i = 0; i < 2; i++) {
+                        for (unsigned char i = 0; i < 1; i++) {
                             server.sendMsg(SEND_SLEEP);
                             delay(1);
                         }
@@ -348,8 +364,17 @@ void run_rov() {
                 start = time(nullptr);
                 while (!manual_stop) {
                     delay_ms(10);
+                    if (grasping_done){
+                        print(BOLDMAGENTA, "ROV: grasping_done SEND_HALF_FORWARD for 2s before detection");
+                        for (unsigned char i = 0; i < 2; i++){
+                            server.sendMsg(SEND_FORWARD);
+                            delay(1);
+                        }
+                        server.sendMsg(SEND_HALF_BACKWARD);
+                        delay(1);
+                        grasping_done = false;
+                    }
                     time_interval =  (time(nullptr) - start) % 39;
-//                    print(BOLDRED, "DEBUG: " << time_interval);
                     if (target_loc.at(2) != 0 || target_loc.at(3) != 0) { // target_loc.at 2, 3位为目标的width, height
                         if (last_opt == 1) {
                             print(BOLDMAGENTA, "ROV: SEND_HALF_BACKWARD for 2s");
@@ -415,10 +440,10 @@ void run_rov() {
                         break;
                     }
                     if (second_dive) {
-                        y_ref = 0.6;
+                        y_ref = 0.7;
                         height_thresh = 0.2;
                     } else {
-                        y_ref = 0.3;
+                        y_ref = 0.4;
                         height_thresh = 0.3;
                     }
                     if (target_loc.at(0) < (float)vis_size.width * (x_ref - width_thresh / 2) || // 先判定是否有左右漂移及漂移值, 向左为正
