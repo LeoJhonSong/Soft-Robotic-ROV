@@ -51,6 +51,7 @@ public:
     void delete_tubelets();
     int uart_send(unsigned char cls, Uart&);
     void reset_tracking_state();
+    int get_class_num(unsigned char);
 //    void enable_track();
 //    void release_track();
     ~Detector();

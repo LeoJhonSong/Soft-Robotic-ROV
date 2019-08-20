@@ -22,7 +22,7 @@ Detector::Detector(unsigned int num_classes, int top_k, float nms_thresh, unsign
     this->tub = tub;
     this->ssd_dim = ssd_dim;
     this->small_size_filter = 0.005;
-    this->large_size_filter = 0.1;
+    this->large_size_filter = 0.15;
     this->track_cl = 0;
     this->track_id = -1;
     this->frame_num = 0;
@@ -148,6 +148,7 @@ void Detector::detect_track(const torch::Tensor& loc, const torch::Tensor& conf,
     torch::Tensor prev_box = std::get<0>(this->tubelets.at(this->track_cl)[this->track_id]);
     torch::Tensor c_mask = conf[this->track_cl].gt(conf_thresh.at(this->track_cl-1));
     if(c_mask.sum().item<int >() == 0){
+        this->output[0][this->track_cl].slice(0, 0, 1) = torch::cat({torch::zeros({1, 1}).fill_(0.01), std::get<0>(this->tubelets.at(this->track_cl)[this->track_id]).div(this->ssd_dim), torch::zeros({1, 1}).fill_(this->track_id), torch::zeros({1, 1}).fill_(std::get<2>(this->tubelets.at(this->track_cl)[this->track_id]))}, 1);
         this->delete_tubelets();
         return;
     }
@@ -159,6 +160,7 @@ void Detector::detect_track(const torch::Tensor& loc, const torch::Tensor& conf,
     int count = std::get<1>(nms_result);
 
     if (count == 0){
+        this->output[0][this->track_cl].slice(0, 0, 1) = torch::cat({torch::zeros({1, 1}).fill_(0.01), std::get<0>(this->tubelets.at(this->track_cl)[this->track_id]).div(this->ssd_dim), torch::zeros({1, 1}).fill_(this->track_id), torch::zeros({1, 1}).fill_(std::get<2>(this->tubelets.at(this->track_cl)[this->track_id]))}, 1);
         this->delete_tubelets();
         return;
     }
@@ -168,6 +170,7 @@ void Detector::detect_track(const torch::Tensor& loc, const torch::Tensor& conf,
     this->tubelets.at(this->track_cl)[this->track_id] = std::tuple<torch::Tensor, int, int>{nms_box[0].unsqueeze(0).mul(this->ssd_dim), this->hold_len + 1, id_matched_times};
     this->output[0][this->track_cl].slice(0, 0, count) = torch::cat({nms_score.unsqueeze(1), nms_box, torch::zeros({count, 1}).fill_(this->track_id), torch::zeros({count, 1}).fill_(id_matched_times)}, 1);
     this->delete_tubelets();
+
 }
 
 
@@ -248,21 +251,12 @@ std::tuple<torch::Tensor, int> Detector::prev_nms(torch::Tensor& boxes, torch::T
     std::tuple<torch::Tensor, torch::Tensor> sorted_scores = scores.sort(0, false);
     torch::Tensor idx = std::get<1>(sorted_scores);
     // pre-box
-//    if (prev_box[0].item<float>() >= 197.4 && prev_box[0].item<float>() <= 197.5)
-//        print(BOLDRED, prev_box);
     torch::Tensor area_tube = torch::mul(prev_box[2] - prev_box[0], prev_box[3] - prev_box[1]);
     torch::Tensor inners_tube = (x2.index_select(0, idx).clamp_max(prev_box[2].item<float>())-x1.index_select(0, idx).clamp_min(prev_box[0].item<float>())).clamp_min(0.0)
                                * (y2.index_select(0, idx).clamp_max(prev_box[3].item<float>())-y1.index_select(0, idx).clamp_min(prev_box[1].item<float>())).clamp_min(0.0);
     torch::Tensor unions_tube = area.index_select(0, idx) - inners_tube + area_tube;
     torch::Tensor IoU_tube = inners_tube.div(unions_tube);
-//    print(BOLDWHITE, "idx: " << idx );
-//    print(BOLDGREEN, "IoU_tube: " << IoU_tube );
-//    print(BOLDMAGENTA, "mask: " << IoU_tube.gt(0.3) );
     idx = idx.masked_select(IoU_tube.gt(0.3));
-//    if (prev_box[0].item<float>() >= 197.4 && prev_box[0].item<float>() <= 197.5) {
-//        print(BOLDBLUE, "after idx: " << idx);
-//        print(BOLDYELLOW, "after iou: " << IoU_tube.masked_select(IoU_tube.gt(0.3)));
-//    }
     if(idx.size(0) > this->top_k) idx = idx.slice(0, idx.size(0)-this->top_k, idx.size(0));
     while(idx.numel() > 0){
         int i = idx[-1].item<int >();
@@ -281,11 +275,7 @@ std::tuple<torch::Tensor, int> Detector::prev_nms(torch::Tensor& boxes, torch::T
         std::get<1>(nms_result) = 0;
     }
     else {
-//        torch::Tensor final_idx = torch::argmax(IoU_tube.index_select(0, keep.slice(0, 0, count)), 0);
-//        print(RED, "final_idx: " << final_idx << ", IoU: " << IoU_tube.index_select(0, keep.slice(0, 0, count)) << ", keep: " << keep.slice(0, 0, count));
-        std::get<0>(nms_result) = keep[0];//[torch::argmax(IoU_tube.index_select(0, keep.slice(0, 0, count)), 0)];
-//        if (prev_box[0].item<float>() >= 197.4 && prev_box[0].item<float>() <= 197.5)
-//            print(BOLDYELLOW, "track: " << keep[0] << ", "<< x1[keep[0]] << ", " << y1[keep[0]] << ", " << x2[keep[0]] << ", " << y2[keep[0]]);
+        std::get<0>(nms_result) = keep[0];
         std::get<1>(nms_result) = 1;
     }
     return nms_result;
@@ -321,10 +311,13 @@ std::vector<int> Detector::visualization(cv::Mat& img, std::ofstream& log_file){
     ++this->frame_num;
     std::stringstream stream;
     std::vector<int> loc;
-    if (save_a_frame)
-        img_queue.push(std::pair<cv::Mat, unsigned int>{img.clone(), this->frame_num});
-    if (send_byte == 6)
-        cv::rectangle(img, cv::Point((float)this->send_list.at(1)/100*img.cols, (float)this->send_list.at(2)/100*img.rows), cv::Point((float)this->send_list.at(3)/100*img.cols, (float)this->send_list.at(4)/100*img.rows), this->color.at(0), 2, 1, 0);
+    if (send_byte == 6) {
+        int x1 = (int)(((float)this->send_list.at(1) / 100 - (float) this->send_list.at(3) / 100 / 2) * img.cols);
+        int y1 = (int)(((float)this->send_list.at(2) / 100 - (float) this->send_list.at(4) / 100 / 2) * img.rows);
+        int x2 = (int)(((float)this->send_list.at(1) / 100 + (float) this->send_list.at(3) / 100 / 2) * img.cols);
+        int y2 = (int)(((float)this->send_list.at(2) / 100 + (float) this->send_list.at(4) / 100 / 2) * img.rows);
+        cv::rectangle(img, cv::Point(x1, y1), cv::Point(x2, y2), this->color.at(0), 2, 1, 0);
+    }
     else {
         if (this->track && this->track_cl > 0) {
             torch::Tensor dets = this->output[0][this->track_cl][0];
@@ -340,7 +333,7 @@ std::vector<int> Detector::visualization(cv::Mat& img, std::ofstream& log_file){
             stream << std::fixed << std::setprecision(2) << scores.item<float>();
             cv::putText(img, std::to_string(ids.item<int>()) + ", " + stream.str(), cv::Point(x1, y1 - 5), 1, 1,
                         this->color.at(this->track_cl));
-            cv::putText(img, "track_id: " + std::to_string(this->track_id), cv::Point(img.cols - 120, 10), 1,
+            cv::putText(img, "track_id: " + std::to_string(this->track_id), cv::Point(img.cols - 120, 30), 1,
                         1, this->color.at(this->track_cl), 2);
             if (save_a_frame)
                 log_file << this->frame_num << ", " << (int) this->track_cl << ", " << std::setprecision(2)
@@ -394,20 +387,28 @@ std::vector<int> Detector::visualization(cv::Mat& img, std::ofstream& log_file){
             }
         }
     }
+    if (save_a_frame) {
+        print(BOLDWHITE, "save detections for frame " << this->frame_num);
+        img_queue.push(std::pair<cv::Mat, unsigned int>{img, this->frame_num});
+    }
     if (this->tub > 0) {
-        cv::putText(img, "trepang: " + std::to_string(this->stable_ides_set.at(1).size()), cv::Point(10, 10), 1,
+        cv::putText(img, "trepang: " + std::to_string(this->stable_ides_set.at(1).size()), cv::Point(10, 30), 1,
                     1, this->color.at(1), 2);
-        cv::putText(img, "urchin: " + std::to_string(this->stable_ides_set.at(2).size()), cv::Point(10, 25), 1,
+        cv::putText(img, "urchin: " + std::to_string(this->stable_ides_set.at(2).size()), cv::Point(10, 45), 1,
                     1, this->color.at(2), 2);
-        cv::putText(img, "shell: " + std::to_string(this->stable_ides_set.at(3).size()), cv::Point(10, 40), 1, 1,
+        cv::putText(img, "shell: " + std::to_string(this->stable_ides_set.at(3).size()), cv::Point(10, 60), 1, 1,
                     this->color.at(3), 2);
-        cv::putText(img, "starfish: " + std::to_string(this->stable_ides_set.at(4).size()), cv::Point(10, 55), 1,
-                    1, this->color.at(4), 2);
+//        cv::putText(img, "starfish: " + std::to_string(this->stable_ides_set.at(4).size()), cv::Point(10, 75), 1,
+//                    1, this->color.at(4), 2);
     }
     cv::imshow("ResDet", img);
     det_frame_queue.push(img);
     save_a_frame = false;
     return loc;
+}
+
+int Detector::get_class_num(unsigned char cls){
+    return this->stable_ides_set.at(cls).size();
 }
 
 
@@ -471,16 +472,18 @@ int Detector::uart_send(unsigned char cls, Uart& uart){
     if (dets[0].item<float>()<0.3 || dets[6].item<int>()<5 || (dets[2] + dets[4]).item<float>()/2.0 > 0.9)
         return 0;
 //    float dist = std::sqrt(std::pow(((dets[1].item<float>()+dets[3].item<float>())/2-0.5), 2) + std::pow(((dets[2].item<float>()+dets[4].item<float>())/4-1), 2));
-//    print(RED, "DEBUG: " << dist);
-    if(std::abs((dets[1].item<float>()+dets[3].item<float>())/2-0.5) > 0.25 || std::abs((dets[2].item<float>()+dets[4].item<float>())/2-1) > 0.5)
+    float xc = (dets[1].item<float>() + dets[3].item<float>()) / 2;
+    float yc = (dets[2].item<float>() + dets[4].item<float>()) / 2;
+    if(std::abs(xc-0.5) > 0.15 || std::abs(yc-1) > 0.5)
         return 1;
     this->send_list.clear();
     this->send_list.push_back(110+cls);
-    this->send_list.push_back((char)(dets[1].item<float>()*100));
-    this->send_list.push_back((char)(dets[2].item<float>()*100));
-    this->send_list.push_back((char)(dets[3].item<float>()*100));
-    this->send_list.push_back((char)(dets[4].item<float>()*100));
+    this->send_list.push_back((char)(xc *100));
+    this->send_list.push_back((char)(yc *100));
+    this->send_list.push_back((char)((dets[3].item<float>() - dets[1].item<float>()) *100));
+    this->send_list.push_back((char)((dets[4].item<float>() - dets[2].item<float>()) *100));
     this->send_list.push_back((char)(round(max_depth/10.0)));
+//    print(RED, "DEBUG: " << (int)this->send_list.at(1) << ", " <<(int)this->send_list.at(2));
     int send_byte = uart.send(this->send_list);
     return send_byte;
 }

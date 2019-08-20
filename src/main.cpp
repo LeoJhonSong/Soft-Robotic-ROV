@@ -77,7 +77,7 @@ int main(int argc, char* argv[]) {
     // make record dir and file
     if(nullptr==opendir(("./record/" + save_path).c_str()))
         mkdir(("./record/" + save_path).c_str(), S_IRWXU|S_IRWXG|S_IRWXO);
-    std::ofstream log_file("./record/" + save_path+"/log.txt");
+    std::ofstream log_file("./record/" + save_path + "/log.txt");
 
     // load models
     torch::NoGradGuard no_grad_guard;
@@ -95,7 +95,7 @@ int main(int argc, char* argv[]) {
     unsigned int num_classes = 5;
     int top_k = 200;
     float nms_thresh = 0.3;
-    std::vector<float> conf_thresh = {0.3, 0.3, 0.5, 0.5};
+    std::vector<float> conf_thresh = {0.3, 0.3, 0.3, 1.0};
     float tub_thresh = 0.3;
     bool reset_id = false;
     Detector Detect(num_classes, top_k, nms_thresh, FLAGS_TUB, FLAGS_SSD_DIM, FLAGS_TRACK);
@@ -111,9 +111,9 @@ int main(int argc, char* argv[]) {
     while(!capture.isOpened()) {
         try{
             if (FLAGS_MODE == -1) {
-                capture.open("/home/sean/data/UWdevkit/snippets/echinus.mp4");
-//                capture.open("/home/sean/Documents/ResDet/bug/2019_8_19_14_23_10/2019_8_19_14_23_10_raw.avi");
-//                capture.set(CV_CAP_PROP_POS_FRAMES, 800);
+//                capture.open("/home/sean/data/UWdevkit/snippets/echinus.mp4");
+                capture.open("/home/sean/Documents/ResDet/bug/2019_8_21_2_26_6/2019_8_21_2_26_6_raw.avi");
+                capture.set(CV_CAP_PROP_POS_FRAMES, 6000);
             } else if (FLAGS_MODE == -2) capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
             else capture.open(FLAGS_MODE);
         }
@@ -196,8 +196,7 @@ int main(int argc, char* argv[]) {
             cv::cvtColor(img_vis, img_vis, cv::COLOR_BGR2RGB);
             cv::resize(img_vis, img_vis, vis_size);
             target_loc = Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, log_file);
-            print(BOLDRED, (float)target_loc[0]/vis_size.width << ", " << (float)target_loc[1]/vis_size.height << ", "<< (float)target_loc[2]/vis_size.width << ", " << (float)target_loc[3]/vis_size.height );
-            // 已判定坐底, 尝试给软体臂程序发送目标坐标
+//            print(BOLDRED, (float)target_loc[0]/vis_size.width << ", " << (float)target_loc[1]/vis_size.height << ", "<< (float)target_loc[2]/vis_size.width << ", " << (float)target_loc[3]/vis_size.height );
             if(land){
                 if (FLAGS_UART) {
                     if (send_byte == -1) {
@@ -246,6 +245,9 @@ int main(int argc, char* argv[]) {
         if (key != -1)  rov_key = key;
         parse_key(key, quit, reset_id, conf_thresh, FLAGS_K, FLAGS_R, filter);
     }
+    std::ofstream result_file("./record/" + save_path + "/result.txt");
+    result_file << "Couting: holothurian,"<< Detect.get_class_num(1) << ",echinus," << Detect.get_class_num(2) << ",scallop," << Detect.get_class_num(3);
+    result_file.close();
     log_file.close();
     uart.closeFile();
     video_write_flag = false;

@@ -67,7 +67,7 @@ public:
     float depth = 0;
     float adjust_rate = 1.0;  // density_rate = sea_water_density / standard_water_density
     int land_count = 0;
-    int count_thresh = 30;  // the unit is almost s, often smaller than 1s
+    int count_thresh = 20;  // the unit is almost s, often smaller than 1s
     float pre_depth = 0.0;
     float depth_diff_thresh = 3.0;  // unit is cm
     float depth_diff = 100.0;

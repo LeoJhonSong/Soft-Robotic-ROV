@@ -225,8 +225,10 @@ bool TCP_Server::is_landed(bool land){ // 结合上一时刻是否位于海底�
         return false;
     }
     if (this->land_count >= this->count_thresh) { // land_count超过阈值count_thresh时判定为坐底, 当land_count和count_thresh过小时会产生噪声
-//        print(BOLDGREEN, "ROV: landed, update max depth " << depth);
-        max_depth = this->depth;
+        if (std::abs(max_depth - this->depth) > 3) {
+            print(BOLDGREEN, "ROV: landed, update max depth " << depth);
+            max_depth = this->depth;
+        }
         return true;
     }
     return false;
@@ -245,7 +247,10 @@ void run_rov() {
     std::random_device rd;
 //    std::mt19937 gen(rd());
     std::uniform_int_distribution<> dis(0, 5);
-    int cruise_state = 0; // 巡航状态
+    int side_sec = 10;
+    int for_sec = 5;
+    std::vector<int> cruise_second = {3, 3+side_sec, 3+side_sec+for_sec, 3+2*side_sec+for_sec,
+                                      3+2*side_sec+2*for_sec, 3+3*side_sec+2*for_sec, 3+3*side_sec+3*for_sec, 3+4*side_sec+3*for_sec}; // 巡航状态
     float width_thresh = 0.2; // 微调ROI阈值
     float height_thresh = 0.3;
     float drift_width = 0.0; // 目标漂移值
@@ -254,6 +259,7 @@ void run_rov() {
     bool second_dive_lost = false;
     float x_ref = 0.5;
     float y_ref = 0.5;
+
     time_t start, time_interval;
     unsigned char last_opt = 0;
     if (run_rov_flag > 0) { // 确认上位机与ROV通信建立成功并开灯
@@ -319,10 +325,8 @@ void run_rov() {
                 print(BOLDBLUE, "ROV: try to stably floating, second_dive? " << second_dive << ", second_dive_lost? " << second_dive_lost);
                 if (second_dive) {
                     if (!second_dive_lost) {
-                        for (unsigned char i = 0; i < 1; i++) {
-                            server.sendMsg(SEND_SLEEP);
-                            delay(1);
-                        }
+                        server.sendMsg(SEND_SLEEP);
+                        delay_ms(100);
                     } else {
                         for (unsigned char i = 0; i < 3; i++) {
                             server.sendMsg(SEND_UP);
@@ -374,7 +378,7 @@ void run_rov() {
                         delay(1);
                         grasping_done = false;
                     }
-                    time_interval =  (time(nullptr) - start) % 39;
+                    time_interval =  (time(nullptr) - start) % (3+4*side_sec+3*for_sec+1);
                     if (target_loc.at(2) != 0 || target_loc.at(3) != 0) { // target_loc.at 2, 3位为目标的width, height
                         if (last_opt == 1) {
                             print(BOLDMAGENTA, "ROV: SEND_HALF_BACKWARD for 2s");
@@ -401,19 +405,24 @@ void run_rov() {
                                 delay(1);
                             }
                         break;
-                    } else if(time_interval <= 3 || (time_interval > 8 && time_interval <= 13) || (time_interval > 18 && time_interval <= 23) || (time_interval > 28 && time_interval <= 33)) {
+                    } else if(time_interval <=  cruise_second.at(0) ||
+                             (time_interval > cruise_second.at(1) && time_interval <= cruise_second.at(2)) ||
+                             (time_interval > cruise_second.at(3) && time_interval <= cruise_second.at(4)) ||
+                             (time_interval > cruise_second.at(5) && time_interval <= cruise_second.at(6))) {
                         if (last_opt != 1) {
                             print(BOLDMAGENTA, "ROV: SEND_HALF_FORWARD");
                             last_opt = 1;
                         }
                         server.sendMsg(SEND_HALF_FORWARD);
-                    } else if((time_interval > 3 && time_interval <= 8) || (time_interval > 33 && time_interval <= 38)) {
+                    } else if((time_interval > cruise_second.at(0) && time_interval <= cruise_second.at(1)) ||
+                              (time_interval > cruise_second.at(6) && time_interval <= cruise_second.at(7))) {
                         if (last_opt != 2) {
                             print(BOLDMAGENTA, "ROV: SEND_HALF_RIGHT");
                             last_opt = 2;
                         }
                         server.sendMsg(SEND_HALF_RIGHT);
-                    } else if((time_interval > 13 && time_interval <= 18) || (time_interval > 23 && time_interval <= 28)) {
+                    } else if((time_interval > cruise_second.at(2) && cruise_second.at(3)) ||
+                              (time_interval > cruise_second.at(4) && time_interval <= cruise_second.at(5))) {
                         if (last_opt != 3) {
                             print(BOLDMAGENTA, "ROV: SEND_HALF_LEFT");
                             last_opt = 3;
@@ -440,10 +449,10 @@ void run_rov() {
                         break;
                     }
                     if (second_dive) {
-                        y_ref = 0.7;
+                        y_ref = 0.6;
                         height_thresh = 0.2;
                     } else {
-                        y_ref = 0.4;
+                        y_ref = 0.5;
                         height_thresh = 0.3;
                     }
                     if (target_loc.at(0) < (float)vis_size.width * (x_ref - width_thresh / 2) || // 先判定是否有左右漂移及漂移值, 向左为正
