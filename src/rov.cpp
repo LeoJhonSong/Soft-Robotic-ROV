@@ -453,7 +453,7 @@ void run_rov() {
                         height_thresh = 0.2;
                     } else {
                         y_ref = 0.5;
-                        height_thresh = 0.3;
+                        height_thresh = 0.2;
                     }
                     if (target_loc.at(0) < (float)vis_size.width * (x_ref - width_thresh / 2) || // 先判定是否有左右漂移及漂移值, 向左为正
                         target_loc.at(0) > (float)vis_size.width * (x_ref + width_thresh / 2))   // 要注意图像坐标系原点在图像左上角
