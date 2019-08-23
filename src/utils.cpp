@@ -21,7 +21,8 @@ void clip(int& n, int lower, int upper) {
     n = std::max(lower, std::min(n, upper));
 }
 
-extern bool rov_half_speed, manual_stop, save_a_frame;
+extern bool rov_half_speed, manual_stop, save_a_frame, save_a_count;
+extern float half_scale, adjust_scale;
 void parse_key(int key, bool& quit, bool& reset_id, std::vector<float>& conf_thresh, int& FLAGS_K, int& FLAGS_R, CFilt& filter){
     switch (key){
 //        case 32:  // space
@@ -73,21 +74,44 @@ void parse_key(int key, bool& quit, bool& reset_id, std::vector<float>& conf_thr
             clip(conf_thresh.at(3), 0.001, 1.0);
             print(YELLOW, "KEY: conf_thresh: " << conf_thresh);
             break;
-        case 101:
+        case 101: // e
             save_a_frame = true;
             break;
-//        case 107:  // l
-//            FLAGS_K += 10;
-//            clip(FLAGS_K, 0, 300);
-//            filter.get_wf(FLAGS_K, FLAGS_R);
-//            std::cout << "main: K: " << FLAGS_K << std::endl;
-//            break;
-//        case 108:  // k
-//            FLAGS_K -= 10;
-//            clip(FLAGS_K, 0, 300);
-//            filter.get_wf(FLAGS_K, FLAGS_R);
-//            std::cout << "main: K: " << FLAGS_K << std::endl;
-//            break;
+        case 118: // v
+            save_a_count = true;
+            break;
+        case 57: // 9
+            half_scale -= 0.1;
+            clip(half_scale, 0.1, 10.0);
+            print(YELLOW, "KEY: half_scale: " << half_scale);
+            break;
+        case 48: // 0
+            half_scale += 0.1;
+            clip(half_scale, 0.1, 10.0);
+            print(YELLOW, "KEY: half_scale: " << half_scale);
+            break;
+        case 55: // 7
+            adjust_scale -= 0.02;
+            clip(adjust_scale, 0.1, 10.0);
+            print(YELLOW, "KEY: adjust_scale: " << adjust_scale);
+            break;
+        case 56: // 8
+            adjust_scale += 0.02;
+            clip(adjust_scale, 0.1, 10.0);
+            print(YELLOW, "KEY: adjust_scale: " << adjust_scale);
+            break;
+        case 52:  // 4
+            FLAGS_K += 10;
+            clip(FLAGS_K, 0, 300);
+            filter.get_wf(FLAGS_K, FLAGS_R);
+            std::cout << "main: K: " << FLAGS_K << std::endl;
+            break;
+        case 51:  // 3
+            FLAGS_K -= 10;
+            clip(FLAGS_K, 0, 300);
+            filter.get_wf(FLAGS_K, FLAGS_R);
+            std::cout << "main: K: " << FLAGS_K << std::endl;
+            break;
         case 114:  // r
             reset_id = true;
             break;

@@ -50,7 +50,8 @@ tm *ltm = localtime(&now);
 std::string save_path =  std::to_string(1900 + ltm->tm_year) + "_" + std::to_string(1+ltm->tm_mon)+ "_" + std::to_string(ltm->tm_mday)
                          + "_" + std::to_string(ltm->tm_hour) + "_" + std::to_string(ltm->tm_min) + "_" + std::to_string(ltm->tm_sec);
 cv::Size vis_size(640, 360);
-bool save_a_frame;
+bool save_a_frame = false;
+bool save_a_count = false;
 std::queue<cv::Mat> frame_queue, det_frame_queue;
 std::queue<std::pair<cv::Mat, unsigned int>> img_queue;
 
@@ -70,6 +71,8 @@ bool grasping_done = false;
 bool second_dive = false;
 float max_depth = 0;
 float curr_depth = 0;
+float half_scale = 1.0;
+float adjust_scale = 1.0;
 
 
 int main(int argc, char* argv[]) {
@@ -112,12 +115,13 @@ int main(int argc, char* argv[]) {
         try{
             if (FLAGS_MODE == -1) {
 //                capture.open("/home/sean/data/UWdevkit/snippets/echinus.mp4");
-                capture.open("/home/sean/Documents/ResDet/bug/2019_8_21_2_26_6/2019_8_21_2_26_6_raw.avi");
-                capture.set(CV_CAP_PROP_POS_FRAMES, 6000);
+                capture.open("/home/sean/Documents/ResDet/record/2019_8_22_12_54_48/2019_8_22_12_54_48_raw.avi");
+                capture.set(CV_CAP_PROP_POS_FRAMES, 8000);
             } else if (FLAGS_MODE == -2) capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
             else capture.open(FLAGS_MODE);
         }
         catch(const char* msg) {
+            print(RED, "cannot open video");
             continue;
         }
     }
@@ -132,6 +136,7 @@ int main(int argc, char* argv[]) {
     bool quit = false;
     unsigned char loc_idex = 0;
     time_t t_send = 0;
+    int conut_times = 0;
 
     // UART
     Uart uart("ttyUSB0", 115200);
@@ -244,9 +249,20 @@ int main(int argc, char* argv[]) {
         int key = cv::waitKey(1);
         if (key != -1)  rov_key = key;
         parse_key(key, quit, reset_id, conf_thresh, FLAGS_K, FLAGS_R, filter);
+        if (save_a_count) {
+            print(BOLDWHITE, "save couting " + std::to_string(conut_times) + ": holothurian," << Detect.get_class_num(1) << ",echinus," << Detect.get_class_num(2)
+                                                                                              << ",scallop," << Detect.get_class_num(3));
+            std::ofstream result_file("./record/" + save_path + "/result_" + std::to_string(conut_times++) + ".txt");
+            result_file << "Couting: holothurian," << Detect.get_class_num(1) << ",echinus," << Detect.get_class_num(2) << ",scallop," << Detect.get_class_num(3) << std::endl;
+            result_file.close();
+            save_a_count = false;
+
+        }
     }
-    std::ofstream result_file("./record/" + save_path + "/result.txt");
-    result_file << "Couting: holothurian,"<< Detect.get_class_num(1) << ",echinus," << Detect.get_class_num(2) << ",scallop," << Detect.get_class_num(3);
+    print(BOLDWHITE, "save couting " + std::to_string(conut_times) + ": holothurian," << Detect.get_class_num(1) << ",echinus," << Detect.get_class_num(2)  << ",scallop," << Detect.get_class_num(3));
+    std::ofstream result_file("./record/" + save_path + "/result_" + std::to_string(conut_times) + ".txt");
+    result_file << "Couting: holothurian," << Detect.get_class_num(1) << ",echinus," << Detect.get_class_num(2)
+                << ",scallop," << Detect.get_class_num(3) << std::endl;
     result_file.close();
     log_file.close();
     uart.closeFile();

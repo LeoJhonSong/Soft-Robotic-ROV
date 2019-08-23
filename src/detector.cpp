@@ -23,6 +23,7 @@ Detector::Detector(unsigned int num_classes, int top_k, float nms_thresh, unsign
     this->ssd_dim = ssd_dim;
     this->small_size_filter = 0.005;
     this->large_size_filter = 0.15;
+    this->y_max_filter = 0.9;
     this->track_cl = 0;
     this->track_id = -1;
     this->frame_num = 0;
@@ -186,7 +187,8 @@ std::tuple<torch::Tensor, int> Detector::nms(torch::Tensor& boxes, torch::Tensor
     torch::Tensor x2 = boxes.slice(1, 2, 3).squeeze(-1);
     torch::Tensor y2 = boxes.slice(1, 3, 4).squeeze(-1);
     torch::Tensor area = torch::mul(x2-x1, y2-y1);
-    torch::Tensor area_mask = area.gt(this->small_size_filter) * area.lt(this->large_size_filter);
+//    torch::Tensor y;
+    torch::Tensor area_mask = area.gt(this->small_size_filter) * area.lt(this->large_size_filter) * y2.lt(this->y_max_filter);
     x1 = x1.masked_select(area_mask);
     y1 = y1.masked_select(area_mask);
     x2 = x2.masked_select(area_mask);
@@ -209,7 +211,7 @@ std::tuple<torch::Tensor, int> Detector::nms(torch::Tensor& boxes, torch::Tensor
         if(idx.size(0) == 1) break;
         idx = idx.slice(0, 0, idx.size(0)-1);
         torch::Tensor inners = (x2.index_select(0, idx).clamp_max(x2[i].item<float>()) - x1.index_select(0, idx).clamp_min(x1[i].item<float>())).clamp_min(0.0)
-                * (y2.index_select(0, idx).clamp_max(y2[i].item<float>()) - y1.index_select(0, idx).clamp_min(y1[i].item<float>())).clamp_min(0.0);;
+                               * (y2.index_select(0, idx).clamp_max(y2[i].item<float>()) - y1.index_select(0, idx).clamp_min(y1[i].item<float>())).clamp_min(0.0);;
         torch::Tensor rem_areas = area.index_select(0, idx);
         torch::Tensor unions = (rem_areas - inners) + area[i];
         torch::Tensor IoU = inners / unions;
@@ -253,7 +255,7 @@ std::tuple<torch::Tensor, int> Detector::prev_nms(torch::Tensor& boxes, torch::T
     // pre-box
     torch::Tensor area_tube = torch::mul(prev_box[2] - prev_box[0], prev_box[3] - prev_box[1]);
     torch::Tensor inners_tube = (x2.index_select(0, idx).clamp_max(prev_box[2].item<float>())-x1.index_select(0, idx).clamp_min(prev_box[0].item<float>())).clamp_min(0.0)
-                               * (y2.index_select(0, idx).clamp_max(prev_box[3].item<float>())-y1.index_select(0, idx).clamp_min(prev_box[1].item<float>())).clamp_min(0.0);
+                                * (y2.index_select(0, idx).clamp_max(prev_box[3].item<float>())-y1.index_select(0, idx).clamp_min(prev_box[1].item<float>())).clamp_min(0.0);
     torch::Tensor unions_tube = area.index_select(0, idx) - inners_tube + area_tube;
     torch::Tensor IoU_tube = inners_tube.div(unions_tube);
     idx = idx.masked_select(IoU_tube.gt(0.3));
@@ -298,7 +300,7 @@ torch::Tensor Detector::iou(const torch::Tensor& boxes, unsigned char cl){
         torch::Tensor last_tube = std::get<0>(tube.second)[0];
         torch::Tensor area_tube = torch::mul(last_tube[2] - last_tube[0], last_tube[3] - last_tube[1]);
         torch::Tensor inner = (x2.clamp_max(last_tube[2].item<float>())-x1.clamp_min(last_tube[0].item<float>())).clamp_min(0.0)
-                * (y2.clamp_max(last_tube[3].item<float>())-y1.clamp_min(last_tube[1].item<float>())).clamp_min(0.0);
+                              * (y2.clamp_max(last_tube[3].item<float>())-y1.clamp_min(last_tube[1].item<float>())).clamp_min(0.0);
         torch::Tensor unions = area - inner + area_tube;
         iou.slice(1, i, i+1) = inner.div(unions).unsqueeze(-1);
         i++;

@@ -19,12 +19,15 @@
 #define RECEIVE_LENGTH 30
 #define LOCAL_PORT "9090"
 
-#define MAX_SPEED 255
-#define adjust_scale 1
-#define half_scale 1
+#define MAX_SPEED 250
+//#define adjust_scale 1
+extern float half_scale;
+extern float adjust_scale;
+
 
 //                                  环 灯    前后  左右   转向  上下
 #define SEND_LIGHTS_ON              1, 1,    0,    0,    0,    0
+#define SEND_LIGHTS_OFF             1, 2,    0,    0,    0,    0
 #define SEND_FORWARD                1, 0,   99,    0,    1,    0
 #define SEND_BACKWARD               1, 0, -100,    0,    1,    0
 #define SEND_LEFT                   1, 0,    0,   99,    1,    0
@@ -75,7 +78,7 @@ public:
     TCP_Server();
     ~TCP_Server();
     void recvMsg();
-    void sendMsg(bool is_close_loop, bool is_lights_on, int front_back, int left_right, int course, int up_down);
+    void sendMsg(bool is_close_loop, int is_lights_on, int front_back, int left_right, int course, int up_down);
     bool is_landed(bool land_flag);
 private:
     int is_new = 0;

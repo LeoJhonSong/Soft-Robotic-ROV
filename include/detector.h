@@ -29,6 +29,7 @@ private:
     unsigned int hold_len;
     float large_size_filter;
     float small_size_filter;
+    float y_max_filter;
     bool track;
     unsigned char track_cl;
     int track_id;

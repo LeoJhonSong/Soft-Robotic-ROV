@@ -13,17 +13,17 @@ TCP_Server::TCP_Server(void)
 {
     auto &portNum = LOCAL_PORT;  // set local port number to 9090
     const unsigned int backLog =
-        8;  // number of connections allowed on the incoming queue
+            8;  // number of connections allowed on the incoming queue
 
     // addrinfo hints, *res, *p;
     addrinfo hints,
-        *p;  // we need 2 pointers, res to hold and p to iterate over
+            *p;  // we need 2 pointers, res to hold and p to iterate over
     memset(&hints, 0, sizeof(hints));
 
     // for more explanation, man socket
     hints.ai_family = AF_UNSPEC;  // don't specify which IP version to use yet
     hints.ai_socktype =
-        SOCK_STREAM;  // SOCK_STREAM refers to TCP, SOCK_DGRAM will be?
+            SOCK_STREAM;  // SOCK_STREAM refers to TCP, SOCK_DGRAM will be?
     hints.ai_flags = AI_PASSIVE;
 
     // man getaddrinfo
@@ -36,7 +36,7 @@ TCP_Server::TCP_Server(void)
 
     unsigned int numOfAddr = 0;
     char ipStr[INET6_ADDRSTRLEN];  // ipv6 length makes sure both ipv4/6
-                                   // addresses can be stored in this variable
+    // addresses can be stored in this variable
 
     // Now since getaddrinfo() has given us a list of addresses
     // we're going to iterate over them and ask user to choose one
@@ -53,7 +53,7 @@ TCP_Server::TCP_Server(void)
             ++numOfAddr;
         }
 
-        // if address is ipv6 address
+            // if address is ipv6 address
         else {
             ipVer = "IPv6";
             sockaddr_in6 *ipv6 = reinterpret_cast<sockaddr_in6 *>(p->ai_addr);
@@ -145,15 +145,19 @@ void TCP_Server::recvMsg(void)
     // std::cout << depth << std::endl;
 }
 
-void TCP_Server::sendMsg(bool is_close_loop, bool is_lights_on, int front_back, int left_right, int course, int up_down)
+void TCP_Server::sendMsg(bool is_close_loop, int is_lights_on, int front_back, int left_right, int course, int up_down)
 // 是否闭环, 是否开灯, 前进后退, 左右平移, 航向角, 上升下潜
 // 速度值为-100到100的整数, 表示百分值
 {
     std::string response = "\xfe\xfe";
     std::string response_inter;
-    if (is_lights_on)
+    if (is_lights_on == 1)
     {
         response.assign("\xfe\xfe\x01\x0f\x01\xf4\x01\xf4\x05\xdc\x05\xdc\x00\x00\x00\x00\x00\x00\x00\x00\x7f\x7f\x7f\x7f\x00\xfd\xfd", 27);
+    }
+    else if (is_lights_on == 2)
+    {
+        response.assign("\xfe\xfe\x01\x0f\x00\x00\x00\x00\x05\xdc\x05\xdc\x00\x00\x00\x00\x00\x00\x00\x00\x7f\x7f\x7f\x7f\x0e\xfd\xfd", 27);
     }
     else
     {
@@ -246,7 +250,7 @@ extern bool second_dive;
 void run_rov() {
     std::random_device rd;
 //    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dis(0, 5);
+//    std::uniform_int_distribution<> dis(0, 5);
     int side_sec = 10;
     int for_sec = 5;
     std::vector<int> cruise_second = {3, 3+side_sec, 3+side_sec+for_sec, 3+2*side_sec+for_sec,
@@ -300,11 +304,24 @@ void run_rov() {
                 else  server.sendMsg(SEND_RIGHT);
                 break;
             case 44:  // ,
+                if (rov_half_speed) server.sendMsg(SEND_HALF_DOWN);
                 server.sendMsg(SEND_DOWN);
                 break;
             case 46:  // .
                 if (rov_half_speed) server.sendMsg(SEND_HALF_UP);
                 else server.sendMsg(SEND_UP);
+                break;
+            case 53:  // 5
+                print(BOLDGREEN, "ROV: light off");
+                server.sendMsg(SEND_LIGHTS_OFF);
+                delay(1);
+                rov_key = 99;
+                break;
+            case 54:  // 6
+                print(BOLDGREEN, "ROV: light on");
+                server.sendMsg(SEND_LIGHTS_ON);
+                delay(1);
+                rov_key = 99;
                 break;
             case 59:  // ; 坐底. 从这一步开始为自主控制.
                 print(BOLDGREEN, "ROV: diving !!!");
@@ -378,7 +395,7 @@ void run_rov() {
                         delay(1);
                         grasping_done = false;
                     }
-                    time_interval =  (time(nullptr) - start) % (3+4*side_sec+3*for_sec+1);
+                    time_interval =  (time(nullptr) - start); // % (3+4*side_sec+3*for_sec+1);
                     if (target_loc.at(2) != 0 || target_loc.at(3) != 0) { // target_loc.at 2, 3位为目标的width, height
                         if (last_opt == 1) {
                             print(BOLDMAGENTA, "ROV: SEND_HALF_BACKWARD for 2s");
@@ -406,9 +423,9 @@ void run_rov() {
                             }
                         break;
                     } else if(time_interval <=  cruise_second.at(0) ||
-                             (time_interval > cruise_second.at(1) && time_interval <= cruise_second.at(2)) ||
-                             (time_interval > cruise_second.at(3) && time_interval <= cruise_second.at(4)) ||
-                             (time_interval > cruise_second.at(5) && time_interval <= cruise_second.at(6))) {
+                              (time_interval > cruise_second.at(1) && time_interval <= cruise_second.at(2)) ||
+                              (time_interval > cruise_second.at(3) && time_interval <= cruise_second.at(4)) ||
+                              (time_interval > cruise_second.at(5) && time_interval <= cruise_second.at(6))) {
                         if (last_opt != 1) {
                             print(BOLDMAGENTA, "ROV: SEND_HALF_FORWARD");
                             last_opt = 1;
@@ -429,11 +446,12 @@ void run_rov() {
                         }
                         server.sendMsg(SEND_HALF_LEFT);
                     } else {
-                        if (last_opt != 0) {
-                            print(BOLDMAGENTA, "ROV: SEND_SLEEP");
-                            last_opt = 0;
-                        }
-                        server.sendMsg(SEND_SLEEP);
+                        break;
+//                        if (last_opt != 0) {
+//                            print(BOLDMAGENTA, "ROV: SEND_SLEEP");
+//                            last_opt = 0;
+//                        }
+//                        server.sendMsg(SEND_SLEEP);
                     }
                 }
                 if (manual_stop) rov_key = 99;
