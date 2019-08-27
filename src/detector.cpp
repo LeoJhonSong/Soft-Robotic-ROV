@@ -337,12 +337,12 @@ std::vector<int> Detector::visualization(cv::Mat& img, std::ofstream& log_file){
                         this->color.at(this->track_cl));
             cv::putText(img, "track_id: " + std::to_string(this->track_id), cv::Point(img.cols - 120, 30), 1,
                         1, this->color.at(this->track_cl), 2);
-            if (save_a_frame)
+            if (save_a_frame) {
                 log_file << this->frame_num << ", " << (int) this->track_cl << ", " << std::setprecision(2)
                          << scores.item<float>() << ", " << dets[1].item<float>() << ", " << dets[2].item<float>()
-                         << ", "
-                         << dets[3].item<float>() << ", " << dets[4].item<float>() << ", "
+                         << ", " << dets[3].item<float>() << ", " << dets[4].item<float>() << ", "
                          << ids.item<int>() << ", " << max_depth - curr_depth << std::endl;
+            }
         } else {
             loc = {0, 0, 0, 0};
             for (unsigned char j = 1; j < this->num_classes-1; j++) {
@@ -379,12 +379,14 @@ std::vector<int> Detector::visualization(cv::Mat& img, std::ofstream& log_file){
                     cv::putText(img, std::to_string(id) + ", " + stream.str(), cv::Point(x1, y1 - 5), 1, 1,
                                 this->color.at(j));
                     this->stable_ides_set.at(j).insert(id);
-                    if (save_a_frame)
+                    if (save_a_frame) {
                         log_file << this->frame_num << ", " << (int) j << ", " << std::setprecision(2)
                                  << score << ", " << boxes[i][0].item<float>() / img.cols << ", "
                                  << boxes[i][1].item<float>() / img.rows << ", " << boxes[i][2].item<float>() / img.cols
                                  << ", " << boxes[i][3].item<float>() / img.rows << ", "
                                  << id << ", " << max_depth - curr_depth << std::endl;
+                        print(BOLDWHITE, (boxes[i][0]+boxes[i][2]).item<float>() / 2 / img.cols << ", " << (boxes[i][1]+boxes[i][3]).item<float>() / 2 / img.rows );
+                    }
                 }
             }
         }

@@ -71,8 +71,8 @@ bool grasping_done = false;
 bool second_dive = false;
 float max_depth = 0;
 float curr_depth = 0;
-float half_scale = 1.0;
-float adjust_scale = 1.0;
+float half_scale = 1.5;
+float adjust_scale = 1.5;
 
 
 int main(int argc, char* argv[]) {
@@ -115,7 +115,7 @@ int main(int argc, char* argv[]) {
         try{
             if (FLAGS_MODE == -1) {
 //                capture.open("/home/sean/data/UWdevkit/snippets/echinus.mp4");
-                capture.open("/home/sean/Documents/ResDet/record/2019_8_22_12_54_48/2019_8_22_12_54_48_raw.avi");
+                capture.open("/home/sean/Documents/ResDet/fine/OnlineDet/2019_8_22_12_54_48_raw.avi");
                 capture.set(CV_CAP_PROP_POS_FRAMES, 8000);
             } else if (FLAGS_MODE == -2) capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
             else capture.open(FLAGS_MODE);
@@ -234,9 +234,16 @@ int main(int argc, char* argv[]) {
             cv::cvtColor(frame.clone(), img_vis, cv::COLOR_BGR2RGB);
             cv::resize(img_vis, img_vis, vis_size);
             cv::imshow("ResDet", img_vis);
+            if (land) {
+                print(BOLDCYAN, "MAIN: uart is closed");
+                land = false;
+                grasping_done = true;
+                max_attempt = 0;
+                send_byte = -1;
+            }
         }
         if (send_byte == 6){
-            if ((time(nullptr) - t_send) > 50) {
+            if ((time(nullptr) - t_send) > 60) {
                 send_byte = -1;
                 if (++max_attempt>1) {
                     print(BOLDCYAN, "MAIN: max_attempt>2 grasping done");

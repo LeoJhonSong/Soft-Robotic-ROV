@@ -37,7 +37,7 @@ extern float adjust_scale;
 #define SEND_UP                     0, 0,    0,    0,    1,   99
 #define SEND_DOWN                   0, 0,    0,    0,    1, -100
 #define SEND_HALF_FORWARD           1, 0,   40 * half_scale,    0 * half_scale,    1,    0
-#define SEND_HALF_BACKWARD          1, 0,  -40 * half_scale,    0 * half_scale,    1,    0
+#define SEND_HALF_BACKWARD          1, 0,  -45 * half_scale,    0 * half_scale,    1,    0
 #define SEND_HALF_LEFT              1, 0,    0 * half_scale,   45 * half_scale,    1,    0
 #define SEND_HALF_RIGHT             1, 0,    0 * half_scale,  -40 * half_scale,    1,    0
 #define SEND_HALF_TURN_LEFT         1, 0,    0,    0,   30,    0
@@ -53,7 +53,7 @@ extern float adjust_scale;
 #define SEND_DIVE_TURN_RIGHT        1, 0,    0,    0,  -37, -100
 #define SEND_ADJUST_FORWARD         1, 0,   33 * adjust_scale,    0 * adjust_scale,    1,    0
 #define SEND_ADJUST_BACKWARD        1, 0,  -33 * adjust_scale,    0 * adjust_scale,    1,    0
-#define SEND_ADJUST_LEFT            1, 0,    0 * adjust_scale,   40 * adjust_scale,    1,    0
+#define SEND_ADJUST_LEFT            1, 0,    0 * adjust_scale,   45 * adjust_scale,    1,    0
 #define SEND_ADJUST_RIGHT           1, 0,    0 * adjust_scale,  -33 * adjust_scale,    1,    0
 #define SEND_ADJUST_TURN_LEFT       1, 0,    0,    0,   25,    0
 #define SEND_ADJUST_TURN_RIGHT      1, 0,    0,    0,  -25,    0

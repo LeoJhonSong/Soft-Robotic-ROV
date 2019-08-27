@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 ./cmake-build-debug/ResDet \
---RUAS 0 \
+--RUAS 2 \
 --K 100 \
 --R 50 \
---NET_PHASE 2 \
---MODE -1 \
+--NET_PHASE 3 \
+--MODE -2 \
 --SSD_DIM 320 \
---NETG_DIM 256 \
+--NETG_DIM 320 \
 --TUB 1 \
---UART=false \
---WITH_ROV=false \
---TRACK=false \
-#2> /dev/null
+--UART=true \
+--WITH_ROV=true \
+--TRACK=true \
+2> /dev/null
