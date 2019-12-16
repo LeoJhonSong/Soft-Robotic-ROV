@@ -98,7 +98,7 @@ int main(int argc, char* argv[]) {
     unsigned int num_classes = 5;
     int top_k = 200;
     float nms_thresh = 0.3;
-    std::vector<float> conf_thresh = {0.3, 0.3, 0.3, 1.0};
+    std::vector<float> conf_thresh = {1.0, 0.8, 0.1, 1.5};
     float tub_thresh = 0.3;
     bool reset_id = false;
     Detector Detect(num_classes, top_k, nms_thresh, FLAGS_TUB, FLAGS_SSD_DIM, FLAGS_TRACK);
@@ -108,15 +108,20 @@ int main(int argc, char* argv[]) {
     if(FLAGS_RUAS>1) {
         filter.get_wf(FLAGS_K, FLAGS_R);
     }
-
     // load video
     cv::VideoCapture capture;
     while(!capture.isOpened()) {
         try{
             if (FLAGS_MODE == -1) {
 //                capture.open("/home/sean/data/UWdevkit/snippets/echinus.mp4");
-                capture.open("/home/sean/Documents/ResDet/fine/OnlineDet/2019_8_22_12_54_48_raw.avi");
-                capture.set(CV_CAP_PROP_POS_FRAMES, 8000);
+//                capture.open("/home/sean/Documents/ResDet/fine/2019_8_18_23_5_28/2019_8_18_23_5_28_raw.avi");
+//                capture.set(CV_CAP_PROP_POS_FRAMES, 2700);
+//                capture.open("/home/sean/Documents/ResDet/fine/Grab/2019_8_22_12_26_37_raw.avi");
+//                capture.set(CV_CAP_PROP_POS_FRAMES, 13000);
+                capture.open("/home/sean/Documents/ResDet/fine/FinalAutoGrab/2019_8_24_16_42_29_raw.avi");
+                capture.set(CV_CAP_PROP_POS_FRAMES, 1100);
+//                capture.open("/home/sean/Documents/ResDet/fine/OnlineDet/2019_8_22_12_54_48_raw.avi");
+//                capture.set(CV_CAP_PROP_POS_FRAMES, 8000);
             } else if (FLAGS_MODE == -2) capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
             else capture.open(FLAGS_MODE);
         }
@@ -234,6 +239,7 @@ int main(int argc, char* argv[]) {
             cv::cvtColor(frame.clone(), img_vis, cv::COLOR_BGR2RGB);
             cv::resize(img_vis, img_vis, vis_size);
             cv::imshow("ResDet", img_vis);
+            det_frame_queue.push(img_vis);
             if (land) {
                 print(BOLDCYAN, "MAIN: uart is closed");
                 land = false;
