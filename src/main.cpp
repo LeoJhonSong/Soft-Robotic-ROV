@@ -115,13 +115,13 @@ int main(int argc, char* argv[]) {
             if (FLAGS_MODE == -1) {
 //                capture.open("/home/sean/data/UWdevkit/snippets/echinus.mp4");
 //                capture.open("/home/sean/Documents/ResDet/fine/2019_8_18_23_5_28/2019_8_18_23_5_28_raw.avi");
-//                capture.set(CV_CAP_PROP_POS_FRAMES, 2700);
+//                capture.set(cv::CAP_PROP_POS_FRAMES, 2700);
 //                capture.open("/home/sean/Documents/ResDet/fine/Grab/2019_8_22_12_26_37_raw.avi");
-//                capture.set(CV_CAP_PROP_POS_FRAMES, 13000);
+//                capture.set(cv::CAP_PROP_POS_FRAMES, 13000);
                 capture.open("/home/sean/Documents/ResDet/fine/FinalAutoGrab/2019_8_24_16_42_29_raw.avi");
-                capture.set(CV_CAP_PROP_POS_FRAMES, 1100);
+                capture.set(cv::CAP_PROP_POS_FRAMES, 1100);
 //                capture.open("/home/sean/Documents/ResDet/fine/OnlineDet/2019_8_22_12_54_48_raw.avi");
-//                capture.set(CV_CAP_PROP_POS_FRAMES, 8000);
+//                capture.set(cv::CAP_PROP_POS_FRAMES, 8000);
             } else if (FLAGS_MODE == -2) capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
             else capture.open(FLAGS_MODE);
         }
@@ -130,8 +130,8 @@ int main(int argc, char* argv[]) {
             continue;
         }
     }
-    frame_w = (int)capture.get(CV_CAP_PROP_FRAME_WIDTH);
-    frame_h = (int)capture.get(CV_CAP_PROP_FRAME_HEIGHT);
+    frame_w = (int)capture.get(cv::CAP_PROP_FRAME_WIDTH);
+    frame_h = (int)capture.get(cv::CAP_PROP_FRAME_HEIGHT);
 
     // intermediate variable
     cv::Mat frame, img_float, img_vis;
