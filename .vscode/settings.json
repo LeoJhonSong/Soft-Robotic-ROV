@@ -1,0 +1,10 @@
+{
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+    "cmake.configureArgs": [
+        "-Wno-dev"
+    ],
+    "cSpell.words": [
+        "gflags",
+        "glog"
+    ]
+}
