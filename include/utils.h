@@ -17,4 +17,7 @@ cv::Mat tensor2im(torch::Tensor tensor);
 void clip(float& n, float lower, float upper);
 void clip(int& n, int lower, int upper);
 void parse_key(int, bool&, bool&, std::vector<float>&, int&, int&, CFilt&);
-void raw_write();
+void video_write();
+void init_state();
+void delay(int);
+void delay_ms(int);

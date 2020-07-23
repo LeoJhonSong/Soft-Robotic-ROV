@@ -19,62 +19,76 @@
 #define RECEIVE_LENGTH 30
 #define LOCAL_PORT "9090"
 
-//                            *       *       *       *       *       *       *       *       *       *       *   *   *   *   *   *
-//                            帧头    信息字  LED1    LED2    舵机1   舵机2   舵预1   舵预2   舵预3   舵预3   前后侧移方向上下校验帧尾
-#define MOVE_FORWARD         "\xfe\xfe\x03\x00\x03\xb6\x03\xb6\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x7f\x7f\x7f\x7c\xfd\xfd"
-#define MOVE_BACKWARD        "\xfe\xfe\x03\x00\x03\xb6\x03\xb6\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\x7f\x7f\x7f\x83\xfd\xfd"
-#define MOVE_LEFT            "\xfe\xfe\x03\x00\x03\xb6\x03\xb6\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x7f\x00\x7f\x7f\x7c\xfd\xfd"
-#define MOVE_RIGHT           "\xfe\xfe\x03\x00\x03\xb6\x03\xb6\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x7f\xff\x7f\x7f\x83\xfd\xfd"
-#define MOVE_TURN_LEFT       "\xfe\xfe\x03\x00\x03\xb6\x03\xb6\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x7f\x7f\x00\x7f\x7c\xfd\xfd"
-#define MOVE_TURN_RIGHT      "\xfe\xfe\x03\x00\x03\xb6\x03\xb6\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x7f\x7f\xff\x7f\x83\xfd\xfd"
-#define MOVE_UP              "\xfe\xfe\x03\x00\x03\xb6\x03\xb6\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x7f\x7f\x7f\x00\x7c\xfd\xfd"
-#define MOVE_DOWN            "\xfe\xfe\x03\x00\x03\xb6\x03\xb6\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x7f\x7f\x7f\xff\x83\xfd\xfd"
-#define MOVE_HALF_FORWARD    "\xfe\xfe\x03\x00\x03\xb6\x03\xb6\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x3f\x7f\x7f\x7f\x7c\xfd\xfd"
-#define MOVE_HALF_BACKWARD   "\xfe\xfe\x03\x00\x03\xb6\x03\xb6\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xbf\x7f\x7f\x7f\x83\xfd\xfd"
-#define MOVE_HALF_LEFT       "\xfe\xfe\x03\x00\x03\xb6\x03\xb6\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x7f\x3f\x7f\x7f\x7c\xfd\xfd"
-#define MOVE_HALF_RIGHT      "\xfe\xfe\x03\x00\x03\xb6\x03\xb6\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x7f\xbf\x7f\x7f\x83\xfd\xfd"
-#define MOVE_HALF_TURN_LEFT  "\xfe\xfe\x03\x00\x03\xb6\x03\xb6\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x7f\x7f\x3f\x7f\x7c\xfd\xfd"
-#define MOVE_HALF_TURN_RIGHT "\xfe\xfe\x03\x00\x03\xb6\x03\xb6\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x7f\x7f\xbf\x7f\x83\xfd\xfd"
-#define MOVE_HALF_UP         "\xfe\xfe\x03\x00\x03\xb6\x03\xb6\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x7f\x7f\x7f\x3f\x7c\xfd\xfd"
-#define MOVE_HALF_DOWN       "\xfe\xfe\x03\x00\x03\xb6\x03\xb6\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x7f\x7f\x7f\xbf\x83\xfd\xfd"
-#define MOVE_SLEEP           "\xfe\xfe\x03\x00\x03\xb6\x03\xb6\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x7f\x7f\x7f\x7f\x03\xfd\xfd"
+#define MAX_SPEED 250
+//#define adjust_scale 1
+extern float half_scale;
+extern float adjust_scale;
 
-#define SEND_FORWARD            0
-#define SEND_BACKWARD           1
-#define SEND_LEFT               2
-#define SEND_RIGHT              3
-#define SEND_TURN_LEFT          4
-#define SEND_TURN_RIGHT         5
-#define SEND_UP                 6
-#define SEND_DOWN               7
-#define SEND_HALF_FORWARD       8
-#define SEND_HALF_BACKWARD      9
-#define SEND_HALF_LEFT          10
-#define SEND_HALF_RIGHT         11
-#define SEND_HALF_TURN_LEFT     12
-#define SEND_HALF_TURN_RIGHT    13
-#define SEND_HALF_UP            14
-#define SEND_HALF_DOWN          15
-#define SEND_SLEEP              16
+
+//                                  环 灯    前后  左右   转向  上下
+#define SEND_LIGHTS_ON              1, 1,    0,    0,    0,    0
+#define SEND_LIGHTS_OFF             1, 2,    0,    0,    0,    0
+#define SEND_FORWARD                1, 0,   99,    0,    1,    0
+#define SEND_BACKWARD               1, 0, -100,    0,    1,    0
+#define SEND_LEFT                   1, 0,    0,   99,    1,    0
+#define SEND_RIGHT                  1, 0,    0, -100,    1,    0
+#define SEND_TURN_LEFT              1, 0,    0,    0,   99,    0
+#define SEND_TURN_RIGHT             1, 0,    0,    0, -100,    0
+#define SEND_UP                     0, 0,    0,    0,    1,   99
+#define SEND_DOWN                   0, 0,    0,    0,    1, -100
+#define SEND_HALF_FORWARD           1, 0,   40 * half_scale,    0 * half_scale,    1,    0
+#define SEND_HALF_BACKWARD          1, 0,  -45 * half_scale,    0 * half_scale,    1,    0
+#define SEND_HALF_LEFT              1, 0,    0 * half_scale,   45 * half_scale,    1,    0
+#define SEND_HALF_RIGHT             1, 0,    0 * half_scale,  -40 * half_scale,    1,    0
+#define SEND_HALF_TURN_LEFT         1, 0,    0,    0,   30,    0
+#define SEND_HALF_TURN_RIGHT        1, 0,    0,    0,  -30,    0
+#define SEND_HALF_UP                0, 0,    0,    0,    1,   50
+#define SEND_HALF_DOWN              0, 0,    0,    0,    1,  -50
+#define SEND_SLEEP                  1, 0,    0,    0,    1,    0
+#define SEND_DIVE_FORWARD           1, 0,   37,    0,    1, -100
+#define SEND_DIVE_BACKWARD          1, 0,  -37,    0,    1, -100
+#define SEND_DIVE_LEFT              1, 0,    0,   37,    1, -100
+#define SEND_DIVE_RIGHT             1, 0,    0,  -37,    1, -100
+#define SEND_DIVE_TURN_LEFT         1, 0,    0,    0,   37, -100
+#define SEND_DIVE_TURN_RIGHT        1, 0,    0,    0,  -37, -100
+#define SEND_ADJUST_FORWARD         1, 0,   33 * adjust_scale,    0 * adjust_scale,    1,    0
+#define SEND_ADJUST_BACKWARD        1, 0,  -33 * adjust_scale,    0 * adjust_scale,    1,    0
+#define SEND_ADJUST_LEFT            1, 0,    0 * adjust_scale,   45 * adjust_scale,    1,    0
+#define SEND_ADJUST_RIGHT           1, 0,    0 * adjust_scale,  -33 * adjust_scale,    1,    0
+#define SEND_ADJUST_TURN_LEFT       1, 0,    0,    0,   25,    0
+#define SEND_ADJUST_TURN_RIGHT      1, 0,    0,    0,  -25,    0
+#define SEND_DIVE_ADJUST_FORWARD    1,  0,   25,   0,    1,  -50
+#define SEND_DIVE_ADJUST_BACKWARD   1,  0,  -25,   0,    1,  -50
+#define SEND_DIVE_ADJUST_LEFT       1,  0,    0,  37,    1,  -50
+#define SEND_DIVE_ADJUST_RIGHT      1,  0,    0, -25,    1,  -50
+
 
 class TCP_Server {
-    public:
-        int isOneLeak = 0;
-        int isTwoLeak = 0;
-        float depth = 0;
+public:
+    int isOneLeak = 0;
+    int isTwoLeak = 0;
+    float depth = 0;
+    float adjust_rate = 1.0;  // density_rate = sea_water_density / standard_water_density
+    int land_count = 0;
+    int count_thresh = 20;  // the unit is almost s, often smaller than 1s
+    float pre_depth = 0.0;
+    float depth_diff_thresh = 3.0;  // unit is cm
+    float depth_diff = 100.0;
 
-        TCP_Server();
-        ~TCP_Server();
-        void recvMsg();
-        void sendMsg(int move);
-    private:
-        int is_new = 0;
-        int sockFD;
-        int newFD;
-        char receive[RECEIVE_LENGTH];
-        addrinfo *res;
-        sockaddr_storage client_addr;
-        socklen_t client_addr_size = sizeof(client_addr);
+    TCP_Server();
+    ~TCP_Server();
+    void recvMsg();
+    void sendMsg(bool is_close_loop, int is_lights_on, int front_back, int left_right, int course, int up_down);
+    bool is_landed(bool land_flag);
+private:
+    int is_new = 0;
+    int sockFD;
+    int newFD;
+    char receive[RECEIVE_LENGTH];
+    addrinfo *res;
+    sockaddr_storage client_addr;
+    socklen_t client_addr_size = sizeof(client_addr);
 };
 
+void run_rov();
 #endif //TCP_SERVER_TCP_SERVER_H

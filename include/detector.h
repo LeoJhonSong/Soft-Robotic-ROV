@@ -21,31 +21,42 @@ private:
     unsigned int tub;
     int ssd_dim;
     torch::Tensor output;
-    std::vector<std::map<int, std::pair<torch::Tensor, int>>> tubelets;
-    std::vector<std::vector<int>> ides;
+    std::vector<std::map<int, std::tuple<torch::Tensor, int, int>>> tubelets;
+    std::vector<std::vector<std::pair<int, int>>> ides;
     std::vector<std::set<int>> ides_set;
+    std::vector<std::set<int>> stable_ides_set;
     torch::Tensor history_max_ides;
     unsigned int hold_len;
-//    unsigned feature_size;
-    std::vector<cv::Scalar> color{cv::Scalar(255,255,0), cv::Scalar(0, 255,255), cv::Scalar(0,0,255), cv::Scalar(255,0,255)};
+    float large_size_filter;
+    float small_size_filter;
+    float y_max_filter;
+    bool track;
+    unsigned char track_cl;
+    int track_id;
+    unsigned int frame_num;
+    std::vector<char> send_list;
+    std::vector<cv::Scalar> color{cv::Scalar(255,0,0), cv::Scalar(255,255,0), cv::Scalar(0, 255,255), cv::Scalar(0,0,255), cv::Scalar(255,0,255)};
 public:
-    Detector(){};
-    Detector(unsigned int, int, float, unsigned char, int);
-    void init_detector(unsigned int, int, float, unsigned char, int);
+    Detector(unsigned int, int, float, unsigned char, int, bool);
     void log_params();
-//    torch::Tensor detect(const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
-//            std::vector<float>, float, bool);
     void detect(const torch::Tensor&, const torch::Tensor&, std::vector<float>);
-    void detect(const torch::Tensor&, const torch::Tensor&, std::vector<float>, float, bool);
-    void visual_detect(const torch::Tensor&, const torch::Tensor&, std::vector<float>, float, bool, cv::Mat&, cv::VideoWriter&);
-    std::tuple<torch::Tensor, int> nms(const torch::Tensor&, const torch::Tensor&);
+    void detect(const torch::Tensor&, const torch::Tensor&, std::vector<float>, float);
+    void detect_track(const torch::Tensor&, const torch::Tensor&, std::vector<float>);
+    std::vector<int> visual_detect(const torch::Tensor&, const torch::Tensor&, const std::vector<float>&, float, bool&, cv::Mat&, std::ofstream&);
+    std::tuple<torch::Tensor, int> nms(torch::Tensor&, torch::Tensor&);
+    std::tuple<torch::Tensor, int> prev_nms(torch::Tensor&, torch::Tensor&, const torch::Tensor&);
     torch::Tensor iou(const torch::Tensor&, unsigned char);
-    void visualization(cv::Mat&, cv::VideoWriter&);
+    std::vector<int> visualization(cv::Mat&, std::ofstream&);
     void init_tubelets();
     void delete_tubelets(unsigned char);
-    void uart_send(unsigned char cls, Uart&);
-    ~Detector(){
-    };
+    void delete_tubelets();
+    int uart_send(unsigned char cls, Uart&);
+    void reset_tracking_state();
+    int get_class_num(unsigned char);
+    void replenish_tubelets(unsigned char cl, int count);
+//    void enable_track();
+//    void release_track();
+    ~Detector();
 };
 
 

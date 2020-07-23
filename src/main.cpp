@@ -1,10 +1,12 @@
 //
 // Created by sean on 7/11/19.
 //
-#include <utils.h>
-#include <detector.h>
-#include <uart.h>
-#include <ruas.h>
+#include "utils.h"
+#include "detector.h"
+#include "uart.h"
+#include "ruas.h"
+#include "rov.h"
+#include "color.h"
 
 #include <cuda_runtime.h>
 
@@ -20,39 +22,72 @@
 #include <vector>
 #include <gflags/gflags.h>
 #include <thread>
+#include<fstream>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <dirent.h>
+#include <cstddef>
+
 
 DEFINE_int32(K, 100, "turbulence intensity. The greater, the intensive");
 DEFINE_int32(R, 40, "Signal to Noise Ratio. The greater, the more serious of noise");
 DEFINE_uint32(RUAS, 0, "0: skip; 1: clahe; 2: wiener+clahe");
-DEFINE_uint32(NET_PHASE, 0, "0: skip; 1: netG; 2: netG+RefineDet; 3: RefineDet" );
+DEFINE_uint32(NET_PHASE, 2, "0: skip; 1: netG; 2: netG+RefineDet; 3: RefineDet" );
 DEFINE_uint32(SSD_DIM, 320, "" );
+DEFINE_uint32(NETG_DIM, 256, "" );
 DEFINE_uint32(TUB, 0, "" );
-DEFINE_int32(MODE, -1, "-1: load video; >0 load camera" );
-DEFINE_int32(UART, 0, "-1: not use it; >0 use it" );
+DEFINE_int32(MODE, 0, "-1: load video; >0 load camera" );
+DEFINE_bool(UART, false, "-1: not use it; >0 use it" );
+DEFINE_bool(WITH_ROV, false, "0: not use it; >0 use it" );
+DEFINE_bool(TRACK, false, "0: not use it; >0 use it" );
 
+
+// for video_write thread
 char EXT[] = "MJPG";
 int ex1 = EXT[0] | (EXT[1] << 8) | (EXT[2] << 16) | (EXT[3] << 24);
 time_t now = time(nullptr);
 tm *ltm = localtime(&now);
-std::string video_name = "./record/" + std::to_string(1900 + ltm->tm_year) + "_" + std::to_string(1+ltm->tm_mon)+ "_" + std::to_string(ltm->tm_mday)
+std::string save_path =  std::to_string(1900 + ltm->tm_year) + "_" + std::to_string(1+ltm->tm_mon)+ "_" + std::to_string(ltm->tm_mday)
                          + "_" + std::to_string(ltm->tm_hour) + "_" + std::to_string(ltm->tm_min) + "_" + std::to_string(ltm->tm_sec);
-std::queue<cv::Mat> frame_queue;
-int frame_w, frame_h;
-bool raw_write_flag = true;
+cv::Size vis_size(640, 360);
+bool save_a_frame = false;
+bool save_a_count = false;
+std::queue<cv::Mat> frame_queue, det_frame_queue;
+std::queue<std::pair<cv::Mat, unsigned int>> img_queue;
 
-int key;
+int frame_w, frame_h;
+bool video_write_flag = true;
+
+// for run_rov thread
 bool run_rov_flag = true;
+int rov_key = 99;
+bool rov_half_speed = false;
+bool land = false;
+int send_byte = -1;
+unsigned char max_attempt = 0;
+std::vector<int> target_loc = {0,0,0,0};
+bool manual_stop = false;
+bool grasping_done = false;
+bool second_dive = false;
+float max_depth = 0;
+float curr_depth = 0;
+float half_scale = 1.5;
+float adjust_scale = 1.5;
 
 
 int main(int argc, char* argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
+    // make record dir and file
+    if(nullptr==opendir(("./record/" + save_path).c_str()))
+        mkdir(("./record/" + save_path).c_str(), S_IRWXU|S_IRWXG|S_IRWXO);
+    std::ofstream log_file("./record/" + save_path + "/log.txt");
 
     // load models
     torch::NoGradGuard no_grad_guard;
     std::string model_path;
 
     if (FLAGS_NET_PHASE == 1) model_path = "./models/netG.pt";
-    else if (FLAGS_NET_PHASE == 2) model_path = "./models/G_SSD_320.pt";
+    else if (FLAGS_NET_PHASE == 2) model_path = "./models/Unet256_SSD320_wof.pt";
     else if (FLAGS_SSD_DIM == 512) model_path = "./models/SSD512_wof.pt";
     else model_path = "./models/SSD320_wof.pt";
 
@@ -63,42 +98,50 @@ int main(int argc, char* argv[]) {
     unsigned int num_classes = 5;
     int top_k = 200;
     float nms_thresh = 0.3;
-    std::vector<float> conf_thresh = {0.3, 0.3, 0.3, 0.3};
-    float tub_thresh = 0.1;
+    std::vector<float> conf_thresh = {1.0, 0.8, 0.1, 1.5};
+    float tub_thresh = 0.3;
     bool reset_id = false;
-    Detector Detect(num_classes, top_k, nms_thresh, FLAGS_TUB, FLAGS_SSD_DIM);
+    Detector Detect(num_classes, top_k, nms_thresh, FLAGS_TUB, FLAGS_SSD_DIM, FLAGS_TRACK);
 
     // load filter
     CFilt filter(FLAGS_SSD_DIM, FLAGS_SSD_DIM, 3);
     if(FLAGS_RUAS>1) {
         filter.get_wf(FLAGS_K, FLAGS_R);
     }
-
     // load video
     cv::VideoCapture capture;
-    if(FLAGS_MODE == -1){
-        capture.open("/home/sean/data/UWdevkit/snippets/echinus.mp4");
-        capture.set(CV_CAP_PROP_POS_FRAMES, 200);
+    while(!capture.isOpened()) {
+        try{
+            if (FLAGS_MODE == -1) {
+//                capture.open("/home/sean/data/UWdevkit/snippets/echinus.mp4");
+//                capture.open("/home/sean/Documents/ResDet/fine/2019_8_18_23_5_28/2019_8_18_23_5_28_raw.avi");
+//                capture.set(CV_CAP_PROP_POS_FRAMES, 2700);
+//                capture.open("/home/sean/Documents/ResDet/fine/Grab/2019_8_22_12_26_37_raw.avi");
+//                capture.set(CV_CAP_PROP_POS_FRAMES, 13000);
+                capture.open("/home/sean/Documents/ResDet/fine/FinalAutoGrab/2019_8_24_16_42_29_raw.avi");
+                capture.set(CV_CAP_PROP_POS_FRAMES, 1100);
+//                capture.open("/home/sean/Documents/ResDet/fine/OnlineDet/2019_8_22_12_54_48_raw.avi");
+//                capture.set(CV_CAP_PROP_POS_FRAMES, 8000);
+            } else if (FLAGS_MODE == -2) capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
+            else capture.open(FLAGS_MODE);
+        }
+        catch(const char* msg) {
+            print(RED, "cannot open video");
+            continue;
+        }
     }
-    else if(FLAGS_MODE == -2) capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
-    else capture.open(FLAGS_MODE);
     frame_w = (int)capture.get(CV_CAP_PROP_FRAME_WIDTH);
     frame_h = (int)capture.get(CV_CAP_PROP_FRAME_HEIGHT);
-    cv::Size vis_size(1280, 720);
-
-    //out video
-    cv::VideoWriter writer;
-    writer.open(video_name + ".mp4", ex1, 20, vis_size, true);
-    if(!writer.isOpened()){
-        std::cout << "Can not open the output video for write" << std::endl;
-    }
-    std::thread raw_writer(raw_write);
 
     // intermediate variable
     cv::Mat frame, img_float, img_vis;
     torch::Tensor img_tensor, fake_B, loc, conf, ota_feature;
     std::vector<torch::jit::IValue> net_input, net_output;
     cv::cuda::GpuMat img_gpu;
+    bool quit = false;
+    unsigned char loc_idex = 0;
+    time_t t_send = 0;
+    int conut_times = 0;
 
     // UART
     Uart uart("ttyUSB0", 115200);
@@ -106,27 +149,32 @@ int main(int argc, char* argv[]) {
         bool uart_open_flag, uart_init_flag;
         uart_open_flag = uart.openFile();
         if (!uart_open_flag)
-            std::cout << "UART fails to open " << std::endl;
+            print(BOLDRED, "ERROR: UART fails to open ");
         uart_init_flag = uart.initPort();
         if (!uart_init_flag)
-            std::cout << "UART fails to be inited " << std::endl;
+            print(BOLDRED, "ERROR: UART fails to be initialed ");
     }
-    bool quit = false;
-    clock_t t_start= clock();
-    unsigned int frame_num = 0;
-    unsigned char loc_idex = 0;
+
+
+    // multi thread
+    if (!FLAGS_WITH_ROV)
+        run_rov_flag = false;
+    std::thread rov_runner(run_rov);
+    std::thread video_writer(video_write);
+
     while(capture.isOpened() && !quit){
         bool read_ret = capture.read(frame);
         if(!read_ret) break;
-        frame_num ++;
         frame_queue.push(frame);
-        cv::resize(frame, frame, cv::Size(FLAGS_SSD_DIM, FLAGS_SSD_DIM));
+        // pre processing
+        cv::resize(frame, frame, cv::Size(FLAGS_NETG_DIM, FLAGS_NETG_DIM));
         if(FLAGS_RUAS == 1){
             filter.clahe_gpu(frame);
         }else if(FLAGS_RUAS == 2){
             filter.wiener_gpu(frame);
         }
         cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
+        // run net
         if (FLAGS_NET_PHASE > 0) {
             if (FLAGS_NET_PHASE < 3) {
                 cv::normalize(frame, img_float, -1, 1, cv::NORM_MINMAX, CV_32F);
@@ -134,8 +182,7 @@ int main(int argc, char* argv[]) {
                 frame.convertTo(img_float, CV_32F);
                 img_float = img_float - 128.0;
             }
-//            std::cout << "here" << std::endl;
-            img_tensor = torch::from_blob(img_float.data, {1, FLAGS_SSD_DIM, FLAGS_SSD_DIM, 3}).to(torch::kCUDA);
+            img_tensor = torch::from_blob(img_float.data, {1, FLAGS_NETG_DIM, FLAGS_NETG_DIM, 3}).to(torch::kCUDA);
             img_tensor = img_tensor.permute({0, 3, 1, 2});
             net_input.emplace_back(img_tensor);
             if (FLAGS_NET_PHASE == 1) {
@@ -155,31 +202,86 @@ int main(int argc, char* argv[]) {
             if (loc_idex==1) img_vis = tensor2im(fake_B);
             else img_vis = frame;
             net_input.pop_back();
+            // detect
+            cv::cvtColor(img_vis, img_vis, cv::COLOR_BGR2RGB);
+            cv::resize(img_vis, img_vis, vis_size);
+            target_loc = Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, log_file);
+//            print(BOLDRED, (float)target_loc[0]/vis_size.width << ", " << (float)target_loc[1]/vis_size.height << ", "<< (float)target_loc[2]/vis_size.width << ", " << (float)target_loc[3]/vis_size.height );
+            if(land){
+                if (FLAGS_UART) {
+                    if (send_byte == -1) {
+                        send_byte = Detect.uart_send(FLAGS_UART, uart);
+                        print(BOLDCYAN, "MAIN: try to uart send, return " << send_byte);
+                        if (send_byte == 6) {
+                            print(BOLDCYAN, "MAIN: uart send successfully, clock start");
+                            t_send = time(nullptr);
+                        } else {
+                            if (send_byte == 0) print(BOLDCYAN, "MAIN: uart fail to send");
+                            else if (send_byte == 1){
+                                print(BOLDCYAN, "MAIN: out of grasping area, try a second dive");
+                                second_dive = true;
+                            }
+                            land = false;
+                            grasping_done = true;
+                            max_attempt = 0;
+                            send_byte = -1;
+                        }
+                    }
+                } else {
+                    print(BOLDCYAN,  "MAIN: uart is closed");
+                    land = false;
+                    grasping_done = true;
+                    max_attempt = 0;
+                    send_byte = -1;
+                }
+            }
+        }else{
+            cv::cvtColor(frame.clone(), img_vis, cv::COLOR_BGR2RGB);
+            cv::resize(img_vis, img_vis, vis_size);
+            cv::imshow("ResDet", img_vis);
+            det_frame_queue.push(img_vis);
+            if (land) {
+                print(BOLDCYAN, "MAIN: uart is closed");
+                land = false;
+                grasping_done = true;
+                max_attempt = 0;
+                send_byte = -1;
+            }
         }
-
-        cv::cvtColor(img_vis, img_vis, cv::COLOR_BGR2RGB);
-        cv::resize(img_vis, img_vis, vis_size);
-
-        Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, writer);
-        if (reset_id) reset_id = false;
-        if (FLAGS_UART > 0)
-            Detect.uart_send(FLAGS_UART, uart);
-        key = cv::waitKey(1);
-        std::cout << key << std::endl;
+        if (send_byte == 6){
+            if ((time(nullptr) - t_send) > 60) {
+                send_byte = -1;
+                if (++max_attempt>1) {
+                    print(BOLDCYAN, "MAIN: max_attempt>2 grasping done");
+                    land = false;
+                    grasping_done = true;
+                    max_attempt = 0;
+                }
+            }
+        }
+        int key = cv::waitKey(1);
+        if (key != -1)  rov_key = key;
         parse_key(key, quit, reset_id, conf_thresh, FLAGS_K, FLAGS_R, filter);
-//        std::cout << "total: " << (t2 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
-//                  << ", ruas: " << (t6 - t1) * 1.0 / CLOCKS_PER_SEC * 1000
-//                  << ", vis: " << (t7 - t2) * 1.0 / CLOCKS_PER_SEC * 1000 << std::endl;
-    }
-    clock_t t_end= clock();
-    std::cout << "frame amount: " << frame_num  << ", FPS: " << (double)frame_num / ((t_end - t_start) * 1.0 / CLOCKS_PER_SEC) << std::endl;
+        if (save_a_count) {
+            print(BOLDWHITE, "save couting " + std::to_string(conut_times) + ": holothurian," << Detect.get_class_num(1) << ",echinus," << Detect.get_class_num(2)
+                                                                                              << ",scallop," << Detect.get_class_num(3));
+            std::ofstream result_file("./record/" + save_path + "/result_" + std::to_string(conut_times++) + ".txt");
+            result_file << "Couting: holothurian," << Detect.get_class_num(1) << ",echinus," << Detect.get_class_num(2) << ",scallop," << Detect.get_class_num(3) << std::endl;
+            result_file.close();
+            save_a_count = false;
 
+        }
+    }
+    print(BOLDWHITE, "save couting " + std::to_string(conut_times) + ": holothurian," << Detect.get_class_num(1) << ",echinus," << Detect.get_class_num(2)  << ",scallop," << Detect.get_class_num(3));
+    std::ofstream result_file("./record/" + save_path + "/result_" + std::to_string(conut_times) + ".txt");
+    result_file << "Couting: holothurian," << Detect.get_class_num(1) << ",echinus," << Detect.get_class_num(2)
+                << ",scallop," << Detect.get_class_num(3) << std::endl;
+    result_file.close();
+    log_file.close();
     uart.closeFile();
-    writer.release();
-    raw_write_flag = false;
-    raw_writer.join();
-//    run_net_flag = false;
-//    net_runner.join();
-    writer.release();
+    video_write_flag = false;
+    video_writer.join();
+    run_rov_flag = false;
+    rov_runner.join();
     return 0;
 }
