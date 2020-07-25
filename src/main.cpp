@@ -105,27 +105,32 @@ int main(int argc, char* argv[]) {
 
     // load filter
     CFilt filter(FLAGS_SSD_DIM, FLAGS_SSD_DIM, 3);
-    if(FLAGS_RUAS>1) {
+    if (FLAGS_RUAS > 1)
+    {
         filter.get_wf(FLAGS_K, FLAGS_R);
     }
     // load video
     cv::VideoCapture capture;
-    while(!capture.isOpened()) {
-        try{
-            if (FLAGS_MODE == -1) {
-//                capture.open("/home/sean/data/UWdevkit/snippets/echinus.mp4");
-//                capture.open("/home/sean/Documents/ResDet/fine/2019_8_18_23_5_28/2019_8_18_23_5_28_raw.avi");
-//                capture.set(cv::CAP_PROP_POS_FRAMES, 2700);
-//                capture.open("/home/sean/Documents/ResDet/fine/Grab/2019_8_22_12_26_37_raw.avi");
-//                capture.set(cv::CAP_PROP_POS_FRAMES, 13000);
-                capture.open("/home/sean/Documents/ResDet/fine/FinalAutoGrab/2019_8_24_16_42_29_raw.avi");
+    while (!capture.isOpened())
+    {
+        try
+        {
+            if (FLAGS_MODE == -1)
+            {
+                capture.open("./test/echinus.mp4");
+                // capture.set(cv::CAP_PROP_POS_FRAMES, 2700);
+                // capture.set(cv::CAP_PROP_POS_FRAMES, 13000);
                 capture.set(cv::CAP_PROP_POS_FRAMES, 1100);
-//                capture.open("/home/sean/Documents/ResDet/fine/OnlineDet/2019_8_22_12_54_48_raw.avi");
-//                capture.set(cv::CAP_PROP_POS_FRAMES, 8000);
-            } else if (FLAGS_MODE == -2) capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
-            else capture.open(FLAGS_MODE);
+                //                capture.open("/home/sean/Documents/ResDet/fine/OnlineDet/2019_8_22_12_54_48_raw.avi");
+                //                capture.set(cv::CAP_PROP_POS_FRAMES, 8000);
+            }
+            else if (FLAGS_MODE == -2)
+                capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
+            else
+                capture.open(FLAGS_MODE);
         }
-        catch(const char* msg) {
+        catch (const char *msg)
+        {
             print(RED, "cannot open video");
             continue;
         }
@@ -144,6 +149,7 @@ int main(int argc, char* argv[]) {
     int conut_times = 0;
 
     // UART
+    //FIXME
     Uart uart("ttyUSB0", 115200);
     if(FLAGS_UART) {
         bool uart_open_flag, uart_init_flag;

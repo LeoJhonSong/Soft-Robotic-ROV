@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-./cmake-build-debug/ResDet \
+./build/Soft-Robotics-ROV \
 --RUAS 0 \
 --K 100 \
 --R 50 \
@@ -11,4 +11,3 @@
 --UART=false \
 --WITH_ROV=false \
 --TRACK=false \
-#2> /dev/null

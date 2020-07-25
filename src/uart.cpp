@@ -44,6 +44,7 @@ bool Uart::openFile(void){
 
     std::string dev_filename = "/dev/";
     dev_filename = dev_filename + port;
+    // 以读写模式, 不将该tty设备作为控制终端, 无延时模式
     fd = open(dev_filename.c_str(), O_RDWR|O_NOCTTY|O_NDELAY);
     for(int i = 0; fd < 0 && i < 1000; i++){
         fd = open(dev_filename.c_str(), O_RDWR|O_NOCTTY|O_NDELAY);
