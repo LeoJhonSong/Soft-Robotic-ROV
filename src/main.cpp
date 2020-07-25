@@ -60,7 +60,7 @@ bool video_write_flag = true;
 
 // for run_rov thread
 bool run_rov_flag = true;
-int rov_key = 99;
+int rov_key = 32;
 bool rov_half_speed = false;
 bool land = false;
 int send_byte = -1;

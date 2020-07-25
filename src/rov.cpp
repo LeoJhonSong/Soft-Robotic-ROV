@@ -3,8 +3,8 @@
 //
 
 #include "rov.h"
-#include "color.h"
 #include "utils.h"
+#include "color.h"
 
 #include <random>
 
@@ -299,67 +299,67 @@ void run_rov()
         // 键盘键值与ROV动作映射
         switch (rov_key)
         {
-        case 99: // c
+        case 32: // 停止, space
             server.sendMsg(SEND_SLEEP);
             break;
-        case 105: // i
+        case 119: // 前进, w
             if (rov_half_speed)
                 server.sendMsg(SEND_HALF_FORWARD);
             else
                 server.sendMsg(SEND_FORWARD);
             break;
-        case 106: // j
+        case 65: // 左转, A (shift + a)
             if (rov_half_speed)
                 server.sendMsg(SEND_HALF_TURN_LEFT);
             else
                 server.sendMsg(SEND_TURN_LEFT);
             break;
-        case 107: // k
+        case 115: // 后退, s
             if (rov_half_speed)
                 server.sendMsg(SEND_HALF_BACKWARD);
             else
                 server.sendMsg(SEND_BACKWARD);
             break;
-        case 108: // l
+        case 68: // 右转, D (shift + d)
             if (rov_half_speed)
                 server.sendMsg(SEND_HALF_TURN_RIGHT);
             else
                 server.sendMsg(SEND_TURN_RIGHT);
             break;
-        case 111: // o
+        case 97: // 左侧移, a
             if (rov_half_speed)
                 server.sendMsg(SEND_HALF_LEFT);
             else
                 server.sendMsg(SEND_LEFT);
             break;
-        case 112: // p
+        case 100: // 右侧移, d
             if (rov_half_speed)
                 server.sendMsg(SEND_HALF_RIGHT);
             else
                 server.sendMsg(SEND_RIGHT);
             break;
-        case 44: // ,
+        case 83: // 下潜, S (shift + s)
             if (rov_half_speed)
                 server.sendMsg(SEND_HALF_DOWN);
             server.sendMsg(SEND_DOWN);
             break;
-        case 46: // .
+        case 87: // 上浮, W (shift + w)
             if (rov_half_speed)
                 server.sendMsg(SEND_HALF_UP);
             else
                 server.sendMsg(SEND_UP);
             break;
-        case 53: // 5
+        case 108: // 关灯, l
             print(BOLDGREEN, "ROV: light off");
             server.sendMsg(SEND_LIGHTS_OFF);
             delay(1);
-            rov_key = 99;
+            rov_key = 32;
             break;
-        case 54: // 6
+        case 76: // 开灯, L (shift + l)
             print(BOLDGREEN, "ROV: light on");
             server.sendMsg(SEND_LIGHTS_ON);
             delay(1);
-            rov_key = 99;
+            rov_key = 32;
             break;
         case 59: // ; 坐底. 从这一步开始为自主控制.
             print(BOLDGREEN, "ROV: diving !!!");
@@ -377,7 +377,7 @@ void run_rov()
             server.land_count = 0;
             land = false; // 结束坐底
             if (manual_stop)
-                rov_key = 99;
+                rov_key = 32;
             else
                 rov_key = 39; // 开始上浮并定深
             break;
@@ -432,7 +432,7 @@ void run_rov()
                 }
             }
             if (manual_stop)
-                rov_key = 99;
+                rov_key = 32;
             else if (second_dive)
                 rov_key = 61;
             else
@@ -534,7 +534,7 @@ void run_rov()
                 }
             }
             if (manual_stop)
-                rov_key = 99;
+                rov_key = 32;
             else if (time_interval > cruise_second.at(7))
                 rov_key = 59;
             else
@@ -614,7 +614,7 @@ void run_rov()
                 }
             }
             if (manual_stop)
-                rov_key = 99;
+                rov_key = 32;
             else if (dive_ready)
                 rov_key = 59;
             else if (second_dive_lost)

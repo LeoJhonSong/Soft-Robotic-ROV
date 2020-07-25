@@ -6,5 +6,6 @@
     "cSpell.words": [
         "gflags",
         "glog"
-    ]
+    ],
+    "cmake.configureOnEdit": false,
 }

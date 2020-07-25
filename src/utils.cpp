@@ -192,14 +192,14 @@ void video_write(){
 }
 
 void init_state(){
-    rov_key = 99;
+    rov_key = 32;
     land = false;
     send_byte = -1;
     max_attempt = 0;
     grasping_done = false;
     second_dive = false;
-//    manual_stop = true;
-//    delay(1);
+    // manual_stop = true;
+    // delay(1);
     manual_stop = true;
 }
 
