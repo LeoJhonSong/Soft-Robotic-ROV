@@ -19,3 +19,6 @@ yay -S cuda cudnn
 yay -S opencv-cuda
 # sudo ln -s /opt/cuda /usr/local/cuda
 yay -S libtorch
+
+# joystick support (simulate keyboard input)
+yay -S xdotool
