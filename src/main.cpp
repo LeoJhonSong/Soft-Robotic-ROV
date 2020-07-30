@@ -91,8 +91,9 @@ int main(int argc, char* argv[]) {
     else if (FLAGS_SSD_DIM == 512) model_path = "./models/SSD512_wof.pt";
     else model_path = "./models/SSD320_wof.pt";
 
-    torch::jit::script::Module net = torch::jit::load(model_path);
-    net.to(at::kCUDA);
+    std::shared_ptr<torch::jit::script::Module> net = torch::jit::load(model_path);
+    net->to(at::kCUDA);
+
 
     // load detector
     unsigned int num_classes = 5;
@@ -192,11 +193,11 @@ int main(int argc, char* argv[]) {
             img_tensor = img_tensor.permute({0, 3, 1, 2});
             net_input.emplace_back(img_tensor);
             if (FLAGS_NET_PHASE == 1) {
-                fake_B = net.forward(net_input).toTensor();
+                fake_B = net->forward(net_input).toTensor();
                 loc_idex = 1;
                 cudaDeviceSynchronize();
             } else if (FLAGS_NET_PHASE > 1) {
-                net_output = net.forward(net_input).toTuple()->elements();
+                net_output = net->forward(net_input).toTuple()->elements();
                 cudaDeviceSynchronize();
                 if (FLAGS_NET_PHASE == 2) {
                     fake_B = net_output.at(0).toTensor();

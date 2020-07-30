@@ -14,9 +14,14 @@
    2. [程序逻辑](#程序逻辑)
    3. [巡航策略](#巡航策略)
 3. [程序说明](#程序说明)
-   1. [程序参数](#程序参数)
-   2. [程序状态-键盘按键-手柄按键对照表](#程序状态-键盘按键-手柄按键对照表)
-   3. [与其他设备通信](#与其他设备通信)
+   1. [环境配置](#环境配置)
+      1. [libtorch安装](#libtorch安装)
+      2. [CUDA安装](#CUDA安装)
+      3. [cuDNN安装](#cuDNN安装)
+      4. [OpenCV安装](#OpenCV安装)
+   2. [程序参数](#程序参数)
+   3. [程序状态-键盘按键-手柄按键对照表](#程序状态-键盘按键-手柄按键对照表)
+   4. [与其他设备通信](#与其他设备通信)
       1. [UART](#UART)
       2. [TCP_Server类](#TCP_Server类)
          1. [成员函数](#成员函数)
@@ -123,6 +128,69 @@
 ![巡航路线示意图](doc/巡航路线示意图.png)
 
 ## 程序说明
+
+### 环境配置
+
+| 依赖     | 版本 | 备注                                                         |
+| -------- | ---- | ------------------------------------------------------------ |
+| libtorch | 1.1  | [下载地址](https://download.pytorch.org/libtorch/cu100/libtorch-shared-with-deps-1.1.0.zip) |
+| CUDA     | 10.0 | [下载地址](https://developer.nvidia.com/cuda-10.0-download-archive?target_os=Linux&target_arch=x86_64&target_distro=Ubuntu&target_version=1804&target_type=runfilelocal) (Ubuntu用) |
+| cuDNN    |      | 对应CUDA10.0的版本即可. [下载地址](https://developer.nvidia.com/rdp/cudnn-archive) |
+| OpenCV   | 3.4  | [opencv下载地址](https://github.com/opencv/opencv/releases) [opencv-contrib下载地址](https://github.com/opencv/opencv_contrib/releases) |
+| gcc      | 7    | 编译有CUDA支持的OpenCV用                                     |
+
+❗️ 写明版本的几个依赖不能使用更高的版本, 否则会出错, 详见[#15](https://github.com/leojhonsong/soft-robotic-rov/issues/15)
+
+❗️ 环境配置需要按下面这个顺序来
+
+#### libtorch安装
+
+将下载下来的压缩包解压出的**libtorch**文件夹放到到`~/local`下
+
+#### CUDA安装
+
+```shell
+# Ubuntu下: 略
+# Manjaro下 (会自动安装gcc7)
+yay -S cuda-10.0
+sudo ln -s /opt/cuda-10.0 /usr/local/cuda
+# 测试. 应当会输出一串状态信息
+cd /usr/local/cuda/samples/1_Utilities/deviceQuery
+sudo make
+./deviceQuery
+```
+
+#### cuDNN安装
+
+```shell
+# 进入解压出的cuda文件夹
+sudo cp include/cudnn.h /usr/local/cuda/include/
+sudo cp lib64/libcudnn* /usr/local/cuda/lib64/
+sudo chmod a+r /usr/local/cuda/include/cudnn.h
+sudo chmod a+r /usr/local/cuda/lib64/libcudnn*
+```
+
+#### OpenCV安装
+
+这里假设OpenCV版本为3.4.11, 如果不同, 更换下面代码中版本号
+
+```shell
+# 将下载下来的opencv-3.4.11和opencv_contrib-3.4.11解压到同一文件夹下
+# 进入opencv-3.4.11, 创建一个build文件夹
+mkdir build
+# cmake配置. 仔细查看输出信息没有报错了. 还需要一些依赖没写, 跟着报错安就好👍 (期间会下载一些东西, 如果下不动需要在终端翻墙)
+cmake ../ \
+-D CMAKE_BUILD_TYPE=Releasee \
+-D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib-3.4.11/modules \
+-D BUILD_opencv_python2=OFF \
+-D CUDA_HOST_COMPILER=/usr/bin/gcc-7 \
+-D WITH_CUDA=ON \
+-D CUDA_NVCC_FLAGS="-D FORCE_INLINES" \
+-D WITH_GTK=ON ..
+# 编译并安装
+make -j
+sudo make install
+```
 
 ### 程序参数
 
