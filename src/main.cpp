@@ -119,11 +119,7 @@ int main(int argc, char* argv[]) {
             if (FLAGS_MODE == -1)
             {
                 capture.open("./test/echinus.mp4");
-                // capture.set(cv::CAP_PROP_POS_FRAMES, 2700);
-                // capture.set(cv::CAP_PROP_POS_FRAMES, 13000);
                 capture.set(cv::CAP_PROP_POS_FRAMES, 1100);
-                //                capture.open("/home/sean/Documents/ResDet/fine/OnlineDet/2019_8_22_12_54_48_raw.avi");
-                //                capture.set(cv::CAP_PROP_POS_FRAMES, 8000);
             }
             else if (FLAGS_MODE == -2)
                 capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
@@ -150,7 +146,6 @@ int main(int argc, char* argv[]) {
     int conut_times = 0;
 
     // UART
-    //FIXME
     Uart uart("ttyUSB0", 115200);
     if(FLAGS_UART) {
         bool uart_open_flag, uart_init_flag;
@@ -213,7 +208,7 @@ int main(int argc, char* argv[]) {
             cv::cvtColor(img_vis, img_vis, cv::COLOR_BGR2RGB);
             cv::resize(img_vis, img_vis, vis_size);
             target_loc = Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, log_file);
-//            print(BOLDRED, (float)target_loc[0]/vis_size.width << ", " << (float)target_loc[1]/vis_size.height << ", "<< (float)target_loc[2]/vis_size.width << ", " << (float)target_loc[3]/vis_size.height );
+            // print(BOLDRED, (float)target_loc[0]/vis_size.width << ", " << (float)target_loc[1]/vis_size.height << ", "<< (float)target_loc[2]/vis_size.width << ", " << (float)target_loc[3]/vis_size.height );
             if(land){
                 if (FLAGS_UART) {
                     if (send_byte == -1) {
@@ -266,7 +261,7 @@ int main(int argc, char* argv[]) {
                 }
             }
         }
-        int key = cv::waitKey(1);
+        int key = cv::waitKey(1) & 0xFF;
         if (key != -1)  rov_key = key;
         parse_key(key, quit, reset_id, conf_thresh, FLAGS_K, FLAGS_R, filter);
         if (save_a_count) {
