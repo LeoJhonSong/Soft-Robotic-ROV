@@ -12,4 +12,4 @@
 --WITH_ROV=false \
 --TRACK=false \ &
 
-./js2key
+./utils/js2key

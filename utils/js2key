@@ -1,0 +1,22 @@
+#! /usr/bin/env bash
+
+# map joystick events from joystick.c with keyboard input
+
+joystickpath="/dev/input/js1"
+
+# run this block only when the joystick is connected
+if [[ -e $joystickpath ]]; then
+    $(dirname "${BASH_SOURCE[0]}")/joystick | while read LINE
+    do
+        case $LINE in
+            (Axis0_at[0-9]*,0) xdotool key d;; # 右平移
+            (Axis0_at-*) xdotool key a;; # 左平移
+            (Axis0_at0,[0-9]*) xdotool key w;; # 前进
+            (Axis0_at0,-*) xdotool key s;; # 后退
+            (Axis1_at[0-9]*,0) xdotool key D;; # 右转
+            (Axis1_at-*) xdotool key A;; # 左转
+            (Axis1_at0,[0-9]*) xdotool key W;; # 上浮
+            (Axis1_at0,-*) xdotool key S;; # 下潜
+            ("Button 6 pressed") xdotool key space;; # 停止
+    done
+fi

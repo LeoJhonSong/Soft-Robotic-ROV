@@ -25,88 +25,82 @@ extern bool rov_half_speed, manual_stop, save_a_frame, save_a_count;
 extern float half_scale, adjust_scale;
 void parse_key(int key, bool& quit, bool& reset_id, std::vector<float>& conf_thresh, int& FLAGS_K, int& FLAGS_R, CFilt& filter){
     switch (key){
-//        case 32:  // space
-//            while(true) {
-//                int key_c = cv::waitKey(1);
-//                if(key_c == 32) break;
-//            }
-//            break;
         case 27:  // esc
             quit = true;
             break;
-        case 50:  // 2
-            conf_thresh.at(0) += 0.1;
-            clip(conf_thresh.at(0), 0.001, 1.0);
-            print(YELLOW, "KEY: conf_thresh: " << conf_thresh);
-            break;
-        case 49:  // 1
-            conf_thresh.at(0) -= 0.1;
-            clip(conf_thresh.at(0), 0.001, 1.0);
-            print(YELLOW, "KEY: conf_thresh: " << conf_thresh);
-            break;
-        case 119:  // w
-            conf_thresh.at(1) += 0.1;
-            clip(conf_thresh.at(1), 0.001, 1.0);
-            print(YELLOW, "KEY: conf_thresh: " << conf_thresh);
-            break;
-        case 113:  // q
-            conf_thresh.at(1) -= 0.1;
-            clip(conf_thresh.at(1), 0.001, 1.0);
-            print(YELLOW, "KEY: conf_thresh: " << conf_thresh);
-            break;
-        case 115:  // s
-            conf_thresh.at(2) += 0.1;
-            clip(conf_thresh.at(2), 0.001, 1.0);
-            print(YELLOW, "KEY: conf_thresh: " << conf_thresh);
-            break;
-        case 97:  // a
-            conf_thresh.at(2) -= 0.1;
-            clip(conf_thresh.at(2), 0.001, 1.0);
-            print(YELLOW, "KEY: conf_thresh: " << conf_thresh);
-            break;
-        case 120:  // x
-            conf_thresh.at(3) += 0.1;
-            clip(conf_thresh.at(3), 0.001, 1.0);
-            print(YELLOW, "KEY: conf_thresh: " << conf_thresh);
-            break;
-        case 122:  // z
-            conf_thresh.at(3) -= 0.1;
-            clip(conf_thresh.at(3), 0.001, 1.0);
-            print(YELLOW, "KEY: conf_thresh: " << conf_thresh);
-            break;
+        // case 50:  // 2
+        //     conf_thresh.at(0) += 0.1;
+        //     clip(conf_thresh.at(0), 0.001, 1.0);
+        //     print(YELLOW, "KEY: conf_thresh: " << conf_thresh);
+        //     break;
+        // case 49:  // 1
+        //     conf_thresh.at(0) -= 0.1;
+        //     clip(conf_thresh.at(0), 0.001, 1.0);
+        //     print(YELLOW, "KEY: conf_thresh: " << conf_thresh);
+        //     break;
+        // case 119:  // w
+        //     conf_thresh.at(1) += 0.1;
+        //     clip(conf_thresh.at(1), 0.001, 1.0);
+        //     print(YELLOW, "KEY: conf_thresh: " << conf_thresh);
+        //     break;
+        // case 113:  // q
+        //     conf_thresh.at(1) -= 0.1;
+        //     clip(conf_thresh.at(1), 0.001, 1.0);
+        //     print(YELLOW, "KEY: conf_thresh: " << conf_thresh);
+        //     break;
+        // case 115:  // s
+        //     conf_thresh.at(2) += 0.1;
+        //     clip(conf_thresh.at(2), 0.001, 1.0);
+        //     print(YELLOW, "KEY: conf_thresh: " << conf_thresh);
+        //     break;
+        // case 97:  // a
+        //     conf_thresh.at(2) -= 0.1;
+        //     clip(conf_thresh.at(2), 0.001, 1.0);
+        //     print(YELLOW, "KEY: conf_thresh: " << conf_thresh);
+        //     break;
+        // case 120:  // x
+        //     conf_thresh.at(3) += 0.1;
+        //     clip(conf_thresh.at(3), 0.001, 1.0);
+        //     print(YELLOW, "KEY: conf_thresh: " << conf_thresh);
+        //     break;
+        // case 122:  // z
+        //     conf_thresh.at(3) -= 0.1;
+        //     clip(conf_thresh.at(3), 0.001, 1.0);
+        //     print(YELLOW, "KEY: conf_thresh: " << conf_thresh);
+        //     break;
         case 101: // e
             save_a_frame = true;
             break;
         case 118: // v
             save_a_count = true;
             break;
-        case 57: // 9
-            half_scale -= 0.1;
-            clip(half_scale, 0.1, 10.0);
-            print(YELLOW, "KEY: half_scale: " << half_scale);
-            break;
-        case 48: // 0
-            half_scale += 0.1;
-            clip(half_scale, 0.1, 10.0);
-            print(YELLOW, "KEY: half_scale: " << half_scale);
-            break;
-        case 55: // 7
-            adjust_scale -= 0.02;
-            clip(adjust_scale, 0.1, 10.0);
-            print(YELLOW, "KEY: adjust_scale: " << adjust_scale);
-            break;
-        case 56: // 8
-            adjust_scale += 0.02;
-            clip(adjust_scale, 0.1, 10.0);
-            print(YELLOW, "KEY: adjust_scale: " << adjust_scale);
-            break;
-        case 52:  // 4
+        // case 57: // 9
+        //     half_scale -= 0.1;
+        //     clip(half_scale, 0.1, 10.0);
+        //     print(YELLOW, "KEY: half_scale: " << half_scale);
+        //     break;
+        // case 48: // 0
+        //     half_scale += 0.1;
+        //     clip(half_scale, 0.1, 10.0);
+        //     print(YELLOW, "KEY: half_scale: " << half_scale);
+        //     break;
+        // case 55: // 7
+        //     adjust_scale -= 0.02;
+        //     clip(adjust_scale, 0.1, 10.0);
+        //     print(YELLOW, "KEY: adjust_scale: " << adjust_scale);
+        //     break;
+        // case 56: // 8
+        //     adjust_scale += 0.02;
+        //     clip(adjust_scale, 0.1, 10.0);
+        //     print(YELLOW, "KEY: adjust_scale: " << adjust_scale);
+        //     break;
+        case 75:  // K (shift + k)
             FLAGS_K += 10;
             clip(FLAGS_K, 0, 300);
             filter.get_wf(FLAGS_K, FLAGS_R);
             std::cout << "main: K: " << FLAGS_K << std::endl;
             break;
-        case 51:  // 3
+        case 107:  // k
             FLAGS_K -= 10;
             clip(FLAGS_K, 0, 300);
             filter.get_wf(FLAGS_K, FLAGS_R);
@@ -125,18 +119,6 @@ void parse_key(int key, bool& quit, bool& reset_id, std::vector<float>& conf_thr
                 print(YELLOW, "KEY: rov half speed");
             }
             break;
-//        case 47:  // /
-//            if (auto_rov) {
-//                std::cout << "main: manual rov" <<std::endl;
-//                auto_rov = false;
-//            }else if (!auto_rov) {
-//                std::cout << "main: auto rov" <<std::endl;
-//                auto_rov = true;
-//                dive_ready = true;
-//                land = false;
-//                send_byte = -1;
-//            }
-//            break;
         case 98:  // b
             if (!manual_stop) {
                 print(YELLOW, "KEY: manually stop a rov behavior and init its states");
