@@ -193,6 +193,8 @@ make -j
 sudo make install
 ```
 
+❗️ 如果不是GTK的OpenCV而是Qt的OpenCV的话似乎是无法区分按键大小写的, 其他按键似乎也会有些问题. python安装的OpenCV是Qt的. `utils/key_test.py`可以测试所按按键被OpenCV识别为什么了.
+
 ### 程序参数
 
 |参数|含义|可能值|
