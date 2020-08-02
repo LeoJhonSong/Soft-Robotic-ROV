@@ -216,9 +216,10 @@ sudo make install
 |动作|键盘按键|手柄按键|
 |-|-|-|
 |停止|<kbd>space</kbd>|左肩扳机|
-|前进/后退/左平移/右平移|<kbd>w</kbd>/<kbd>s</kbd>/<kbd>a</kbd>/<kbd>d</kbd>|左摇杆|
+|前进/后退|<kbd>w</kbd>/<kbd>s</kbd>|右摇杆上下|
+|左平移/右平移|<kbd>a</kbd>/<kbd>d</kbd>|左摇杆左右|
+|前进/后退|<kbd>w</kbd>/<kbd>s</kbd>|右摇杆上下|
 |左转/右转|<kbd>A</kbd>/<kbd>D</kbd>|右摇杆左右|
-|上浮/下潜|<kbd>W</kbd>/<kbd>S</kbd>|右摇杆上下|
 |开灯/关灯|<kbd>L</kbd>/<kbd>l</kbd>||
 |坐底, 进入自主控制|<kbd>Enter</kbd>||
 |上浮定深|<kbd>u</kbd>||
