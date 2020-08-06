@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <termios.h>
 #include <uart.h>
+#include <color.h>
 
 Uart::Uart(std::string port, int baud_rate){
     port_status = NOT_INIT;
@@ -50,7 +51,7 @@ bool Uart::openFile(void){
         fd = open(dev_filename.c_str(), O_RDWR|O_NOCTTY|O_NDELAY);
     }
     if(-1 == fd){
-        std::cout << "Can't Open Serial Port" << std::endl;
+        print(RED, "Can't Open Serial Port");
         return false;
     }
 

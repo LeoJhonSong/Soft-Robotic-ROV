@@ -6,6 +6,7 @@ joystickpath="/dev/input/js1"
 
 # run this block only when the joystick is connected
 if [[ -e $joystickpath ]]; then
+    echo -e "\033[32mjs2key activated\033[0m"
     $(dirname "${BASH_SOURCE[0]}")/joystick $joystickpath | while read LINE
     do
         case $LINE in
@@ -21,4 +22,6 @@ if [[ -e $joystickpath ]]; then
         esac
 
     done
+else
+    echo -e "\033[1;31mjs2key quit\033[0m"
 fi

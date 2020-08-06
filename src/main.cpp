@@ -30,13 +30,13 @@
 
 
 DEFINE_int32(K, 100, "turbulence intensity. The greater, the intensive");
-DEFINE_int32(R, 40, "Signal to Noise Ratio. The greater, the more serious of noise");
+DEFINE_int32(R, 50, "Signal to Noise Ratio. The greater, the more serious of noise");
 DEFINE_uint32(RUAS, 0, "0: skip; 1: clahe; 2: wiener+clahe");
 DEFINE_uint32(NET_PHASE, 2, "0: skip; 1: netG; 2: netG+RefineDet; 3: RefineDet" );
 DEFINE_uint32(SSD_DIM, 320, "" );
 DEFINE_uint32(NETG_DIM, 256, "" );
-DEFINE_uint32(TUB, 0, "" );
-DEFINE_int32(MODE, 0, "-1: load video; >0 load camera" );
+DEFINE_uint32(TUB, 1, "" );
+DEFINE_int32(MODE, -1, "-1: load video; >0 load camera" );
 DEFINE_bool(UART, false, "-1: not use it; >0 use it" );
 DEFINE_bool(WITH_ROV, false, "0: not use it; >0 use it" );
 DEFINE_bool(TRACK, false, "0: not use it; >0 use it" );
@@ -76,6 +76,9 @@ float adjust_scale = 1.5;
 
 
 int main(int argc, char* argv[]) {
+    time_t now = std::time(0);
+    char* date = std::ctime(&now);
+    print(BOLDGREEN, "starting at " << date);
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     // make record dir and file
     if(nullptr==opendir(("./record/" + save_path).c_str()))
@@ -285,5 +288,6 @@ int main(int argc, char* argv[]) {
     video_writer.join();
     run_rov_flag = false;
     rov_runner.join();
+    print(BOLDGREEN, "bye!");
     return 0;
 }
