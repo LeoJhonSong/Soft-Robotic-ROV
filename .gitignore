@@ -1,4 +1,5 @@
 *.MP4
+*.mp4
 *build*
 model*
 *idea*
