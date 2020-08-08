@@ -122,7 +122,7 @@ int main(int argc, char *argv[])
         case JS_EVENT_AXIS:
             axis = get_axis_state(&event, axes);
             if (axis < 3)
-                printf("Axis %zu at (%6d, %6d)\n", axis, axes[axis].x, axes[axis].y);
+                printf("Axis%zu_at%d,%d\n", axis, axes[axis].x, axes[axis].y);
             break;
         default:
             /* Ignore init events. */

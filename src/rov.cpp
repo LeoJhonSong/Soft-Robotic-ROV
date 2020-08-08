@@ -361,7 +361,7 @@ void run_rov()
             delay(1);
             rov_key = 32;
             break;
-        case 59: // ; 坐底. 从这一步开始为自主控制.
+        case 13: // 坐底, 回车 (\r) (从这一步开始为自主控制)
             print(BOLDGREEN, "ROV: diving !!!");
             grasping_done = false;
             second_dive = false;
@@ -379,9 +379,9 @@ void run_rov()
             if (manual_stop)
                 rov_key = 32;
             else
-                rov_key = 39; // 开始上浮并定深
+                rov_key = 117; // 开始上浮并定深
             break;
-        case 39: // '  定深, 全速上浮3s, 悬停2s等ROV静止后获取当前深度
+        case 117: // 上浮定深, u (全速上浮3s, 悬停2s等ROV静止后获取当前深度)
             print(BOLDBLUE, "ROV: try to stably floating, second_dive? " << second_dive << ", second_dive_lost? " << second_dive_lost);
             if (second_dive)
             {
@@ -436,9 +436,9 @@ void run_rov()
             else if (second_dive)
                 rov_key = 61;
             else
-                rov_key = 47;
+                rov_key = 99;
             break;
-        case 47: // 视野内无目标时遍历水域
+        case 99: // 视野内无目标时遍历水域, c
             print(BOLDMAGENTA, "ROV: cruising");
             last_opt = 0;
             start = time(nullptr);
@@ -536,16 +536,17 @@ void run_rov()
             if (manual_stop)
                 rov_key = 32;
             else if (time_interval > cruise_second.at(7))
-                rov_key = 59;
+                rov_key = 13;
             else
                 rov_key = 61;
             break;
-        case 61: // = 实时微调水平位置并全速下潜
+        case 61: // 坐底至目标处, o
+            // FIXME: 此处策略要改
             print(BOLDYELLOW, "ROV: aiming");
             while ((!manual_stop))
             {
                 delay(1); // 0.1S
-                // 当目标丢失时跳出循环到case59 坐底
+                // 当目标丢失时跳出循环到case13 坐底
                 if (target_loc.at(2) == 0 || target_loc.at(3) == 0)
                 {
                     dive_ready = false;
@@ -616,11 +617,11 @@ void run_rov()
             if (manual_stop)
                 rov_key = 32;
             else if (dive_ready)
-                rov_key = 59;
+                rov_key = 13;
             else if (second_dive_lost)
-                rov_key = 39;
+                rov_key = 117;
             else
-                rov_key = 47;
+                rov_key = 99;
             break;
         default:
             server.sendMsg(SEND_SLEEP);

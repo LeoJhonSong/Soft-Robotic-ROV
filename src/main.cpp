@@ -31,13 +31,13 @@
 
 
 DEFINE_int32(K, 100, "turbulence intensity. The greater, the intensive");
-DEFINE_int32(R, 40, "Signal to Noise Ratio. The greater, the more serious of noise");
+DEFINE_int32(R, 50, "Signal to Noise Ratio. The greater, the more serious of noise");
 DEFINE_uint32(RUAS, 0, "0: skip; 1: clahe; 2: wiener+clahe");
 DEFINE_uint32(NET_PHASE, 2, "0: skip; 1: netG; 2: netG+RefineDet; 3: RefineDet" );
 DEFINE_uint32(SSD_DIM, 320, "" );
 DEFINE_uint32(NETG_DIM, 256, "" );
-DEFINE_uint32(TUB, 0, "" );
-DEFINE_int32(MODE, 0, "-1: load video; >0 load camera" );
+DEFINE_uint32(TUB, 1, "" );
+DEFINE_int32(MODE, -1, "-1: load video; >0 load camera" );
 DEFINE_bool(UART, false, "-1: not use it; >0 use it" );
 DEFINE_bool(WITH_ROV, false, "0: not use it; >0 use it" );
 DEFINE_bool(TRACK, false, "0: not use it; >0 use it" );
@@ -80,6 +80,9 @@ float adjust_scale = 1.5;
 
 
 int main(int argc, char* argv[]) {
+    time_t now = std::time(0);
+    char* date = std::ctime(&now);
+    print(BOLDGREEN, "starting at " << date);
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     // make record dir and file
     if(FLAGS_RECORD)
@@ -124,20 +127,9 @@ int main(int argc, char* argv[]) {
         {
             if (FLAGS_MODE == -1)
             {
-                // capture.open("./test/echinus.mp4");
-                // capture.set(cv::CAP_PROP_POS_FRAMES, 2700);
-                // capture.set(cv::CAP_PROP_POS_FRAMES, 13000);
-                // capture.set(cv::CAP_PROP_POS_FRAMES, 1100);
-                //                capture.open("/home/sean/Documents/ResDet/fine/OnlineDet/2019_8_22_12_54_48_raw.avi");
-                //                capture.set(cv::CAP_PROP_POS_FRAMES, 8000);
-                // capture.open("/home/luyue/Documents/ResDet/fine/OnlineDet/2019_8_22_12_54_48_raw.avi");
-                // capture.set(cv::CAP_PROP_POS_FRAMES, 8000);
-                // capture.open("./redpoint.mp4");
-                // capture.set(cv::CAP_PROP_POS_FRAMES, 1);
 
-                // capture.open("/home/luyue/ex_hdd/sign_gray.mp4");
-                // capture.set(cv::CAP_PROP_POS_FRAMES, 1);
-                capture.open(0);
+                capture.open("./test/echinus.mp4");
+                capture.set(cv::CAP_PROP_POS_FRAMES, 1100);
             }
             else if (FLAGS_MODE == -2)
                 capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
@@ -164,7 +156,6 @@ int main(int argc, char* argv[]) {
     int conut_times = 0;
 
     // UART
-    //FIXME
     Uart uart("ttyUSB0", 115200);
     if(FLAGS_UART) {
         bool uart_open_flag, uart_init_flag;
@@ -238,7 +229,7 @@ int main(int argc, char* argv[]) {
             marker_info = marker_detector.detect_single_marker(img_vis, true, marker::VER_OPENCV, marker::MODE_DETECT);
 
             target_loc = Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, log_file);
-//            print(BOLDRED, (float)target_loc[0]/vis_size.width << ", " << (float)target_loc[1]/vis_size.height << ", "<< (float)target_loc[2]/vis_size.width << ", " << (float)target_loc[3]/vis_size.height );
+            // print(BOLDRED, (float)target_loc[0]/vis_size.width << ", " << (float)target_loc[1]/vis_size.height << ", "<< (float)target_loc[2]/vis_size.width << ", " << (float)target_loc[3]/vis_size.height );
             if(land){
                 if (FLAGS_UART) {
                     if (send_byte == -1) {
@@ -291,7 +282,7 @@ int main(int argc, char* argv[]) {
                 }
             }
         }
-        int key = cv::waitKey(1);
+        int key = cv::waitKey(1) & 0xFF;
         if (key != -1)  rov_key = key;
         parse_key(key, quit, reset_id, conf_thresh, FLAGS_K, FLAGS_R, filter);
         if (save_a_count) {
@@ -315,5 +306,6 @@ int main(int argc, char* argv[]) {
     video_writer.join();
     run_rov_flag = false;
     rov_runner.join();
+    print(BOLDGREEN, "bye!");
     return 0;
 }
