@@ -7,6 +7,7 @@
 #include "ruas.h"
 #include "rov.h"
 #include "color.h"
+#include "marker_detector.h"
 
 #include <cuda_runtime.h>
 
@@ -22,7 +23,7 @@
 #include <vector>
 #include <gflags/gflags.h>
 #include <thread>
-#include<fstream>
+#include <fstream>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <dirent.h>
@@ -40,6 +41,7 @@ DEFINE_int32(MODE, 0, "-1: load video; >0 load camera" );
 DEFINE_bool(UART, false, "-1: not use it; >0 use it" );
 DEFINE_bool(WITH_ROV, false, "0: not use it; >0 use it" );
 DEFINE_bool(TRACK, false, "0: not use it; >0 use it" );
+DEFINE_bool(RECORD, false, "0: not use it; >0 use it" );
 
 
 // for video_write thread
@@ -50,6 +52,8 @@ tm *ltm = localtime(&now);
 std::string save_path =  std::to_string(1900 + ltm->tm_year) + "_" + std::to_string(1+ltm->tm_mon)+ "_" + std::to_string(ltm->tm_mday)
                          + "_" + std::to_string(ltm->tm_hour) + "_" + std::to_string(ltm->tm_min) + "_" + std::to_string(ltm->tm_sec);
 cv::Size vis_size(640, 360);
+cv::Size match_size(640*1042/360, 1042);
+double scale_ratio = 1042.0 / 360.0;
 bool save_a_frame = false;
 bool save_a_count = false;
 std::queue<cv::Mat> frame_queue, det_frame_queue;
@@ -78,8 +82,9 @@ float adjust_scale = 1.5;
 int main(int argc, char* argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     // make record dir and file
-    if(nullptr==opendir(("./record/" + save_path).c_str()))
-        mkdir(("./record/" + save_path).c_str(), S_IRWXU|S_IRWXG|S_IRWXO);
+    if(FLAGS_RECORD)
+        if(nullptr==opendir(("./record/" + save_path).c_str()))
+            mkdir(("./record/" + save_path).c_str(), S_IRWXU|S_IRWXG|S_IRWXO);
     std::ofstream log_file("./record/" + save_path + "/log.txt");
 
     // load models
@@ -110,6 +115,7 @@ int main(int argc, char* argv[]) {
     {
         filter.get_wf(FLAGS_K, FLAGS_R);
     }
+
     // load video
     cv::VideoCapture capture;
     while (!capture.isOpened())
@@ -118,12 +124,20 @@ int main(int argc, char* argv[]) {
         {
             if (FLAGS_MODE == -1)
             {
-                capture.open("./test/echinus.mp4");
+                // capture.open("./test/echinus.mp4");
                 // capture.set(cv::CAP_PROP_POS_FRAMES, 2700);
                 // capture.set(cv::CAP_PROP_POS_FRAMES, 13000);
-                capture.set(cv::CAP_PROP_POS_FRAMES, 1100);
+                // capture.set(cv::CAP_PROP_POS_FRAMES, 1100);
                 //                capture.open("/home/sean/Documents/ResDet/fine/OnlineDet/2019_8_22_12_54_48_raw.avi");
                 //                capture.set(cv::CAP_PROP_POS_FRAMES, 8000);
+                // capture.open("/home/luyue/Documents/ResDet/fine/OnlineDet/2019_8_22_12_54_48_raw.avi");
+                // capture.set(cv::CAP_PROP_POS_FRAMES, 8000);
+                // capture.open("./redpoint.mp4");
+                // capture.set(cv::CAP_PROP_POS_FRAMES, 1);
+
+                // capture.open("/home/luyue/ex_hdd/sign_gray.mp4");
+                // capture.set(cv::CAP_PROP_POS_FRAMES, 1);
+                capture.open(0);
             }
             else if (FLAGS_MODE == -2)
                 capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
@@ -169,6 +183,13 @@ int main(int argc, char* argv[]) {
     std::thread rov_runner(run_rov);
     std::thread video_writer(video_write);
 
+    // marker detector
+    // 初始化的size要对应上后面输入图片的size,看到时候用哪个图片(原始的frame, net_G输出的fake_B, 或者resize后的img_vis)比较好
+    // capture.read(frame);
+	// marker::MarkerDetector marker_detector(frame.size());
+	marker::MarkerDetector marker_detector(vis_size);
+	marker::MarkerInfo marker_info;
+
     while(capture.isOpened() && !quit){
         bool read_ret = capture.read(frame);
         if(!read_ret) break;
@@ -212,6 +233,10 @@ int main(int argc, char* argv[]) {
             // detect
             cv::cvtColor(img_vis, img_vis, cv::COLOR_BGR2RGB);
             cv::resize(img_vis, img_vis, vis_size);
+            
+            // detect marker
+            marker_info = marker_detector.detect_single_marker(img_vis, true, marker::VER_OPENCV, marker::MODE_DETECT);
+
             target_loc = Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, log_file);
 //            print(BOLDRED, (float)target_loc[0]/vis_size.width << ", " << (float)target_loc[1]/vis_size.height << ", "<< (float)target_loc[2]/vis_size.width << ", " << (float)target_loc[3]/vis_size.height );
             if(land){
