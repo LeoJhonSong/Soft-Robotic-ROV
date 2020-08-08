@@ -52,8 +52,6 @@ tm *ltm = localtime(&now);
 std::string save_path =  std::to_string(1900 + ltm->tm_year) + "_" + std::to_string(1+ltm->tm_mon)+ "_" + std::to_string(ltm->tm_mday)
                          + "_" + std::to_string(ltm->tm_hour) + "_" + std::to_string(ltm->tm_min) + "_" + std::to_string(ltm->tm_sec);
 cv::Size vis_size(640, 360);
-cv::Size match_size(640*1042/360, 1042);
-double scale_ratio = 1042.0 / 360.0;
 bool save_a_frame = false;
 bool save_a_count = false;
 std::queue<cv::Mat> frame_queue, det_frame_queue;
