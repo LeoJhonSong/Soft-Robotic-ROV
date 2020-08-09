@@ -141,6 +141,11 @@ extern std::string save_path;
 extern unsigned char max_attempt;
 extern cv::Size vis_size;
 void video_write(){
+    if (!video_write_flag)
+    {
+        return;
+    }
+    
     //raw video
     cv::VideoWriter writer_raw;
     writer_raw.open("./record/" + save_path + "/" + save_path + "_raw.avi", ex1, 20, cv::Size(frame_w, frame_h), true);
