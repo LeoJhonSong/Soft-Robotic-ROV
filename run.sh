@@ -11,4 +11,5 @@
 --TUB=1 \
 --UART=false \
 --WITH_ROV=false \
---TRACK=false
+--TRACK=false \
+--RECORD=false

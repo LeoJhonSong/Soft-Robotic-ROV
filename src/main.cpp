@@ -40,6 +40,7 @@ DEFINE_int32(MODE, -1, "-1: load video; >0 load camera" );
 DEFINE_bool(UART, false, "-1: not use it; >0 use it" );
 DEFINE_bool(WITH_ROV, false, "0: not use it; >0 use it" );
 DEFINE_bool(TRACK, false, "0: not use it; >0 use it" );
+DEFINE_bool(RECORD, false, "0: do not record raw and detected videos; >0 record them");
 
 
 // for video_write thread
@@ -56,7 +57,7 @@ std::queue<cv::Mat> frame_queue, det_frame_queue;
 std::queue<std::pair<cv::Mat, unsigned int>> img_queue;
 
 int frame_w, frame_h;
-bool video_write_flag = false;
+bool video_write_flag = FLAGS_RECORD;
 
 // for run_rov thread
 bool run_rov_flag = true;
