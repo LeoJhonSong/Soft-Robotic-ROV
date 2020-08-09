@@ -56,7 +56,7 @@ std::queue<cv::Mat> frame_queue, det_frame_queue;
 std::queue<std::pair<cv::Mat, unsigned int>> img_queue;
 
 int frame_w, frame_h;
-bool video_write_flag = true;
+bool video_write_flag = false;
 
 // for run_rov thread
 bool run_rov_flag = true;
