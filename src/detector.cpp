@@ -11,6 +11,7 @@ extern std::queue<cv::Mat> det_frame_queue;
 extern std::queue<std::pair<cv::Mat, int>> img_queue;
 extern float max_depth, curr_depth;
 extern int send_byte;
+extern bool detect_scallop;
 
 Detector::~Detector()=default;
 
@@ -482,7 +483,8 @@ void Detector::delete_tubelets(){
 
 int Detector::uart_send(unsigned char cls, Uart& uart){
     int selected_cls = cls;
-    if (this->track_cl > 0 && this->track_cl < 3)
+    int detect_cls_num = detect_scallop ? 4 : 3;
+    if (this->track_cl > 0 && this->track_cl < detect_cls_num)
         selected_cls = this->track_cl;
     if (selected_cls > this->num_classes-1){
         torch::Tensor scores = this->output[0].slice(1, 0, 1).slice(2, 0, 1);
@@ -525,7 +527,9 @@ std::vector<int> Detector::visual_detect(const torch::Tensor& loc, const torch::
             this->detect(loc, conf, conf_thresh, tub_thresh);
     }
     else this->detect(loc, conf, conf_thresh);
-    this->output[0][3] *= 0;
+    // 置零所有框的扇贝的分数
+    if (!detect_scallop) this->output[0][3] *= 0;
+
     return this->visualization(img, log_file);
 }
 
