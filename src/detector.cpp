@@ -482,7 +482,7 @@ void Detector::delete_tubelets(){
 
 int Detector::uart_send(unsigned char cls, Uart& uart){
     int selected_cls = cls;
-    if (this->track_cl > 0)
+    if (this->track_cl > 0 && this->track_cl < 3)
         selected_cls = this->track_cl;
     if (selected_cls > this->num_classes-1){
         torch::Tensor scores = this->output[0].slice(1, 0, 1).slice(2, 0, 1);
@@ -525,6 +525,7 @@ std::vector<int> Detector::visual_detect(const torch::Tensor& loc, const torch::
             this->detect(loc, conf, conf_thresh, tub_thresh);
     }
     else this->detect(loc, conf, conf_thresh);
+    this->output[0][3] *= 0;
     return this->visualization(img, log_file);
 }
 

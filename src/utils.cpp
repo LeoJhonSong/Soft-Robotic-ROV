@@ -144,6 +144,11 @@ void video_write(){
     // 如果不录制视频, 退出视频录制线程
     if (!video_write_flag) return;
     //raw video
+    if (!video_write_flag)
+    {
+        return;
+    }
+    
     cv::VideoWriter writer_raw;
     writer_raw.open("./record/" + save_path + "/" + save_path + "_raw.avi", ex1, 20, cv::Size(frame_w, frame_h), true);
     if(!writer_raw.isOpened()){

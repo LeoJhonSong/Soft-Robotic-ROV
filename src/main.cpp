@@ -57,7 +57,7 @@ std::queue<cv::Mat> frame_queue, det_frame_queue;
 std::queue<std::pair<cv::Mat, unsigned int>> img_queue;
 
 int frame_w, frame_h;
-bool video_write_flag = FLAGS_RECORD;
+bool video_write_flag = false;
 
 // for run_rov thread
 bool run_rov_flag = true;
@@ -122,8 +122,11 @@ int main(int argc, char* argv[]) {
         {
             if (FLAGS_MODE == -1)
             {
-                capture.open("./test/echinus.mp4");
-                capture.set(cv::CAP_PROP_POS_FRAMES, 1100);
+                // capture.open("./test/echinus.mp4");
+                // capture.set(cv::CAP_PROP_POS_FRAMES, 1100);
+                // capture.open("/home/luyue/ex_hdd/2019_8_22_12_54_48_raw_x264.mp4");
+                capture.open("/home/luyue/ex_hdd/2019_8_22_12_54_48_raw.avi");
+                capture.set(cv::CAP_PROP_POS_FRAMES, 8000);
             }
             else if (FLAGS_MODE == -2)
                 capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
