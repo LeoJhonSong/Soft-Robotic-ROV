@@ -7,6 +7,7 @@
 #include "ruas.h"
 #include "rov.h"
 #include "color.h"
+#include "parallel_camera.h"
 
 #include <cuda_runtime.h>
 
@@ -118,7 +119,8 @@ int main(int argc, char* argv[]) {
         filter.get_wf(FLAGS_K, FLAGS_R);
     }
     // load video
-    cv::VideoCapture capture;
+    // cv::VideoCapture capture;
+    ParallelCamera capture;
     while (!capture.isOpened())
     {
         try
@@ -171,11 +173,12 @@ int main(int argc, char* argv[]) {
         run_rov_flag = false;
     std::thread rov_runner(run_rov);
     std::thread video_writer(video_write);
+    capture.receive_start();
 
     while(capture.isOpened() && !quit){
         bool read_ret = capture.read(frame);
         if(!read_ret) break;
-        frame_queue.push(frame);
+        // frame_queue.push(frame);
         // pre processing
         cv::resize(frame, frame, cv::Size(FLAGS_NETG_DIM, FLAGS_NETG_DIM));
         if(FLAGS_RUAS == 1){
@@ -293,6 +296,7 @@ int main(int argc, char* argv[]) {
     video_writer.join();
     run_rov_flag = false;
     rov_runner.join();
+    capture.receive_stop();
     print(BOLDGREEN, "bye!");
     return 0;
 }
