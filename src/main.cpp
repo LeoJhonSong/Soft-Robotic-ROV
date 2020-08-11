@@ -36,11 +36,11 @@ DEFINE_uint32(NET_PHASE, 2, "0: skip; 1: netG; 2: netG+RefineDet; 3: RefineDet" 
 DEFINE_uint32(SSD_DIM, 320, "" );
 DEFINE_uint32(NETG_DIM, 256, "" );
 DEFINE_uint32(TUB, 1, "" );
-DEFINE_int32(MODE, -1, "-1: load video; >0 load camera" );
-DEFINE_bool(UART, false, "-1: not use it; >0 use it" );
-DEFINE_bool(WITH_ROV, false, "0: not use it; >0 use it" );
+DEFINE_int32(MODE, -1, "-2: load web camra; -1: load local video; >0: load camera" );
+DEFINE_bool(UART, false, "false: do not try to communicate by UART; true: try to communicate by UART" );
+DEFINE_bool(WITH_ROV, false, "false: do not try to connect ROV; true: try to connect to ROV" );
 DEFINE_bool(TRACK, false, "0: not use it; >0 use it" );
-
+DEFINE_bool(RECORD, false, "false: do not record raw and detected videos; true: record them");
 
 // for video_write thread
 char EXT[] = "MJPG";
