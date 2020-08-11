@@ -40,7 +40,6 @@ DEFINE_int32(MODE, -1, "-1: load video; >0 load camera" );
 DEFINE_bool(UART, false, "-1: not use it; >0 use it" );
 DEFINE_bool(WITH_ROV, false, "0: not use it; >0 use it" );
 DEFINE_bool(TRACK, false, "0: not use it; >0 use it" );
-DEFINE_bool(RECORD, false, "0: do not record raw and detected videos; >0 record them");
 
 
 // for video_write thread
@@ -57,7 +56,7 @@ std::queue<cv::Mat> frame_queue, det_frame_queue;
 std::queue<std::pair<cv::Mat, unsigned int>> img_queue;
 
 int frame_w, frame_h;
-bool video_write_flag = FLAGS_RECORD;
+bool video_write_flag = false;
 
 // for run_rov thread
 bool run_rov_flag = true;
@@ -75,12 +74,16 @@ float curr_depth = 0;
 float half_scale = 1.5;
 float adjust_scale = 1.5;
 
+bool detect_scallop = false;
 
 int main(int argc, char* argv[]) {
     time_t now = std::time(0);
     char* date = std::ctime(&now);
     print(BOLDGREEN, "starting at " << date);
+    // 读入命令行参数
     gflags::ParseCommandLineFlags(&argc, &argv, true);
+    // 设置是否录制
+    video_write_flag = FLAGS_RECORD;
     // make record dir and file
     if(nullptr==opendir(("./record/" + save_path).c_str()))
         mkdir(("./record/" + save_path).c_str(), S_IRWXU|S_IRWXG|S_IRWXO);
@@ -123,6 +126,7 @@ int main(int argc, char* argv[]) {
             if (FLAGS_MODE == -1)
             {
                 capture.open("./test/echinus.mp4");
+                // 设置从视频的哪一帧开始读取
                 capture.set(cv::CAP_PROP_POS_FRAMES, 1100);
             }
             else if (FLAGS_MODE == -2)
