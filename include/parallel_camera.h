@@ -13,10 +13,14 @@ private:
     cv::Mat testf;
     bool current_read_ret;
     bool is_running = false;
+    int video_type = 0;
     std::thread* receive_thread = nullptr;
     void receive();
+    
 public:
     bool read(cv::Mat &image);
+    bool open(const cv::String &filename);
+    bool open(int index);
     void receive_start();
     void receive_stop();
 };

@@ -5,7 +5,7 @@
 --K=100 \
 --R=50 \
 --NET_PHASE=2 \
---MODE=0 \
+--MODE=-1 \
 --SSD_DIM=320 \
 --NETG_DIM=256 \
 --TUB=1 \

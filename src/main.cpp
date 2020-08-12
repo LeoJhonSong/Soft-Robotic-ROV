@@ -130,9 +130,13 @@ int main(int argc, char* argv[]) {
                 capture.open("./test/echinus.mp4");
                 // 设置从视频的哪一帧开始读取
                 capture.set(cv::CAP_PROP_POS_FRAMES, 1100);
+                // capture.open("/home/luyue/ex_hdd/2019_8_22_12_54_48_raw.avi");
+                // 设置从视频的哪一帧开始读取
+                // capture.set(cv::CAP_PROP_POS_FRAMES, 8000);
             }
             else if (FLAGS_MODE == -2)
                 capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
+                // capture.open("http://192.168.3.25:8080/video");
             else
                 capture.open(FLAGS_MODE);
         }
