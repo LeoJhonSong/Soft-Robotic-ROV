@@ -8,6 +8,7 @@
 #include "rov.h"
 #include "color.h"
 #include "marker_detector.h"
+#include "parallel_camera.h"
 
 #include <cuda_runtime.h>
 
@@ -121,7 +122,7 @@ int main(int argc, char* argv[]) {
     }
 
     // load video
-    cv::VideoCapture capture;
+    ParallelCamera capture;
     while (!capture.isOpened())
     {
         try
@@ -175,6 +176,7 @@ int main(int argc, char* argv[]) {
         run_rov_flag = false;
     std::thread rov_runner(run_rov);
     std::thread video_writer(video_write);
+    capture.receive_start();  // 视频流读取线程
 
     // marker detector
     // 初始化的size要对应上后面输入图片的size,看到时候用哪个图片(原始的frame, net_G输出的fake_B, 或者resize后的img_vis)比较好
@@ -184,9 +186,9 @@ int main(int argc, char* argv[]) {
 	marker::MarkerInfo marker_info;
 
     while(capture.isOpened() && !quit){
+        // 获取视频流中最新帧
         bool read_ret = capture.read(frame);
         if(!read_ret) break;
-        frame_queue.push(frame);
         // pre processing
         cv::resize(frame, frame, cv::Size(FLAGS_NETG_DIM, FLAGS_NETG_DIM));
         if(FLAGS_RUAS == 1){
@@ -226,7 +228,7 @@ int main(int argc, char* argv[]) {
             // detect
             cv::cvtColor(img_vis, img_vis, cv::COLOR_BGR2RGB);
             cv::resize(img_vis, img_vis, vis_size);
-            
+
             // detect marker
             marker_info = marker_detector.detect_single_marker(img_vis, true, marker::VER_OPENCV, marker::MODE_DETECT);
 
@@ -308,6 +310,7 @@ int main(int argc, char* argv[]) {
     video_writer.join();
     run_rov_flag = false;
     rov_runner.join();
+    capture.receive_stop();
     print(BOLDGREEN, "bye!");
     return 0;
 }
