@@ -20,8 +20,8 @@ void ParallelCamera::receive()
     {
         if (this->video_type == CAPTURE_TYPE_VIDEO)
         {
-            cv::waitKey(1);
-            // 延时 微秒
+            // cv::waitKey(1);
+            // 限制本地视频读取速度. 延时1秒/FPS的一半
             usleep(1000000.0 / this->get(cv::CAP_PROP_FPS) * 0.5);
         }
         this->current_read_ret = this->cv::VideoCapture::read(this->current_frame);
@@ -31,7 +31,7 @@ void ParallelCamera::receive()
             continue;
         }
         frame_queue.push(this->current_frame);
-        cv::imshow("frame", this->current_frame);
+        // cv::imshow("frame", this->current_frame);
     }
 }
 
