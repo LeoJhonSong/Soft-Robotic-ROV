@@ -482,7 +482,7 @@ void Detector::delete_tubelets(){
 
 
 int Detector::uart_send(unsigned char cls, Uart& uart){
-    int selected_cls = cls;
+    int selected_cls;
     int detect_cls_num = detect_scallop ? 4 : 3;
     if (this->track_cl > 0 && this->track_cl < detect_cls_num)
         selected_cls = this->track_cl;
@@ -493,19 +493,21 @@ int Detector::uart_send(unsigned char cls, Uart& uart){
     torch::Tensor dets = this->output[0][selected_cls][0];
     if (dets[0].item<float>()<0.3 || dets[6].item<int>()<5 || (dets[2] + dets[4]).item<float>()/2.0 > 0.9)
         return 0;
-//    float dist = std::sqrt(std::pow(((dets[1].item<float>()+dets[3].item<float>())/2-0.5), 2) + std::pow(((dets[2].item<float>()+dets[4].item<float>())/4-1), 2));
+    // float dist = std::sqrt(std::pow(((dets[1].item<float>()+dets[3].item<float>())/2-0.5), 2) + std::pow(((dets[2].item<float>()+dets[4].item<float>())/4-1), 2));
+    // xc, yc为0-1的数
     float xc = (dets[1].item<float>() + dets[3].item<float>()) / 2;
     float yc = (dets[2].item<float>() + dets[4].item<float>()) / 2;
     if(std::abs(xc-0.5) > 0.15 || std::abs(yc-1) > 0.5)
         return 1;
     this->send_list.clear();
-    this->send_list.push_back(110+cls);
-    this->send_list.push_back((char)(xc *100));
+    this->send_list.push_back(selected_cls);  // 1为海参, 2为海胆, 3为扇贝
+    this->send_list.push_back((char)(xc *100));  // 为了让xc, yc为整数, 乘100
     this->send_list.push_back((char)(yc *100));
     this->send_list.push_back((char)((dets[3].item<float>() - dets[1].item<float>()) *100));
     this->send_list.push_back((char)((dets[4].item<float>() - dets[2].item<float>()) *100));
     this->send_list.push_back((char)(round(max_depth/10.0)));
-//    print(RED, "DEBUG: " << (int)this->send_list.at(1) << ", " <<(int)this->send_list.at(2));
+    // print(RED, "DEBUG: " << (int)this->send_list.at(1) << ", " <<(int)this->send_list.at(2));
+    // 如果发送成功, send_byte即发送位数, 6, 如未发送成功, send_byte为0
     int send_byte = uart.send(this->send_list);
     return send_byte;
 }

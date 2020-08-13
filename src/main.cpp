@@ -198,76 +198,85 @@ int main(int argc, char* argv[]) {
         }
         cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
         // run net
-        if (FLAGS_NET_PHASE > 0) {
-            if (FLAGS_NET_PHASE < 3) {
-                cv::normalize(frame, img_float, -1, 1, cv::NORM_MINMAX, CV_32F);
-            } else if (FLAGS_NET_PHASE == 3) {
-                frame.convertTo(img_float, CV_32F);
-                img_float = img_float - 128.0;
-            }
-            img_tensor = torch::from_blob(img_float.data, {1, FLAGS_NETG_DIM, FLAGS_NETG_DIM, 3}).to(torch::kCUDA);
-            img_tensor = img_tensor.permute({0, 3, 1, 2});
-            net_input.emplace_back(img_tensor);
-            if (FLAGS_NET_PHASE == 1) {
-                fake_B = net->forward(net_input).toTensor();
+        if (FLAGS_NET_PHASE < 3)
+        {
+            cv::normalize(frame, img_float, -1, 1, cv::NORM_MINMAX, CV_32F);
+        }
+        else if (FLAGS_NET_PHASE == 3)
+        {
+            frame.convertTo(img_float, CV_32F);
+            img_float = img_float - 128.0;
+        }
+        img_tensor = torch::from_blob(img_float.data, {1, FLAGS_NETG_DIM, FLAGS_NETG_DIM, 3}).to(torch::kCUDA);
+        img_tensor = img_tensor.permute({0, 3, 1, 2});
+        net_input.emplace_back(img_tensor);
+        if (FLAGS_NET_PHASE == 1)
+        {
+            fake_B = net->forward(net_input).toTensor();
+            loc_idex = 1;
+            cudaDeviceSynchronize();
+        }
+        else if (FLAGS_NET_PHASE > 1)
+        {
+            net_output = net->forward(net_input).toTuple()->elements();
+            cudaDeviceSynchronize();
+            if (FLAGS_NET_PHASE == 2)
+            {
+                fake_B = net_output.at(0).toTensor();
                 loc_idex = 1;
-                cudaDeviceSynchronize();
-            } else if (FLAGS_NET_PHASE > 1) {
-                net_output = net->forward(net_input).toTuple()->elements();
-                cudaDeviceSynchronize();
-                if (FLAGS_NET_PHASE == 2) {
-                    fake_B = net_output.at(0).toTensor();
-                    loc_idex = 1;
-                } else if (FLAGS_NET_PHASE == 3) loc_idex = 0;
-                loc = net_output.at(loc_idex).toTensor().to(torch::kCPU);
-                conf = net_output.at(loc_idex + 1).toTensor().to(torch::kCPU);
             }
-            if (loc_idex==1) img_vis = tensor2im(fake_B);
-            else img_vis = frame;
-            net_input.pop_back();
-            // detect
-            cv::cvtColor(img_vis, img_vis, cv::COLOR_BGR2RGB);
-            cv::resize(img_vis, img_vis, vis_size);
+            else if (FLAGS_NET_PHASE == 3)
+                loc_idex = 0;
+            loc = net_output.at(loc_idex).toTensor().to(torch::kCPU);
+            conf = net_output.at(loc_idex + 1).toTensor().to(torch::kCPU);
+        }
+        if (loc_idex == 1)
+            img_vis = tensor2im(fake_B);
+        else
+            img_vis = frame;
+        net_input.pop_back();
+        // detect
+        cv::cvtColor(img_vis, img_vis, cv::COLOR_BGR2RGB);
+        cv::resize(img_vis, img_vis, vis_size);
 
-            // detect marker
-            marker_info = marker_detector.detect_single_marker(img_vis, true, marker::VER_OPENCV, marker::MODE_DETECT);
+        // detect marker
+        marker_info = marker_detector.detect_single_marker(img_vis, true, marker::VER_OPENCV, marker::MODE_DETECT);
 
-            target_loc = Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, log_file);
-            // print(BOLDRED, (float)target_loc[0]/vis_size.width << ", " << (float)target_loc[1]/vis_size.height << ", "<< (float)target_loc[2]/vis_size.width << ", " << (float)target_loc[3]/vis_size.height );
-            if(land){
-                if (FLAGS_UART) {
-                    if (send_byte == -1) {
-                        send_byte = Detect.uart_send(FLAGS_UART, uart);
-                        print(BOLDCYAN, "MAIN: try to uart send, return " << send_byte);
-                        if (send_byte == 6) {
-                            print(BOLDCYAN, "MAIN: uart send successfully, clock start");
-                            t_send = time(nullptr);
-                        } else {
-                            if (send_byte == 0) print(BOLDCYAN, "MAIN: uart fail to send");
-                            else if (send_byte == 1){
-                                print(BOLDCYAN, "MAIN: out of grasping area, try a second dive");
-                                second_dive = true;
-                            }
-                            land = false;
-                            grasping_done = true;
-                            max_attempt = 0;
-                            send_byte = -1;
-                        }
+        target_loc = Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, log_file);
+        // print(BOLDRED, (float)target_loc[0]/vis_size.width << ", " << (float)target_loc[1]/vis_size.height << ", "<< (float)target_loc[2]/vis_size.width << ", " << (float)target_loc[3]/vis_size.height );
+
+        // 坐底后的串口通信
+        if (land)
+        {
+            if (FLAGS_UART)
+            {
+                if (send_byte == -1)
+                {
+                    send_byte = Detect.uart_send(FLAGS_UART, uart);
+                    print(BOLDCYAN, "MAIN: try to uart send, return " << send_byte);
+                    if (send_byte == 6)
+                    {
+                        print(BOLDCYAN, "MAIN: uart send successfully, clock start");
+                        t_send = time(nullptr);
                     }
-                } else {
-                    print(BOLDCYAN,  "MAIN: uart is closed");
-                    land = false;
-                    grasping_done = true;
-                    max_attempt = 0;
-                    send_byte = -1;
+                    else
+                    {
+                        if (send_byte == 0)
+                            print(BOLDCYAN, "MAIN: uart fail to send");
+                        else if (send_byte == 1)
+                        {
+                            print(BOLDCYAN, "MAIN: out of grasping area, try a second dive");
+                            second_dive = true;
+                        }
+                        land = false;
+                        grasping_done = true;
+                        max_attempt = 0;
+                        send_byte = -1;
+                    }
                 }
             }
-        }else{
-            cv::cvtColor(frame.clone(), img_vis, cv::COLOR_BGR2RGB);
-            cv::resize(img_vis, img_vis, vis_size);
-            cv::imshow("ResDet", img_vis);
-            det_frame_queue.push(img_vis);
-            if (land) {
+            else
+            {
                 print(BOLDCYAN, "MAIN: uart is closed");
                 land = false;
                 grasping_done = true;
@@ -275,28 +284,49 @@ int main(int argc, char* argv[]) {
                 send_byte = -1;
             }
         }
-        if (send_byte == 6){
-            if ((time(nullptr) - t_send) > 60) {
+        // 串口通信成功后
+        if (send_byte == 6)
+        {
+            if ((time(nullptr) - t_send) > 60)  // 时间超过60s, 判断再尝试一次还是放弃当前目标
+            {
+                // 再试一次
                 send_byte = -1;
-                if (++max_attempt>1) {
-                    print(BOLDCYAN, "MAIN: max_attempt>2 grasping done");
+                // 两次尝试后放弃抓取当前目标
+                if (++max_attempt > 1)
+                {
+                    print(BOLDCYAN, "MAIN: tried for 2 times, grasping done");
                     land = false;
                     grasping_done = true;
                     max_attempt = 0;
                 }
             }
+            else
+            {
+                // 发送marker坐标
+                std::vector<char> send_array;
+                send_array.clear();
+                send_array.push_back((char)5);  // 5表示是手臂的信息
+                send_array.push_back((char)((int)marker_info.center.x / vis_size.width * 100));  // 缩放到与目标坐标同一尺度
+                send_array.push_back((char)((int)marker_info.center.y / vis_size.height * 100));
+                // 这后几位其实无用
+                send_array.push_back((char)0);
+                send_array.push_back((char)0);
+                send_array.push_back((char)0);
+                uart.send(send_array);
+            }
         }
         int key = cv::waitKey(1) & 0xFF;
-        if (key != -1)  rov_key = key;
+        if (key != -1)
+            rov_key = key;
         parse_key(key, quit, reset_id, conf_thresh, FLAGS_K, FLAGS_R, filter);
-        if (save_a_count) {
+        if (save_a_count)
+        {
             print(BOLDWHITE, "save couting " + std::to_string(conut_times) + ": holothurian," << Detect.get_class_num(1) << ",echinus," << Detect.get_class_num(2)
                                                                                               << ",scallop," << Detect.get_class_num(3));
             std::ofstream result_file("./record/" + save_path + "/result_" + std::to_string(conut_times++) + ".txt");
             result_file << "Couting: holothurian," << Detect.get_class_num(1) << ",echinus," << Detect.get_class_num(2) << ",scallop," << Detect.get_class_num(3) << std::endl;
             result_file.close();
             save_a_count = false;
-
         }
     }
     print(BOLDWHITE, "save couting " + std::to_string(conut_times) + ": holothurian," << Detect.get_class_num(1) << ",echinus," << Detect.get_class_num(2)  << ",scallop," << Detect.get_class_num(3));

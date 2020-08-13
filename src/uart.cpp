@@ -240,6 +240,7 @@ int Uart::send(std::vector<char> send_list){
         send_buf[i] = send_list[i];
     }
 
+    // 如果发送成功, 返回发送位数, ret等于send_list.size(), 否则未发送成功, ret为0
     ret = send(send_buf, send_list.size());
 
     delete [] send_buf;
