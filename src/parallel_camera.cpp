@@ -20,7 +20,6 @@ void ParallelCamera::receive()
     {
         if (this->video_type == CAPTURE_TYPE_VIDEO)
         {
-            // cv::waitKey(1);
             // 限制本地视频读取速度. 延时1秒/FPS的一半
             usleep(1000000.0 / this->get(cv::CAP_PROP_FPS) * 0.5);
         }
@@ -31,6 +30,7 @@ void ParallelCamera::receive()
             continue;
         }
         frame_queue.push(this->current_frame);
+        // cv::waitKey(1);
         // cv::imshow("frame", this->current_frame);
     }
 }
@@ -43,10 +43,10 @@ bool ParallelCamera::read(cv::Mat &image)
 
 bool ParallelCamera::open(const cv::String &filename)
 {
-    if (filename.find_last_of(".mp4") != cv::String::npos ||
-        filename.find_last_of(".MP4") != cv::String::npos ||
-        filename.find_last_of(".avi") != cv::String::npos ||
-        filename.find_last_of(".AVI") != cv::String::npos)
+    if (filename.find_last_of("mp4") != cv::String::npos ||
+        filename.find_last_of("MP4") != cv::String::npos ||
+        filename.find_last_of("avi") != cv::String::npos ||
+        filename.find_last_of("AVI") != cv::String::npos)
     {
         this->video_type = CAPTURE_TYPE_VIDEO;
     }
