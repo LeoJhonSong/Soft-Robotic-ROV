@@ -1,22 +1,27 @@
 digraph G {
-
+  splines=polyline
+  node [shape=box]
   subgraph cluster_dive {
     node [style=filled;]
     x[label="持续下潜"]
-    x -> a[label="当深度一定时间\n内波动稳定在5cm\n以内时判断为坐底"]
-    a[label="坐底,\n记录此时深度作为海底深度,\n算出气压补偿"]
-    b[label="以视野内置信度最高的为目标,\n前后或左右移动使目标中心在阈值框内"]
+    x -> a
+    a[label="当深度一定时间\n内波动稳定在5cm\n以内时判断为坐底"]
+    b[label=<以视野内置信度最高的为目标,<br/><s>前后或左右移动使目标中心在阈值框内</s><br/><b>记录目标坐标</b>>]
     y -> x[label="目标丢失"]
-    y[label="全速下潜的同时实时前后或左右微调"]
-    b -> y[label="目标中心在阈值框内"]
-    y -> a[label="当深度一定时间\n内波动稳定在5cm\n以内时判断为坐底"]
+    y[label=<<b>根据目标距图像中心距离设定水平速度,<br/></b>全速下潜<s>的同时实时前后或左右微调</s>>]
+    b -> y[label=<<s>目标在阈值框内</s>>]
+    y -> g
+    g[label=<<b>坐底后识别抓取范围内是否有可抓目标</b>>]
+    g -> k[label=<<b>否</b>>]
+    k[label=<<b>向着记录方向<br/>半速水平移动的同时全速上浮1s</b>>]
+    k -> b
     fontcolor = "blue"
     label = "移动至适当位置坐底";
     color=blue
   }
   subgraph cluster_curise {
     node [style=filled]
-    c[label="巡航\n因为摄像头向前的视野不够多,\n路径规划无法依靠视觉,\n采取蛇形走位遍历水域"]
+    c[label=<巡航<br/>采取蛇形走位遍历水域>]
     d[label="定深\n因为目标水域水底较为平坦,\n采取上升一段时间后停止上升,\n然后利用ROV自带深度闭环实现定深"]
     d -> c
     l[label="实时检测目标"]
@@ -30,20 +35,22 @@ digraph G {
   subgraph cluster_grasp {
     node [style=filled];
     a -> f
-    e[label="给手臂程序传递目标相对位置,\n抓取并放入网框"]
+    e[label=<给手臂程序传递目标相对位置,<br/><b>持续发送手臂末端坐标</b><br/>抓取并放入网框>]
     f[label="识别抓取范围内是否有可抓目标"]
-    i[label="判断是否达到\n抓取次数上限"]
+    i[label="判断是否\n已经抓取两次"]
     f -> i[label="有"]
     e-> f
-    i -> e[label="未达到\n抓取次数\n上限"]
+    i -> e[label="否"]
     fontcolor = "blue"
     label = "抓取"
     color=blue
   }
   start -> x
-  f -> d[label="无可抓目标"]
+  f -> d[label="无"]
   b -> c[label="目标丢失"]
-  i -> c[label="达到抓取\n次数上限"]
+  i -> c[label="是"]
+  g -> e[label=<<b>是</b>>]
+  c -> x[label=<<b>一段时间后结束巡航</b>>]
 
-  start [style="filled"; color="red"; fontcolor="white";];
+  start [style="filled"; fillcolor="lawngreen" color=black];
 }
