@@ -434,7 +434,7 @@ void run_rov()
             if (manual_stop)
                 rov_key = 32;
             else if (second_dive)
-                rov_key = 61;
+                rov_key = 111;
             else
                 rov_key = 99;
             break;
@@ -538,9 +538,9 @@ void run_rov()
             else if (time_interval > cruise_second.at(7))
                 rov_key = 13;
             else
-                rov_key = 61;
+                rov_key = 111;
             break;
-        case 61: // 坐底至目标处, o
+        case 111: // 坐底至目标处, o
             // FIXME: 此处策略要改
             print(BOLDYELLOW, "ROV: aiming");
             while ((!manual_stop))
