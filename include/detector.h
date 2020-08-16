@@ -54,8 +54,6 @@ public:
     void reset_tracking_state();
     int get_class_num(unsigned char);
     void replenish_tubelets(unsigned char cl, int count);
-//    void enable_track();
-//    void release_track();
     ~Detector();
 };
 

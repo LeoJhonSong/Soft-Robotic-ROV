@@ -135,6 +135,7 @@ void TCP_Server::recvMsg(void)
         return;
     }
     memset(receive, 0, sizeof(receive));
+    // return;  // FIXME 如果无法收到ROV发来信息, 从本行结束
     auto bytes_recv = recv(newFD, receive, 27, 0);
 
     if (receive[4] == '\xaa')

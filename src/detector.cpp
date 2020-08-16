@@ -496,7 +496,10 @@ int Detector::uart_send(unsigned char cls, Uart& uart){
 //    float dist = std::sqrt(std::pow(((dets[1].item<float>()+dets[3].item<float>())/2-0.5), 2) + std::pow(((dets[2].item<float>()+dets[4].item<float>())/4-1), 2));
     float xc = (dets[1].item<float>() + dets[3].item<float>()) / 2;
     float yc = (dets[2].item<float>() + dets[4].item<float>()) / 2;
-    if(std::abs(xc-0.5) > 0.15 || std::abs(yc-1) > 0.5)
+    // FIXME 这个阈值不知道需不需要调大
+    // 如果目标不在横向距图像中心0.15个宽, 纵向距离图像下边0.5个高的阈值框内, 返回1
+    // if(std::abs(xc-0.5) > 0.15 || std::abs(yc-1) > 0.5)
+    if(std::abs(xc-0.5) > 0.45 || std::abs(yc-1) > 0.9)
         return 1;
     this->send_list.clear();
     this->send_list.push_back(110+cls);
@@ -537,15 +540,3 @@ void Detector::reset_tracking_state(){
     this->track_cl = 0;
     this->track_id = -1;
 }
-
-//void Detector::enable_track(){
-//    std::cout << "main: enable tracking" << std::endl;
-//    this->track = true;
-//    this->reset_tracking_state();
-//}
-//
-//void Detector::release_track(){
-//    std::cout << "main: release track" << std::endl;
-//    this->track = false;
-//    this->reset_tracking_state();
-//}
