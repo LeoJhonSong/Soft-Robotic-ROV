@@ -5,7 +5,7 @@ void marker::MarkerDetector::camera_resize(cv::Size new_size)
     this->camera.CamSize = new_size;
 }
 void marker::MarkerDetector::set_dict_o(cv::aruco::PREDEFINED_DICTIONARY_NAME dict_o)
-{   
+{
     this->dictionary_o = cv::aruco::getPredefinedDictionary(dict_o);
 }
 
@@ -100,6 +100,7 @@ std::vector<marker::MarkerInfo> marker::MarkerDetector::detect_markers(cv::Mat &
     {
         std::cout << "\"ver\" is wrong " << std::endl;
     }
+    return std::vector<marker::MarkerInfo>();
 }
 
 // 检测所有marker --aruco version
@@ -107,11 +108,11 @@ std::vector<marker::MarkerInfo> marker::MarkerDetector::_detect_markers_aruco(cv
 {
     std::vector<marker::MarkerInfo> detected_markers;
     auto markers = this->detector_a.detect(img, this->camera, 0.1); //0.05 is the marker size
-    for(auto &marker:markers)
-    {   
+    for (auto &marker : markers)
+    {
         if (track)
         {
-            this->MTracker[marker.id].estimatePose(marker, this->camera, this->marker_size);  // call its tracker and estimate the pose
+            this->MTracker[marker.id].estimatePose(marker, this->camera, this->marker_size); // call its tracker and estimate the pose
         }
         marker::MarkerInfo marker_info;
         marker_info.id = marker.id;
@@ -152,9 +153,9 @@ std::vector<marker::MarkerInfo> marker::MarkerDetector::_detect_markers_opencv(c
 
     std::vector<int> ids;
     std::vector<std::vector<cv::Point2f>> corners;
-    cv::aruco::detectMarkers(img, this->dictionary_o, corners, ids);    //检测靶标
-    if (ids.size() > 0) 
-    {   
+    cv::aruco::detectMarkers(img, this->dictionary_o, corners, ids); //检测靶标
+    if (ids.size() > 0)
+    {
         std::vector<cv::Vec3d> rvecs, tvecs;
         cv::aruco::estimatePoseSingleMarkers(corners, this->marker_size, this->camera.CameraMatrix, this->camera.Distorsion, rvecs, tvecs); //求解旋转矩阵rvecs和平移矩阵tvecs
         for (int i = 0; i < ids.size(); i++)
@@ -166,7 +167,7 @@ std::vector<marker::MarkerInfo> marker::MarkerDetector::_detect_markers_opencv(c
             marker_info.Tvec = cv::Mat(tvecs.at(i));
             float c_x = 0;
             float c_y = 0;
-            for (auto p:corners[i])
+            for (auto p : corners[i])
             {
                 c_x += p.x;
                 c_y += p.y;
@@ -179,11 +180,9 @@ std::vector<marker::MarkerInfo> marker::MarkerDetector::_detect_markers_opencv(c
             if (visible)
             {
                 cv::circle(img, cv::Point2f(c_x, c_y), 6, cv::Scalar(0, 0, 255), -1, 8, 0);
-                cv::aruco::drawDetectedMarkers(img, corners, ids);      //绘制检测到的靶标的框
-                cv::aruco::drawAxis(img, this->camera.CameraMatrix, this->camera.Distorsion, rvecs[i], tvecs[i], 0.1);                
-
+                cv::aruco::drawDetectedMarkers(img, corners, ids); //绘制检测到的靶标的框
+                cv::aruco::drawAxis(img, this->camera.CameraMatrix, this->camera.Distorsion, rvecs[i], tvecs[i], 0.1);
             }
-            
         }
     }
     return detected_markers;
@@ -194,10 +193,10 @@ std::vector<marker::MarkerInfo> marker::MarkerDetector::_track_markers_aruco(cv:
 {
     std::vector<marker::MarkerInfo> tracked_markers;
     std::vector<aruco::Marker> Markers = this->detector_a.detect(img);
-    for (auto& marker : Markers)  // for each marker
+    for (auto &marker : Markers) // for each marker
     {
-        this->MTracker[marker.id].estimatePose(marker, this->camera, this->marker_size);  // call its tracker and estimate the pose
-        
+        this->MTracker[marker.id].estimatePose(marker, this->camera, this->marker_size); // call its tracker and estimate the pose
+
         marker::MarkerInfo marker_info;
         marker_info.id = marker.id;
         marker_info.Rvec = marker.Rvec;
@@ -217,7 +216,7 @@ std::vector<marker::MarkerInfo> marker::MarkerDetector::_track_markers_aruco(cv:
         marker_info.center = cv::Point2f(c_x, c_y);
         tracked_markers.push_back(marker_info);
     }
-    
+
     if (visible)
     {
         // for each marker, draw info and its boundaries in the image
@@ -231,7 +230,8 @@ std::vector<marker::MarkerInfo> marker::MarkerDetector::_track_markers_aruco(cv:
         {
             for (unsigned int i = 0; i < Markers.size(); i++)
             {
-                if (Markers[i].isPoseValid()){
+                if (Markers[i].isPoseValid())
+                {
                     aruco::CvDrawingUtils::draw3dCube(img, Markers[i], this->camera);
                     aruco::CvDrawingUtils::draw3dAxis(img, Markers[i], this->camera);
                 }
