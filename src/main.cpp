@@ -107,7 +107,7 @@ int main(int argc, char* argv[]) {
     unsigned int num_classes = 5;
     int top_k = 200;
     float nms_thresh = 0.3;
-    std::vector<float> conf_thresh = {1.0, 0.8, 0.1, 1.5};
+    std::vector<float> conf_thresh = {0.5, 0.8, 0.1, 1.5};
     float tub_thresh = 0.3;
     bool reset_id = false;
     Detector Detect(num_classes, top_k, nms_thresh, FLAGS_TUB, FLAGS_SSD_DIM, FLAGS_TRACK);
