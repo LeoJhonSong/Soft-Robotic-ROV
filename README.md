@@ -220,6 +220,7 @@ sudo make install
 | 手臂 | 5    |
 
 ❗️ 目前训练集没有给海星, 不识别海星.
+❗️ 手臂并非由神经网络识别, 是ArUco识别的.
 
 ### 程序参数
 
@@ -235,7 +236,7 @@ sudo make install
 |TUB||**1**|
 |UART|串口模式|**true**: 启用UART串口/**false**: 不启用UART串口|
 |WITH_ROV|ROV连接模式|**true**: 连接ROV运行/**false**: 不连接ROV运行|
-|TRACK||**true**/**false**|
+|TRACK|是否给出目标坐标|**true**/**false**|
 
 ### 程序状态-键盘按键-手柄按键对照表
 
@@ -258,7 +259,9 @@ sudo make install
 
 #### UART
 
-目前程序通过`/dev/ttyUSB0`(第一个被发现的USB串口设备) 以115200的波特率进行串口通信. 只有连接了一个串口设备时`/dev/`下才会有这个设备.
+目前程序通过`/dev/ttyUSB0`(第一个被发现的USB串口设备) 以**9600**的波特率进行串口通信. 只有连接了一个串口设备时`/dev/`下才会有这个设备.
+
+❗️ 另一侧也需要以9600的波特率进行通信, 否则收到的会是乱七八糟的东西.
 
 #### 游戏手柄
 
@@ -274,12 +277,12 @@ sudo make install
 |-|-|
 |(构造函数)|创建监听socket, 绑定端口并开始监听端口|
 |(析构函数)|关闭业务socket, 关闭监听socket|
-|**void recvMsg( void )**|如果未建立业务socket则在accept()处阻塞, 直到建立业务socket. 接收ROV发来的24位数据并处理第4位 (舱1是否漏水, 存至 `isOneLeak`), 第7位 (舱2是否漏水, 存至 `isTwoLeak`), 第8, 9位 (深度信息, 存至 `depth`)数据.|
-|**void sendMsg( int move )**|按传递的参数`move`对应的动作 (见下表) 发送指令给ROV|
+|`void recvMsg( void )`|如果未建立业务socket则在accept()处阻塞, 直到建立业务socket. 接收ROV发来的24位数据并处理第4位 (舱1是否漏水, 存至 **isOneLeak**), 第7位 (舱2是否漏水, 存至 **isTwoLeak**), 第8, 9位 (深度信息, 存至 **depth**)数据.|
+|`void sendMsg( int move )`|按传递的参数**move**对应的动作 (见下表) 发送指令给ROV|
 
-⚠️ accept()在 **recvMsg()** 中意味着必须先执行一次recvMsg()才能和ROV建立连接.
+⚠️ accept()在 `recvMsg()` 中意味着必须先执行一次recvMsg()才能和ROV建立连接.
 
-另外值得注意的是**accept()**和**recv()**在未接收到ROV数据时会一直等待, 即阻塞, 直到接收到数据程序才会继续.
+另外值得注意的是`accept()`和`recv()`在未接收到ROV数据时会一直等待, 即阻塞, 直到接收到数据程序才会继续.
 
 ##### sendMsg()中move值与动作与可用宏定义对应表
 

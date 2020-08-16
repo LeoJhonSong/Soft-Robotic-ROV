@@ -159,7 +159,7 @@ int main(int argc, char* argv[]) {
     int conut_times = 0;
 
     // UART
-    Uart uart("ttyUSB0", 115200);
+    Uart uart("ttyUSB0", 9600);
     if(FLAGS_UART) {
         bool uart_open_flag, uart_init_flag;
         uart_open_flag = uart.openFile();
@@ -241,6 +241,7 @@ int main(int argc, char* argv[]) {
 
         // detect marker
         marker_info = marker_detector.detect_single_marker(img_vis, true, marker::VER_OPENCV, marker::MODE_DETECT);
+        // print(BOLDYELLOW, "x: " << marker_info.center.x << " y: " << marker_info.center.y);
 
         target_loc = Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, log_file);
         // print(BOLDRED, (float)target_loc[0]/vis_size.width << ", " << (float)target_loc[1]/vis_size.height << ", "<< (float)target_loc[2]/vis_size.width << ", " << (float)target_loc[3]/vis_size.height );
