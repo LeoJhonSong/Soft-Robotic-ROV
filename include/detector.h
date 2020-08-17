@@ -50,7 +50,7 @@ public:
     void init_tubelets();
     void delete_tubelets(unsigned char);
     void delete_tubelets();
-    int uart_send(unsigned char cls, Uart&);
+    std::vector<int> get_relative_position(Uart&);
     void reset_tracking_state();
     int get_class_num(unsigned char);
     void replenish_tubelets(unsigned char cl, int count);

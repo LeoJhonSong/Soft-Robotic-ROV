@@ -75,8 +75,9 @@ float max_depth = 0;
 float curr_depth = 0;
 float half_scale = 1.5;
 float adjust_scale = 1.5;
-
 bool detect_scallop = false;
+
+std::vector<int> target_info;
 
 int main(int argc, char* argv[]) {
     time_t now = std::time(0);
@@ -246,6 +247,7 @@ int main(int argc, char* argv[]) {
         target_loc = Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, log_file);
         // print(BOLDRED, (float)target_loc[0]/vis_size.width << ", " << (float)target_loc[1]/vis_size.height << ", "<< (float)target_loc[2]/vis_size.width << ", " << (float)target_loc[3]/vis_size.height );
 
+        // land = 1;  // FIXME 如果无法判断坐底取消本行注释来调试uart
         // 坐底后的串口通信
         if (land)
         {
@@ -253,8 +255,21 @@ int main(int argc, char* argv[]) {
             {
                 if (send_byte == -1)
                 {
-                    send_byte = Detect.uart_send(FLAGS_UART, uart);
-                    print(BOLDCYAN, "MAIN: try to uart send, return " << send_byte);
+                    target_info = Detect.get_relative_position(uart);
+                    if(target_info[0] == 1000)
+                        send_byte = 0;
+                    else if(target_info[0] == 2000)
+                        send_byte = 1;
+                    else
+                    {
+                        // 发送marker相对于目标的坐标
+                        std::string send_array = "#";
+                        send_array = send_array + std::to_string(marker_info.center.x / vis_size.width * 100 - target_info[1]) + "," + std::to_string(marker_info.center.y / vis_size.height * 100 - target_info[2]);
+                        // FIXME 应使用uart.send的第三种定义
+                        send_byte = uart.send(send_array);
+                        print(BOLDGREEN, "[marker relative position] " << send_array);
+                    }
+
                     if (send_byte == 6)
                     {
                         print(BOLDCYAN, "MAIN: uart send successfully, clock start");
@@ -288,10 +303,12 @@ int main(int argc, char* argv[]) {
         // 串口通信成功后
         if (send_byte == 6)
         {
+            // TODO 时间可能需要延长
             if ((time(nullptr) - t_send) > 60)  // 时间超过60s, 判断再尝试一次还是放弃当前目标
             {
                 // 再试一次
                 send_byte = -1;
+                // TODO 这个再试一次好像没起作用
                 // 两次尝试后放弃抓取当前目标
                 if (++max_attempt > 1)
                 {
@@ -303,17 +320,12 @@ int main(int argc, char* argv[]) {
             }
             else
             {
-                // 发送marker坐标
-                std::vector<char> send_array;
-                send_array.clear();
-                send_array.push_back((char)5);  // 5表示是手臂的信息
-                send_array.push_back((char)((int)marker_info.center.x / vis_size.width * 100));  // 缩放到与目标坐标同一尺度
-                send_array.push_back((char)((int)marker_info.center.y / vis_size.height * 100));
-                // 这后几位其实无用
-                send_array.push_back((char)0);
-                send_array.push_back((char)0);
-                send_array.push_back((char)0);
+                // 发送marker相对于目标的坐标
+                std::string send_array = "#";
+                send_array = send_array + std::to_string(marker_info.center.x / vis_size.width * 100 - target_info[1]) + "," + std::to_string(marker_info.center.y / vis_size.height * 100 - target_info[2]);
+                // FIXME 应使用uart.send的第三种定义
                 uart.send(send_array);
+                print(BOLDGREEN, "[marker relative position] " << send_array);
             }
         }
         int key = cv::waitKey(1) & 0xFF;

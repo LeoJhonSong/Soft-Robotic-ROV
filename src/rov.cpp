@@ -542,7 +542,7 @@ void run_rov()
                 rov_key = 111;
             break;
         case 111: // 坐底至目标处, o
-            // FIXME: 此处策略要改
+            // TODO 此处策略要改
             print(BOLDYELLOW, "ROV: aiming");
             while ((!manual_stop))
             {

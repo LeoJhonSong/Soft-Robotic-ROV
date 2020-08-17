@@ -224,8 +224,9 @@ int Uart::send(char * send_buf, int data_len){
 
     ret = write(file_descriptor, send_buf, data_len);
 
+    // 如果发送成功, 返回6, 否则未发送成功, ret为0
     if(data_len == ret){
-        return ret;
+        return 6;
     }
     else{
         return 0;
@@ -240,11 +241,25 @@ int Uart::send(std::vector<char> send_list){
         send_buf[i] = send_list[i];
     }
 
-    // 如果发送成功, 返回发送位数, ret等于send_list.size(), 否则未发送成功, ret为0
+    // 如果发送成功, 返回6, 否则未发送成功, ret为0
     ret = send(send_buf, send_list.size());
 
     delete [] send_buf;
 
+    return ret;
+}
+
+int Uart::send(std::string send_string)
+{
+    int ret = 0;
+    char* send_buf = new char [send_string.size()];
+    for(int i = 0; i < send_string.size(); i++)
+    {
+        send_buf[i] = send_string[i];
+    }
+    // 如果发送成功, 返回6, 否则未发送成功, ret为0
+    ret = send(send_buf, send_string.size());
+    delete [] send_buf;
     return ret;
 }
 

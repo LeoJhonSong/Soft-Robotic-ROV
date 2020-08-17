@@ -19,6 +19,7 @@ public:
     int recv(char * rev_buf, int data_len);
     int send(char * send_buf, int data_len);
     int send(std::vector<char> send_list);
+    int send(std::string send_string);
 
     int logging_level;
 

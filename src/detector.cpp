@@ -480,9 +480,9 @@ void Detector::delete_tubelets(){
     }
 }
 
-
-int Detector::uart_send(unsigned char cls, Uart& uart){
+std::vector<int> Detector::get_relative_position(Uart& uart){
     int selected_cls;
+    std::vector<int> target_info;
     int detect_cls_num = detect_scallop ? 4 : 3;
     if (this->track_cl > 0 && this->track_cl < detect_cls_num)
         selected_cls = this->track_cl;
@@ -491,8 +491,14 @@ int Detector::uart_send(unsigned char cls, Uart& uart){
         selected_cls = scores.argmax().item<unsigned char>();
     }
     torch::Tensor dets = this->output[0][selected_cls][0];
+    target_info.clear();
     if (dets[0].item<float>()<0.3 || dets[6].item<int>()<5 || (dets[2] + dets[4]).item<float>()/2.0 > 0.9)
-        return 0;
+    {
+        // 对应send_byte == 0
+        target_info.push_back(1000);
+        target_info.push_back(1000);
+        return target_info;
+    }
     // float dist = std::sqrt(std::pow(((dets[1].item<float>()+dets[3].item<float>())/2-0.5), 2) + std::pow(((dets[2].item<float>()+dets[4].item<float>())/4-1), 2));
     // xc, yc为0-1的数
     float xc = (dets[1].item<float>() + dets[3].item<float>()) / 2;
@@ -501,18 +507,17 @@ int Detector::uart_send(unsigned char cls, Uart& uart){
     // 如果目标不在横向距图像中心0.15个宽, 纵向距离图像下边0.5个高的阈值框内, 返回1
     // if(std::abs(xc-0.5) > 0.15 || std::abs(yc-1) > 0.5)
     if(std::abs(xc-0.5) > 0.45 || std::abs(yc-1) > 0.9)
-        return 1;
-    this->send_list.clear();
-    this->send_list.push_back(selected_cls);  // 1为海参, 2为海胆, 3为扇贝
-    this->send_list.push_back((char)(xc *100));  // 为了让xc, yc为整数, 乘100
-    this->send_list.push_back((char)(yc *100));
-    this->send_list.push_back((char)((dets[3].item<float>() - dets[1].item<float>()) *100));
-    this->send_list.push_back((char)((dets[4].item<float>() - dets[2].item<float>()) *100));
-    this->send_list.push_back((char)(round(max_depth/10.0)));
-    // print(RED, "DEBUG: " << (int)this->send_list.at(1) << ", " <<(int)this->send_list.at(2));
-    // 如果发送成功, send_byte即发送位数, 6, 如未发送成功, send_byte为0
-    int send_byte = uart.send(this->send_list);
-    return send_byte;
+    {
+        // 对应send_byte == 1
+        target_info.push_back(2000);
+        target_info.push_back(2000);
+        return target_info;
+    }
+    target_info.push_back(selected_cls);  // 1为海参, 2为海胆, 3为扇贝
+    target_info.push_back((xc *100));  // 为了让xc, yc为整数, 乘100
+    target_info.push_back((yc *100));
+
+    return target_info;
 }
 
 
