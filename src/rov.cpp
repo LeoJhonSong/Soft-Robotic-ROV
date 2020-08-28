@@ -445,6 +445,7 @@ void run_rov()
             while (!manual_stop)
             {
                 delay_ms(10);
+                // 抓到目标后往前抖一下确保目标进框里
                 if (grasping_done)
                 {
                     print(BOLDMAGENTA, "ROV: grasping_done SEND_HALF_FORWARD for 2s before detection");
@@ -458,8 +459,8 @@ void run_rov()
                     grasping_done = false;
                 }
                 time_interval = (time(nullptr) - start);
-                // print(BOLDRED, time_interval);
-                if (target_loc.at(2) != 0 || target_loc.at(3) != 0) // target_loc.at 2, 3位为目标的width, height
+                // 发现目标后给一小段时间反向速度来减速, 减小水平速度对坐底的影响
+                if (target_loc.at(2) != 0 && target_loc.at(3) != 0) // target_loc.at 2, 3位为目标的width, height
                 {
                     if (last_opt == 1)
                     {
@@ -496,36 +497,28 @@ void run_rov()
                         }
                     break;
                 }
+                // 未发现目标的巡航路线
                 else if (time_interval <= cruise_second.at(0) ||
                          (time_interval > cruise_second.at(1) && time_interval <= cruise_second.at(2)) ||
                          (time_interval > cruise_second.at(3) && time_interval <= cruise_second.at(4)) ||
                          (time_interval > cruise_second.at(5) && time_interval <= cruise_second.at(6)))
                 {
-                    if (last_opt != 1)
-                    {
-                        print(BOLDMAGENTA, "ROV: SEND_HALF_FORWARD");
-                        last_opt = 1;
-                    }
+                    print(BOLDMAGENTA, "ROV: SEND_HALF_FORWARD");
+                    last_opt = 1;
                     server.sendMsg(SEND_HALF_FORWARD);
                 }
                 else if ((time_interval > cruise_second.at(0) && time_interval <= cruise_second.at(1)) ||
                          (time_interval > cruise_second.at(6) && time_interval <= cruise_second.at(7)))
                 {
-                    if (last_opt != 2)
-                    {
-                        print(BOLDMAGENTA, "ROV: SEND_HALF_RIGHT");
-                        last_opt = 2;
-                    }
+                    print(BOLDMAGENTA, "ROV: SEND_HALF_RIGHT");
+                    last_opt = 2;
                     server.sendMsg(SEND_HALF_RIGHT);
                 }
                 else if ((time_interval > cruise_second.at(2) && time_interval <= cruise_second.at(3)) ||
                          (time_interval > cruise_second.at(4) && time_interval <= cruise_second.at(5)))
                 {
-                    if (last_opt != 3)
-                    {
-                        print(BOLDMAGENTA, "ROV: SEND_HALF_LEFT");
-                        last_opt = 3;
-                    }
+                    print(BOLDMAGENTA, "ROV: SEND_HALF_LEFT");
+                    last_opt = 3;
                     server.sendMsg(SEND_HALF_LEFT);
                 }
                 else
@@ -535,7 +528,7 @@ void run_rov()
             }
             if (manual_stop)
                 rov_key = 32;
-            else if (time_interval > cruise_second.at(7))
+            else if (time_interval > cruise_second.at(7))  // 运行一次巡航路线后坐底, 更新巡航高度
                 rov_key = 13;
             else
                 rov_key = 111;
