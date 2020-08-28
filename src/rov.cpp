@@ -264,14 +264,19 @@ extern bool second_dive;
 
 void run_rov()
 {
-    std::random_device rd;
-    //    std::mt19937 gen(rd());
-    //    std::uniform_int_distribution<> dis(0, 5);
+    // 巡航路线
     int side_sec = 3;
     int for_sec = 3;
-    // 巡航路线
-    std::vector<int> cruise_second = {3, 3 + side_sec, 3 + side_sec + for_sec, 3 + 2 * side_sec + for_sec,
-                                      3 + 2 * side_sec + 2 * for_sec, 3 + 3 * side_sec + 2 * for_sec, 3 + 3 * side_sec + 3 * for_sec, 3 + 4 * side_sec + 3 * for_sec};
+    std::vector<int> cruise_second = {
+            for_sec,
+            for_sec +     side_sec,
+        2 * for_sec +     side_sec,
+        2 * for_sec + 2 * side_sec,
+        3 * for_sec + 2 * side_sec,
+        3 * for_sec + 3 * side_sec,
+        4 * for_sec + 3 * side_sec,
+        4 * for_sec + 4 * side_sec
+    };
     float width_thresh = 0.2; // 微调ROI阈值
     float height_thresh = 0.3;
     float drift_width = 0.0; // 目标漂移值
