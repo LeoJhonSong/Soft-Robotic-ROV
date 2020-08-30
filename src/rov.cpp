@@ -135,7 +135,6 @@ void TCP_Server::recvMsg(void)
         return;
     }
     memset(receive, 0, sizeof(receive));
-    // return;  // FIXME 如果无法收到ROV发来信息, 从本行结束
     auto bytes_recv = recv(newFD, receive, 27, 0);
 
     if (receive[4] == '\xaa')
@@ -540,7 +539,7 @@ void run_rov()
                 rov_key = 111;
             break;
         case 111: // 坐底至目标处, o
-            // FIXME: 此处策略要改
+            // TODO 此处策略要改
             print(BOLDYELLOW, "ROV: aiming");
             while ((!manual_stop))
             {

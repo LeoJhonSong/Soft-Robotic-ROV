@@ -7,6 +7,7 @@
 #include "ruas.h"
 #include "rov.h"
 #include "color.h"
+#include "marker_detector.h"
 #include "parallel_camera.h"
 
 #include <cuda_runtime.h>
@@ -23,7 +24,7 @@
 #include <vector>
 #include <gflags/gflags.h>
 #include <thread>
-#include<fstream>
+#include <fstream>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <dirent.h>
@@ -40,7 +41,7 @@ DEFINE_uint32(TUB, 1, "" );
 DEFINE_int32(MODE, -1, "-2: load web camra; -1: load local video; >0: load camera" );
 DEFINE_bool(UART, false, "false: do not try to communicate by UART; true: try to communicate by UART" );
 DEFINE_bool(WITH_ROV, false, "false: do not try to connect ROV; true: try to connect to ROV" );
-DEFINE_bool(TRACK, false, "0: not use it; >0 use it" );
+DEFINE_bool(TRACK, true, "0: not use it; >0 use it" );
 DEFINE_bool(RECORD, false, "false: do not record raw and detected videos; true: record them");
 
 // for video_write thread
@@ -74,8 +75,11 @@ float max_depth = 0;
 float curr_depth = 0;
 float half_scale = 1.5;
 float adjust_scale = 1.5;
-
 bool detect_scallop = false;
+
+std::vector<int> target_info;
+const int MARKER_OFFSET_X = 50;
+const int MARKER_OFFSET_Y = 75;
 
 int main(int argc, char* argv[]) {
     time_t now = std::time(0);
@@ -86,8 +90,9 @@ int main(int argc, char* argv[]) {
     // 设置是否录制
     video_write_flag = FLAGS_RECORD;
     // make record dir and file
-    if(nullptr==opendir(("./record/" + save_path).c_str()))
-        mkdir(("./record/" + save_path).c_str(), S_IRWXU|S_IRWXG|S_IRWXO);
+    if(FLAGS_RECORD)
+        if(nullptr==opendir(("./record/" + save_path).c_str()))
+            mkdir(("./record/" + save_path).c_str(), S_IRWXU|S_IRWXG|S_IRWXO);
     std::ofstream log_file("./record/" + save_path + "/log.txt");
 
     // load models
@@ -107,7 +112,7 @@ int main(int argc, char* argv[]) {
     unsigned int num_classes = 5;
     int top_k = 200;
     float nms_thresh = 0.3;
-    std::vector<float> conf_thresh = {0.5, 0.8, 0.1, 1.5};
+    std::vector<float> conf_thresh = {0.6, 0.8, 0.3, 1.5};  // 海参, 海胆, 扇贝, 海星
     float tub_thresh = 0.3;
     bool reset_id = false;
     Detector Detect(num_classes, top_k, nms_thresh, FLAGS_TUB, FLAGS_SSD_DIM, FLAGS_TRACK);
@@ -118,6 +123,7 @@ int main(int argc, char* argv[]) {
     {
         filter.get_wf(FLAGS_K, FLAGS_R);
     }
+
     // load video
     ParallelCamera capture;
     while (!capture.isOpened())
@@ -126,6 +132,7 @@ int main(int argc, char* argv[]) {
         {
             if (FLAGS_MODE == -1)
             {
+
                 capture.open("./test/echinus.mp4");
                 // 设置从视频的哪一帧开始读取
                 capture.set(cv::CAP_PROP_POS_FRAMES, 1100);
@@ -155,7 +162,7 @@ int main(int argc, char* argv[]) {
     int conut_times = 0;
 
     // UART
-    Uart uart("ttyUSB0", 115200);
+    Uart uart("ttyUSB0", 9600);
     if(FLAGS_UART) {
         bool uart_open_flag, uart_init_flag;
         uart_open_flag = uart.openFile();
@@ -174,6 +181,14 @@ int main(int argc, char* argv[]) {
     std::thread video_writer(video_write);
     capture.receive_start();  // 视频流读取线程
 
+    // marker detector
+    // 初始化的size要对应上后面输入图片的size,看到时候用哪个图片(原始的frame, net_G输出的fake_B, 或者resize后的img_vis)比较好
+    // capture.read(frame);
+	// marker::MarkerDetector marker_detector(frame.size());
+	marker::MarkerDetector marker_detector(vis_size);
+	marker::MarkerInfo marker_info_current;
+	marker::MarkerInfo marker_info;
+
     while(capture.isOpened() && !quit){
         // 获取视频流中最新帧
         bool read_ret = capture.read(frame);
@@ -187,72 +202,117 @@ int main(int argc, char* argv[]) {
         }
         cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
         // run net
-        if (FLAGS_NET_PHASE > 0) {
-            if (FLAGS_NET_PHASE < 3) {
-                cv::normalize(frame, img_float, -1, 1, cv::NORM_MINMAX, CV_32F);
-            } else if (FLAGS_NET_PHASE == 3) {
-                frame.convertTo(img_float, CV_32F);
-                img_float = img_float - 128.0;
-            }
-            img_tensor = torch::from_blob(img_float.data, {1, FLAGS_NETG_DIM, FLAGS_NETG_DIM, 3}).to(torch::kCUDA);
-            img_tensor = img_tensor.permute({0, 3, 1, 2});
-            net_input.emplace_back(img_tensor);
-            if (FLAGS_NET_PHASE == 1) {
-                fake_B = net->forward(net_input).toTensor();
+        if (FLAGS_NET_PHASE < 3)
+        {
+            cv::normalize(frame, img_float, -1, 1, cv::NORM_MINMAX, CV_32F);
+        }
+        else if (FLAGS_NET_PHASE == 3)
+        {
+            frame.convertTo(img_float, CV_32F);
+            img_float = img_float - 128.0;
+        }
+        img_tensor = torch::from_blob(img_float.data, {1, FLAGS_NETG_DIM, FLAGS_NETG_DIM, 3}).to(torch::kCUDA);
+        img_tensor = img_tensor.permute({0, 3, 1, 2});
+        net_input.emplace_back(img_tensor);
+        if (FLAGS_NET_PHASE == 1)
+        {
+            fake_B = net->forward(net_input).toTensor();
+            loc_idex = 1;
+            cudaDeviceSynchronize();
+        }
+        else if (FLAGS_NET_PHASE > 1)
+        {
+            net_output = net->forward(net_input).toTuple()->elements();
+            cudaDeviceSynchronize();
+            if (FLAGS_NET_PHASE == 2)
+            {
+                fake_B = net_output.at(0).toTensor();
                 loc_idex = 1;
-                cudaDeviceSynchronize();
-            } else if (FLAGS_NET_PHASE > 1) {
-                net_output = net->forward(net_input).toTuple()->elements();
-                cudaDeviceSynchronize();
-                if (FLAGS_NET_PHASE == 2) {
-                    fake_B = net_output.at(0).toTensor();
-                    loc_idex = 1;
-                } else if (FLAGS_NET_PHASE == 3) loc_idex = 0;
-                loc = net_output.at(loc_idex).toTensor().to(torch::kCPU);
-                conf = net_output.at(loc_idex + 1).toTensor().to(torch::kCPU);
             }
-            if (loc_idex==1) img_vis = tensor2im(fake_B);
-            else img_vis = frame;
-            net_input.pop_back();
-            // detect
-            cv::cvtColor(img_vis, img_vis, cv::COLOR_BGR2RGB);
-            cv::resize(img_vis, img_vis, vis_size);
-            target_loc = Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, log_file);
-            // print(BOLDRED, (float)target_loc[0]/vis_size.width << ", " << (float)target_loc[1]/vis_size.height << ", "<< (float)target_loc[2]/vis_size.width << ", " << (float)target_loc[3]/vis_size.height );
-            if(land){
-                if (FLAGS_UART) {
-                    if (send_byte == -1) {
-                        send_byte = Detect.uart_send(FLAGS_UART, uart);
-                        print(BOLDCYAN, "MAIN: try to uart send, return " << send_byte);
-                        if (send_byte == 6) {
-                            print(BOLDCYAN, "MAIN: uart send successfully, clock start");
-                            t_send = time(nullptr);
-                        } else {
-                            if (send_byte == 0) print(BOLDCYAN, "MAIN: uart fail to send");
-                            else if (send_byte == 1){
-                                print(BOLDCYAN, "MAIN: out of grasping area, try a second dive");
-                                second_dive = true;
-                            }
-                            land = false;
-                            grasping_done = true;
-                            max_attempt = 0;
-                            send_byte = -1;
-                        }
+            else if (FLAGS_NET_PHASE == 3)
+                loc_idex = 0;
+            loc = net_output.at(loc_idex).toTensor().to(torch::kCPU);
+            conf = net_output.at(loc_idex + 1).toTensor().to(torch::kCPU);
+        }
+        if (loc_idex == 1)
+            img_vis = tensor2im(fake_B);
+        else
+            img_vis = frame;
+        net_input.pop_back();
+        // detect
+        cv::cvtColor(img_vis, img_vis, cv::COLOR_BGR2RGB);
+        cv::resize(img_vis, img_vis, vis_size);
+
+        // detect marker
+        marker_info_current = marker_detector.detect_single_marker(img_vis, true, marker::VER_OPENCV, marker::MODE_DETECT);
+        if (marker_info_current.center.x > 0 && marker_info_current.center.y > 0)
+        {
+            marker_info = marker_info_current;
+            // 补偿偏置
+            marker_info.center.x += MARKER_OFFSET_X;
+            marker_info.center.y += MARKER_OFFSET_Y;
+        }
+        // 补偿后原点
+        cv::circle(img_vis, marker_info.center, 6, cv::Scalar(0, 0, 255), -1, 8, 0);
+        // print(BOLDYELLOW, "x: " << marker_info.center.x << " y: " << marker_info.center.y);
+
+        target_loc = Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, log_file);
+        // print(BOLDRED, (float)target_loc[0]/vis_size.width << ", " << (float)target_loc[1]/vis_size.height << ", "<< (float)target_loc[2]/vis_size.width << ", " << (float)target_loc[3]/vis_size.height );
+
+        // 坐底后的串口通信
+        if (land)
+        {
+            if (FLAGS_UART)
+            {
+                if (send_byte == -1)
+                {
+                    target_info = Detect.get_relative_position(uart);
+                    if(target_info[0] == 1000)
+                    {
+                        send_byte = 0;
+                        uart.send("No target");
                     }
-                } else {
-                    print(BOLDCYAN,  "MAIN: uart is closed");
-                    land = false;
-                    grasping_done = true;
-                    max_attempt = 0;
-                    send_byte = -1;
+                    else if(target_info[0] == 2000)
+                    {
+                    // else if(false)
+                        send_byte = 1;
+                        uart.send("No target");
+                    }
+                    else
+                    {
+                        // 发送marker相对于目标的坐标
+                        std::string send_array = "#";
+                        send_array = send_array + std::to_string(-(marker_info.center.x / vis_size.width * 100 - target_info[1])) + "," + std::to_string(-(marker_info.center.y / vis_size.height * 100 - target_info[2]))+ "\n";
+                        print(BOLDYELLOW, "t_x: " << target_info[1] << " t_y: " << target_info[2]);
+
+                        send_byte = uart.send(send_array);
+
+                        print(BOLDGREEN, "[marker relative position] " << send_array);
+                    }
+
+                    if (send_byte == 6)
+                    {
+                        print(BOLDCYAN, "MAIN: uart send successfully, clock start");
+                        t_send = time(nullptr);
+                    }
+                    else
+                    {
+                        if (send_byte == 0)
+                            print(BOLDCYAN, "MAIN: uart fail to send");
+                        else if (send_byte == 1)
+                        {
+                            print(BOLDCYAN, "MAIN: out of grasping area, try a second dive");
+                            second_dive = true;
+                        }
+                        land = false;
+                        grasping_done = true;
+                        max_attempt = 0;
+                        send_byte = -1;
+                    }
                 }
             }
-        }else{
-            cv::cvtColor(frame.clone(), img_vis, cv::COLOR_BGR2RGB);
-            cv::resize(img_vis, img_vis, vis_size);
-            cv::imshow("ResDet", img_vis);
-            det_frame_queue.push(img_vis);
-            if (land) {
+            else
+            {
                 print(BOLDCYAN, "MAIN: uart is closed");
                 land = false;
                 grasping_done = true;
@@ -260,28 +320,46 @@ int main(int argc, char* argv[]) {
                 send_byte = -1;
             }
         }
-        if (send_byte == 6){
-            if ((time(nullptr) - t_send) > 60) {
+        // 串口通信成功后
+        if (send_byte == 6)
+        {
+            if ((time(nullptr) - t_send) > 180)  // 时间超过180s, 判断再尝试一次还是放弃当前目标
+            {
+                // 再试一次
                 send_byte = -1;
-                if (++max_attempt>1) {
-                    print(BOLDCYAN, "MAIN: max_attempt>2 grasping done");
+                // TODO 这个再试一次好像没起作用
+                // 两次尝试后放弃抓取当前目标
+                if (++max_attempt > 1)
+                {
+                    print(BOLDCYAN, "MAIN: tried for 2 times, grasping done");
                     land = false;
                     grasping_done = true;
                     max_attempt = 0;
                 }
             }
+            else
+            {
+                // 发送marker相对于目标的坐标
+                std::string send_array = "#";
+                send_array = send_array + std::to_string(-(marker_info.center.x / vis_size.width * 100 - target_info[1])) + "," + std::to_string(-(marker_info.center.y / vis_size.height * 100 - target_info[2])) + "\n";
+                print(BOLDYELLOW, "t1_x: " << target_info[1] << " t1_y: " << target_info[2]);
+
+                uart.send(send_array);
+                print(BOLDGREEN, "[marker relative position] " << send_array);
+            }
         }
         int key = cv::waitKey(1) & 0xFF;
-        if (key != -1)  rov_key = key;
+        if (key != -1)
+            rov_key = key;
         parse_key(key, quit, reset_id, conf_thresh, FLAGS_K, FLAGS_R, filter);
-        if (save_a_count) {
+        if (save_a_count)
+        {
             print(BOLDWHITE, "save couting " + std::to_string(conut_times) + ": holothurian," << Detect.get_class_num(1) << ",echinus," << Detect.get_class_num(2)
                                                                                               << ",scallop," << Detect.get_class_num(3));
             std::ofstream result_file("./record/" + save_path + "/result_" + std::to_string(conut_times++) + ".txt");
             result_file << "Couting: holothurian," << Detect.get_class_num(1) << ",echinus," << Detect.get_class_num(2) << ",scallop," << Detect.get_class_num(3) << std::endl;
             result_file.close();
             save_a_count = false;
-
         }
     }
     print(BOLDWHITE, "save couting " + std::to_string(conut_times) + ": holothurian," << Detect.get_class_num(1) << ",echinus," << Detect.get_class_num(2)  << ",scallop," << Detect.get_class_num(3));
