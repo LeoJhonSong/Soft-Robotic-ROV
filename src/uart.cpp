@@ -215,7 +215,7 @@ int Uart::recv(char * rcv_buf, int data_len){
     }
 }
 
-int Uart::send(char * send_buf, int data_len){
+int Uart::send(const char * send_buf, int data_len){
     if(port_status != INITED){
         return 0;
     }
@@ -252,14 +252,8 @@ int Uart::send(std::vector<char> send_list){
 int Uart::send(std::string send_string)
 {
     int ret = 0;
-    char* send_buf = new char [send_string.size()];
-    for(int i = 0; i < send_string.size(); i++)
-    {
-        send_buf[i] = send_string[i];
-    }
     // 如果发送成功, 返回6, 否则未发送成功, ret为0
-    ret = send(send_buf, send_string.size());
-    delete [] send_buf;
+    ret = send(send_string.data(), send_string.size());
     return ret;
 }
 

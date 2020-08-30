@@ -517,6 +517,14 @@ std::vector<int> Detector::get_relative_position(Uart& uart){
     target_info.push_back((xc *100));  // 为了让xc, yc为整数, 乘100
     target_info.push_back((yc *100));
 
+    this->send_list.clear();
+    this->send_list.push_back(selected_cls);  // 1为海参, 2为海胆, 3为扇贝
+    this->send_list.push_back((char)(xc *100));  // 为了让xc, yc为整数, 乘100
+    this->send_list.push_back((char)(yc *100));
+    this->send_list.push_back((char)((dets[3].item<float>() - dets[1].item<float>()) *100));
+    this->send_list.push_back((char)((dets[4].item<float>() - dets[2].item<float>()) *100));
+    this->send_list.push_back((char)(round(max_depth/10.0)));
+
     return target_info;
 }
 

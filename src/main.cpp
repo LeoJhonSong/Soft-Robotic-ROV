@@ -41,7 +41,7 @@ DEFINE_uint32(TUB, 1, "" );
 DEFINE_int32(MODE, -1, "-2: load web camra; -1: load local video; >0: load camera" );
 DEFINE_bool(UART, false, "false: do not try to communicate by UART; true: try to communicate by UART" );
 DEFINE_bool(WITH_ROV, false, "false: do not try to connect ROV; true: try to connect to ROV" );
-DEFINE_bool(TRACK, false, "0: not use it; >0 use it" );
+DEFINE_bool(TRACK, true, "0: not use it; >0 use it" );
 DEFINE_bool(RECORD, false, "false: do not record raw and detected videos; true: record them");
 
 // for video_write thread
@@ -78,6 +78,8 @@ float adjust_scale = 1.5;
 bool detect_scallop = false;
 
 std::vector<int> target_info;
+const int MARKER_OFFSET_X = 50;
+const int MARKER_OFFSET_Y = 75;
 
 int main(int argc, char* argv[]) {
     time_t now = std::time(0);
@@ -110,7 +112,7 @@ int main(int argc, char* argv[]) {
     unsigned int num_classes = 5;
     int top_k = 200;
     float nms_thresh = 0.3;
-    std::vector<float> conf_thresh = {0.5, 0.8, 0.1, 1.5};
+    std::vector<float> conf_thresh = {0.6, 0.8, 0.3, 1.5};  // 海参, 海胆, 扇贝, 海星
     float tub_thresh = 0.3;
     bool reset_id = false;
     Detector Detect(num_classes, top_k, nms_thresh, FLAGS_TUB, FLAGS_SSD_DIM, FLAGS_TRACK);
@@ -184,6 +186,7 @@ int main(int argc, char* argv[]) {
     // capture.read(frame);
 	// marker::MarkerDetector marker_detector(frame.size());
 	marker::MarkerDetector marker_detector(vis_size);
+	marker::MarkerInfo marker_info_current;
 	marker::MarkerInfo marker_info;
 
     while(capture.isOpened() && !quit){
@@ -241,13 +244,21 @@ int main(int argc, char* argv[]) {
         cv::resize(img_vis, img_vis, vis_size);
 
         // detect marker
-        marker_info = marker_detector.detect_single_marker(img_vis, true, marker::VER_OPENCV, marker::MODE_DETECT);
+        marker_info_current = marker_detector.detect_single_marker(img_vis, true, marker::VER_OPENCV, marker::MODE_DETECT);
+        if (marker_info_current.center.x > 0 && marker_info_current.center.y > 0)
+        {
+            marker_info = marker_info_current;
+            // 补偿偏置
+            marker_info.center.x += MARKER_OFFSET_X;
+            marker_info.center.y += MARKER_OFFSET_Y;
+        }
+        // 补偿后原点
+        cv::circle(img_vis, marker_info.center, 6, cv::Scalar(0, 0, 255), -1, 8, 0);
         // print(BOLDYELLOW, "x: " << marker_info.center.x << " y: " << marker_info.center.y);
 
         target_loc = Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, log_file);
         // print(BOLDRED, (float)target_loc[0]/vis_size.width << ", " << (float)target_loc[1]/vis_size.height << ", "<< (float)target_loc[2]/vis_size.width << ", " << (float)target_loc[3]/vis_size.height );
 
-        // land = 1;  // FIXME 如果无法判断坐底取消本行注释来调试uart
         // 坐底后的串口通信
         if (land)
         {
@@ -257,16 +268,25 @@ int main(int argc, char* argv[]) {
                 {
                     target_info = Detect.get_relative_position(uart);
                     if(target_info[0] == 1000)
+                    {
                         send_byte = 0;
+                        uart.send("No target");
+                    }
                     else if(target_info[0] == 2000)
+                    {
+                    // else if(false)
                         send_byte = 1;
+                        uart.send("No target");
+                    }
                     else
                     {
                         // 发送marker相对于目标的坐标
                         std::string send_array = "#";
-                        send_array = send_array + std::to_string(marker_info.center.x / vis_size.width * 100 - target_info[1]) + "," + std::to_string(marker_info.center.y / vis_size.height * 100 - target_info[2]);
-                        // FIXME 应使用uart.send的第三种定义
+                        send_array = send_array + std::to_string(-(marker_info.center.x / vis_size.width * 100 - target_info[1])) + "," + std::to_string(-(marker_info.center.y / vis_size.height * 100 - target_info[2]))+ "\n";
+                        print(BOLDYELLOW, "t_x: " << target_info[1] << " t_y: " << target_info[2]);
+
                         send_byte = uart.send(send_array);
+
                         print(BOLDGREEN, "[marker relative position] " << send_array);
                     }
 
@@ -303,8 +323,7 @@ int main(int argc, char* argv[]) {
         // 串口通信成功后
         if (send_byte == 6)
         {
-            // TODO 时间可能需要延长
-            if ((time(nullptr) - t_send) > 60)  // 时间超过60s, 判断再尝试一次还是放弃当前目标
+            if ((time(nullptr) - t_send) > 180)  // 时间超过180s, 判断再尝试一次还是放弃当前目标
             {
                 // 再试一次
                 send_byte = -1;
@@ -322,8 +341,9 @@ int main(int argc, char* argv[]) {
             {
                 // 发送marker相对于目标的坐标
                 std::string send_array = "#";
-                send_array = send_array + std::to_string(marker_info.center.x / vis_size.width * 100 - target_info[1]) + "," + std::to_string(marker_info.center.y / vis_size.height * 100 - target_info[2]);
-                // FIXME 应使用uart.send的第三种定义
+                send_array = send_array + std::to_string(-(marker_info.center.x / vis_size.width * 100 - target_info[1])) + "," + std::to_string(-(marker_info.center.y / vis_size.height * 100 - target_info[2])) + "\n";
+                print(BOLDYELLOW, "t1_x: " << target_info[1] << " t1_y: " << target_info[2]);
+
                 uart.send(send_array);
                 print(BOLDGREEN, "[marker relative position] " << send_array);
             }
