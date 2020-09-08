@@ -302,6 +302,7 @@ int main(int argc, char* argv[]) {
                         else if (send_byte == 1)
                         {
                             print(BOLDCYAN, "MAIN: out of grasping area, try a second dive");
+                            // 这是废的
                             second_dive = true;
                         }
                         land = false;
@@ -327,7 +328,6 @@ int main(int argc, char* argv[]) {
             {
                 // 再试一次
                 send_byte = -1;
-                // TODO 这个再试一次好像没起作用
                 // 两次尝试后放弃抓取当前目标
                 if (++max_attempt > 1)
                 {

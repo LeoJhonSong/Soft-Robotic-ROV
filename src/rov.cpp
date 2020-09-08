@@ -539,87 +539,52 @@ void run_rov()
                 rov_key = 111;
             break;
         case 111: // 坐底至目标处, o
-            // TODO 此处策略要改
             print(BOLDYELLOW, "ROV: aiming");
-            while ((!manual_stop))
+            // FIXME 跳动超过x次, 放弃靠近目标, 转case13 (坐底)
+            int chances = 0;
+            while ((!manual_stop) && chances < 3)
             {
-                delay(1); // 0.1S
-                // 当目标丢失时跳出循环到case13 坐底
+                chances++;
+                delay(1);  // 限制循环频率, 避免占用过高CPU
+                // 目标丢失, 放弃靠近目标, 转case13 (坐底)
                 if (target_loc.at(2) == 0 || target_loc.at(3) == 0)
                 {
-                    dive_ready = false;
-                    if (second_dive)
-                        second_dive_lost = true;
+                    rov_key = 13;
                     break;
                 }
-                if (second_dive)
+                float target_x = std::abs(target_loc.at(0) / vis_size.width - 0.5);
+                float target_y = std::abs(target_loc.at(1) / vis_size.height - 0.5);
+                // FIXME 如果目标在一个较大的阈值框外, 设置指向图像中心的水平满速; 如果目标在阈值框内, 水平速度置零. 同时全速坐底
+                int speed_x = 0;
+                int speed_y = 0;
+                if(target_x > 0.2 || target_y > 0.2)
                 {
-                    y_ref = 0.6;
-                    height_thresh = 0.2;
+                    speed_x = target_x / std::min(target_x, target_y) *  100;
+                    speed_y = target_y / std::min(target_x, target_y) *  100;
+                }
+                while(!land)
+                {
+                    server.sendMsg(1, 0, speed_x, speed_y, 0, -100);
+                    server.recvMsg();
+                    land = server.is_landed(land);
+                }
+                // 如果目标进入抓取阈值框, 转case13 (坐底)进行抓取; 否则记录目标相对与图像中心的方向
+                target_x = std::abs(target_loc.at(0) / vis_size.width - 0.5);
+                target_y = std::abs(target_loc.at(1) / vis_size.height - 0.5);
+                if(target_x > 0.45 || target_y > 0.45)
+                {
+                    speed_x = target_x / std::min(target_x, target_y) *  100;
+                    speed_y = target_y / std::min(target_x, target_y) *  100;
                 }
                 else
                 {
-                    y_ref = 0.5;
-                    height_thresh = 0.2;
-                }
-                // 先判定是否有左右漂移及漂移值, 向左为正. 要注意图像坐标系原点在图像左上角
-                if (target_loc.at(0) < (float)vis_size.width * (x_ref - width_thresh / 2) ||
-                    target_loc.at(0) > (float)vis_size.width * (x_ref + width_thresh / 2))
-                {
-                    drift_width = vis_size.width * x_ref - target_loc.at(0);
-                }
-                else
-                    drift_width = 0;
-                // 然后判断是否有前后漂移及漂移值, 向上为正
-                if (target_loc.at(1) < (float)vis_size.height * (y_ref - height_thresh / 2) ||
-                    target_loc.at(1) > (float)vis_size.height * (y_ref + height_thresh / 2))
-                    drift_height = vis_size.height * y_ref - target_loc.at(1);
-                else
-                    drift_height = 0;
-                // 当目标在ROI内时全速下潜
-                if (drift_width == 0 && drift_height == 0)
-                {
-                    dive_ready = true;
+                    rov_key = 13;
                     break;
                 }
-                // 比较左右漂移值和前后漂移值大小, 优先微调漂移更严重方向
-                else if (std::abs(drift_width) >= std::abs(drift_height))
-                {
-                    // 目标在视野中偏左则左转, 偏右则右转, 注意左右偏移时用转动来微调
-                    if (drift_width > 0)
-                    {
-                        print(BOLDYELLOW, "ROV: SEND_ADJUST_LEFT");
-                        server.sendMsg(SEND_ADJUST_LEFT);
-                    }
-                    else
-                    {
-                        print(BOLDYELLOW, "ROV: SEND_ADJUST_RIGHT");
-                        server.sendMsg(SEND_ADJUST_RIGHT);
-                    }
-                }
-                // 偏前则前移, 偏后则后移
-                else
-                {
-                    if (drift_height > 0)
-                    {
-                        print(BOLDYELLOW, "ROV: SEND_ADJUST_FORWARD");
-                        server.sendMsg(SEND_ADJUST_FORWARD);
-                    }
-                    else
-                    {
-                        print(BOLDYELLOW, "ROV: SEND_ADJUST_BACKWARD");
-                        server.sendMsg(SEND_ADJUST_BACKWARD);
-                    }
-                }
+                // FIXME 向记录方向水平全速, 全速上浮x秒
+                server.sendMsg(1, 0, speed_x, speed_y, 0, 100);
+                delay_ms(1000);
             }
-            if (manual_stop)
-                rov_key = 32;
-            else if (dive_ready)
-                rov_key = 13;
-            else if (second_dive_lost)
-                rov_key = 117;
-            else
-                rov_key = 99;
             break;
         default:
             server.sendMsg(SEND_SLEEP);
