@@ -8,4 +8,7 @@
         "glog"
     ],
     "cmake.configureOnEdit": false,
+    "files.associations": {
+        "*.tcc": "cpp"
+    },
 }

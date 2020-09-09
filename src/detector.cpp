@@ -506,7 +506,7 @@ std::vector<int> Detector::get_relative_position(Uart& uart){
     // FIXME 这个阈值不知道需不需要调大
     // 如果目标不在横向距图像中心0.15个宽, 纵向距离图像下边0.5个高的阈值框内, 返回1
     // if(std::abs(xc-0.5) > 0.15 || std::abs(yc-1) > 0.5)
-    if(std::abs(xc-0.5) > 0.45 || std::abs(yc-1) > 0.9)
+    if(std::abs(xc-0.5) > 0.25 || std::abs(yc-0.8) > 0.2)
     {
         // 对应send_byte == 1
         target_info.push_back(2000);

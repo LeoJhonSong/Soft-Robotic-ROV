@@ -228,7 +228,12 @@ extern float max_depth, curr_depth;
 bool TCP_Server::is_landed(bool land)
 {
     this->depth_diff = this->depth - this->pre_depth;
+    if (this->depth == 0)
+    {
+        return false;
+    }
     this->pre_depth = this->depth;
+    print(RED, "depth: " << this->pre_depth);
     if (land)
     { // 更新海底深度
     }
@@ -296,6 +301,7 @@ void run_rov()
         server.sendMsg(SEND_LIGHTS_ON);
     }
     // 进入ROV动作控制循环, 整个比赛过程中都应当处于这个循环中
+    int chances = 0;
     while (run_rov_flag)
     {
         server.recvMsg();
@@ -374,10 +380,12 @@ void run_rov()
             // 当未人为操作且软体臂抓取未完成时持续坐底
             while (!manual_stop && !grasping_done && !second_dive)
             {
+                print(YELLOW, "hello");
                 server.sendMsg(SEND_DOWN);
                 server.recvMsg();
                 if (server.depth > 0)
                     land = server.is_landed(land); // 判定是否到达海底
+                print(RED, "land: " << land);
             }
             server.land_count = 0;
             land = false; // 结束坐底
@@ -541,7 +549,6 @@ void run_rov()
         case 111: // 坐底至目标处, o
             print(BOLDYELLOW, "ROV: aiming");
             // FIXME 跳动超过x次, 放弃靠近目标, 转case13 (坐底)
-            int chances = 0;
             while ((!manual_stop) && chances < 3)
             {
                 chances++;
@@ -549,41 +556,97 @@ void run_rov()
                 // 目标丢失, 放弃靠近目标, 转case13 (坐底)
                 if (target_loc.at(2) == 0 || target_loc.at(3) == 0)
                 {
+                    print(RED, "aaa");
                     rov_key = 13;
                     break;
                 }
-                float target_x = std::abs(target_loc.at(0) / vis_size.width - 0.5);
-                float target_y = std::abs(target_loc.at(1) / vis_size.height - 0.5);
+                // float target_x = std::abs(target_loc.at(0) / vis_size.width - 0.5);
+                // float target_y = std::abs(target_loc.at(1) / vis_size.height - 1.0);
+                float target_x = float(target_loc.at(0)) / vis_size.width - 0.5;
+                print(RED, target_loc.at(0));
+                float target_y = float(target_loc.at(1)) / vis_size.height - 0.8;
                 // FIXME 如果目标在一个较大的阈值框外, 设置指向图像中心的水平满速; 如果目标在阈值框内, 水平速度置零. 同时全速坐底
                 int speed_x = 0;
                 int speed_y = 0;
-                if(target_x > 0.2 || target_y > 0.2)
+                // if(std::abs(target_x) > 0.5 || std::abs(target_y) > 1.0)
+                // {
+                //     speed_x = target_x / std::min(target_x, target_y) *  100;
+                //     speed_y = target_y / std::min(target_x, target_y) *  100;
+                // }
+                // if(target_x > 0.4)
+                // {
+                //     speed_x = target_x / std::min(target_x, target_y) *  100;
+                //     speed_y = target_y / std::min(target_x, target_y) *  100;
+                // }
+                while (std::abs(target_x) > 0.2)
                 {
-                    speed_x = target_x / std::min(target_x, target_y) *  100;
-                    speed_y = target_y / std::min(target_x, target_y) *  100;
+                    target_x = float(target_loc.at(0)) / vis_size.width - 0.5;
+                    speed_x = - (1/0.5) * target_x * 100;
+                    delay_ms(500);
+                    server.sendMsg(1, 0, speed_x, 0, 0, -100);
                 }
+                
+                // if (std::abs(target_x) > 0.2)
+                // {
+                //     speed_x = - (1/0.5) * target_x * 100;
+                //     print(YELLOW, "speed_x: " << speed_x);
+                // }
+
+                if (std::abs(target_y) > 0.15)
+                {
+                    speed_y = -target_y * 100;
+                    print(YELLOW, "speed_y: " << speed_y);
+                }
+                
                 while(!land)
                 {
-                    server.sendMsg(1, 0, speed_x, speed_y, 0, -100);
+                    print(RED, "target_loc_0: " << target_loc.at(0));
+                    // server.sendMsg(1, 0, speed_x, speed_y, 0, -100);
+                    server.sendMsg(1, 0, 0, speed_y, 0, -100);
                     server.recvMsg();
                     land = server.is_landed(land);
                 }
+                print(BLUE, "land!!!!!!!!!!!!!");
                 // 如果目标进入抓取阈值框, 转case13 (坐底)进行抓取; 否则记录目标相对与图像中心的方向
-                target_x = std::abs(target_loc.at(0) / vis_size.width - 0.5);
-                target_y = std::abs(target_loc.at(1) / vis_size.height - 0.5);
-                if(target_x > 0.45 || target_y > 0.45)
+                target_x = float(target_loc.at(0)) / vis_size.width - 0.5;
+                // print(RED, target_loc.at(0));
+                target_y = float(target_loc.at(1)) / vis_size.height - 0.8;
+                // target_x = std::abs(float(target_loc.at(0)) / vis_size.width - 0.5);
+                // target_y = std::abs(float(target_loc.at(1)) / vis_size.height - 0.8);
+                speed_x = 0;
+                speed_y = 0;
+                if(std::abs(target_x) > 0.25 || std::abs(target_y) > 0.2)
                 {
-                    speed_x = target_x / std::min(target_x, target_y) *  100;
-                    speed_y = target_y / std::min(target_x, target_y) *  100;
+                    print(RED, "No");
+                    speed_x = -(1/0.5) * target_x * 100 * 2;
+                    speed_y = -target_y * 100 * 2;
+                    if (speed_x > 100)
+                        speed_x = 100;
+                    if (speed_y > 100)
+                    {
+                        speed_y = 100;
+                    }
+                    
+                    // speed_x = target_x / std::min(target_x, target_y) *  100;
+                    // speed_y = target_y / std::min(target_x, target_y) *  100;
                 }
                 else
                 {
+                    print(RED, "land and grap");
                     rov_key = 13;
                     break;
                 }
                 // FIXME 向记录方向水平全速, 全速上浮x秒
-                server.sendMsg(1, 0, speed_x, speed_y, 0, 100);
-                delay_ms(1000);
+                if (speed_x > speed_y)
+                {
+                    server.sendMsg(1, 0, 0, speed_y, 0, 100);
+                }
+                else
+                {
+                    server.sendMsg(1, 0, speed_x, 0, 0, 100);
+                }
+                
+                delay_ms(1500);
             }
             break;
         default:

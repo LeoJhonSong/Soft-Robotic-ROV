@@ -5,11 +5,11 @@
 --K=100 \
 --R=50 \
 --NET_PHASE=2 \
---MODE=-1 \
+--MODE=-2 \
 --SSD_DIM=320 \
 --NETG_DIM=256 \
 --TUB=1 \
---UART=false \
---WITH_ROV=false \
+--UART=true \
+--WITH_ROV=true \
 --TRACK=true \
 --RECORD=false

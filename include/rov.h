@@ -26,41 +26,41 @@ extern float adjust_scale;
 
 
 //                                  环 灯    前后  左右   转向  上下
-#define SEND_LIGHTS_ON              1, 1,    0,    0,    0,    0
-#define SEND_LIGHTS_OFF             1, 2,    0,    0,    0,    0
-#define SEND_FORWARD                1, 0,   99,    0,    1,    0
-#define SEND_BACKWARD               1, 0, -100,    0,    1,    0
-#define SEND_LEFT                   1, 0,    0,   99,    1,    0
-#define SEND_RIGHT                  1, 0,    0, -100,    1,    0
-#define SEND_TURN_LEFT              1, 0,    0,    0,   99,    0
-#define SEND_TURN_RIGHT             1, 0,    0,    0, -100,    0
-#define SEND_UP                     0, 0,    0,    0,    1,   99
-#define SEND_DOWN                   0, 0,    0,    0,    1, -100
-#define SEND_HALF_FORWARD           1, 0,   40 * half_scale,    0 * half_scale,    1,    0
-#define SEND_HALF_BACKWARD          1, 0,  -45 * half_scale,    0 * half_scale,    1,    0
-#define SEND_HALF_LEFT              1, 0,    0 * half_scale,   45 * half_scale,    1,    0
-#define SEND_HALF_RIGHT             1, 0,    0 * half_scale,  -40 * half_scale,    1,    0
-#define SEND_HALF_TURN_LEFT         1, 0,    0,    0,   30,    0
-#define SEND_HALF_TURN_RIGHT        1, 0,    0,    0,  -30,    0
-#define SEND_HALF_UP                0, 0,    0,    0,    1,   50
-#define SEND_HALF_DOWN              0, 0,    0,    0,    1,  -50
-#define SEND_SLEEP                  1, 0,    0,    0,    1,    0
-#define SEND_DIVE_FORWARD           1, 0,   37,    0,    1, -100
-#define SEND_DIVE_BACKWARD          1, 0,  -37,    0,    1, -100
-#define SEND_DIVE_LEFT              1, 0,    0,   37,    1, -100
-#define SEND_DIVE_RIGHT             1, 0,    0,  -37,    1, -100
-#define SEND_DIVE_TURN_LEFT         1, 0,    0,    0,   37, -100
-#define SEND_DIVE_TURN_RIGHT        1, 0,    0,    0,  -37, -100
-#define SEND_ADJUST_FORWARD         1, 0,   33 * adjust_scale,    0 * adjust_scale,    1,    0
-#define SEND_ADJUST_BACKWARD        1, 0,  -33 * adjust_scale,    0 * adjust_scale,    1,    0
-#define SEND_ADJUST_LEFT            1, 0,    0 * adjust_scale,   45 * adjust_scale,    1,    0
-#define SEND_ADJUST_RIGHT           1, 0,    0 * adjust_scale,  -33 * adjust_scale,    1,    0
-#define SEND_ADJUST_TURN_LEFT       1, 0,    0,    0,   25,    0
-#define SEND_ADJUST_TURN_RIGHT      1, 0,    0,    0,  -25,    0
-#define SEND_DIVE_ADJUST_FORWARD    1,  0,   25,   0,    1,  -50
-#define SEND_DIVE_ADJUST_BACKWARD   1,  0,  -25,   0,    1,  -50
-#define SEND_DIVE_ADJUST_LEFT       1,  0,    0,  37,    1,  -50
-#define SEND_DIVE_ADJUST_RIGHT      1,  0,    0, -25,    1,  -50
+#define SEND_LIGHTS_ON              0, 1,    0,    0,    0,    0
+#define SEND_LIGHTS_OFF             0, 2,    0,    0,    0,    0
+#define SEND_FORWARD                0, 0,   99,    0,    1,    0
+#define SEND_BACKWARD               0, 0, -100,    0,    1,    0
+#define SEND_LEFT                   0, 0,    0,   99,    1,    0
+#define SEND_RIGHT                  0, 0,    0, -100,    1,    0
+#define SEND_TURN_LEFT              0, 0,    0,    0,   99,    0
+#define SEND_TURN_RIGHT             0, 0,    0,    0, -100,    0
+#define SEND_UP                     0, 0,    0,    0,    0,   99
+#define SEND_DOWN                   0, 0,    0,    0,    0, -100
+#define SEND_HALF_FORWARD           0, 0,   40 * half_scale,    0 * half_scale,    1,    0
+#define SEND_HALF_BACKWARD          0, 0,  -45 * half_scale,    0 * half_scale,    1,    0
+#define SEND_HALF_LEFT              0, 0,    0 * half_scale,   45 * half_scale,    1,    0
+#define SEND_HALF_RIGHT             0, 0,    0 * half_scale,  -40 * half_scale,    1,    0
+#define SEND_HALF_TURN_LEFT         0, 0,    0,    0,   30,    0
+#define SEND_HALF_TURN_RIGHT        0, 0,    0,    0,  -30,    0
+#define SEND_HALF_UP                0, 0,    0,    0,    0,   50
+#define SEND_HALF_DOWN              0, 0,    0,    0,    0,  -50
+#define SEND_SLEEP                  0, 0,    0,    0,    0,    0
+#define SEND_DIVE_FORWARD           0, 0,   37,    0,    1, -100
+#define SEND_DIVE_BACKWARD          0, 0,  -37,    0,    1, -100
+#define SEND_DIVE_LEFT              0, 0,    0,   37,    1, -100
+#define SEND_DIVE_RIGHT             0, 0,    0,  -37,    1, -100
+#define SEND_DIVE_TURN_LEFT         0, 0,    0,    0,   37, -100
+#define SEND_DIVE_TURN_RIGHT        0, 0,    0,    0,  -37, -100
+#define SEND_ADJUST_FORWARD         0, 0,   33 * adjust_scale,    0 * adjust_scale,    1,    0
+#define SEND_ADJUST_BACKWARD        0, 0,  -33 * adjust_scale,    0 * adjust_scale,    1,    0
+#define SEND_ADJUST_LEFT            0, 0,    0 * adjust_scale,   45 * adjust_scale,    1,    0
+#define SEND_ADJUST_RIGHT           0, 0,    0 * adjust_scale,  -33 * adjust_scale,    1,    0
+#define SEND_ADJUST_TURN_LEFT       0, 0,    0,    0,   25,    0
+#define SEND_ADJUST_TURN_RIGHT      0, 0,    0,    0,  -25,    0
+#define SEND_DIVE_ADJUST_FORWARD    0,  0,   25,   0,    1,  -50
+#define SEND_DIVE_ADJUST_BACKWARD   0,  0,  -25,   0,    1,  -50
+#define SEND_DIVE_ADJUST_LEFT       0,  0,    0,  37,    1,  -50
+#define SEND_DIVE_ADJUST_RIGHT      0,  0,    0, -25,    1,  -50
 
 
 class TCP_Server {
