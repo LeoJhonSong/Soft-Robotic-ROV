@@ -102,7 +102,25 @@ std::vector<marker::MarkerInfo> marker::MarkerDetector::detect_markers(cv::Mat &
     }
     return std::vector<marker::MarkerInfo>();
 }
-
+marker::MarkerInfo marker::MarkerDetector::detect_average_marker(cv::Mat &img, bool visible, char ver, char mode)
+{
+    std::vector<marker::MarkerInfo> resultes = detect_markers(img, visible, ver, mode);
+    if (resultes.empty())
+    {
+        return marker::MarkerInfo();
+    }
+    cv::Point2f marker_centers_average(0, 0);
+    for (int i = 0; i < resultes.size(); i++)
+    {
+        cv::Point2f true_center = (resultes.at(i).center + marker::MARKER_OFFSETS.at(resultes.at(i).id));
+        marker_centers_average.x += true_center.x;
+        marker_centers_average.y += true_center.y;
+        cv::circle(img, true_center, 6, cv::Scalar(0, 0, 255), 1, 8, 0);
+    }
+    marker_centers_average.x /= resultes.size();
+    marker_centers_average.y /= resultes.size();
+    return marker::MarkerInfo(1, marker_centers_average);
+}
 // 检测所有marker --aruco version
 std::vector<marker::MarkerInfo> marker::MarkerDetector::_detect_markers_aruco(cv::Mat &img, bool visible, bool track)
 {

@@ -75,7 +75,7 @@ float max_depth = 0;
 float curr_depth = 0;
 float half_scale = 1.5;
 float adjust_scale = 1.5;
-bool detect_scallop = false;
+bool detect_scallop = true;
 
 std::vector<int> target_info;
 const int MARKER_OFFSET_X = 50;
@@ -244,13 +244,14 @@ int main(int argc, char* argv[]) {
         cv::resize(img_vis, img_vis, vis_size);
 
         // detect marker
-        marker_info_current = marker_detector.detect_single_marker(img_vis, true, marker::VER_OPENCV, marker::MODE_DETECT);
+        // marker_info_current = marker_detector.detect_single_marker(img_vis, true, marker::VER_OPENCV, marker::MODE_DETECT);
+        marker_info_current = marker_detector.detect_average_marker(img_vis, true, marker::VER_OPENCV, marker::MODE_DETECT);
         if (marker_info_current.center.x > 0 && marker_info_current.center.y > 0)
         {
             marker_info = marker_info_current;
-            // 补偿偏置
-            marker_info.center.x += MARKER_OFFSET_X;
-            marker_info.center.y += MARKER_OFFSET_Y;
+            // // 补偿偏置
+            // marker_info.center.x += MARKER_OFFSET_X;
+            // marker_info.center.y += MARKER_OFFSET_Y;
         }
         // 补偿后原点
         cv::circle(img_vis, marker_info.center, 6, cv::Scalar(0, 0, 255), -1, 8, 0);
@@ -324,7 +325,7 @@ int main(int argc, char* argv[]) {
         // 串口通信成功后
         if (send_byte == 6)
         {
-            if ((time(nullptr) - t_send) > 180)  // 时间超过180s, 判断再尝试一次还是放弃当前目标
+            if ((time(nullptr) - t_send) > 60)  // 时间超过180s, 判断再尝试一次还是放弃当前目标
             {
                 // 再试一次
                 send_byte = -1;

@@ -578,31 +578,48 @@ void run_rov()
                 //     speed_x = target_x / std::min(target_x, target_y) *  100;
                 //     speed_y = target_y / std::min(target_x, target_y) *  100;
                 // }
-                while (std::abs(target_x) > 0.2)
-                {
-                    target_x = float(target_loc.at(0)) / vis_size.width - 0.5;
-                    speed_x = - (1/0.5) * target_x * 100;
-                    delay_ms(500);
-                    server.sendMsg(1, 0, speed_x, 0, 0, -100);
-                }
+                // while (std::abs(target_x) > 0.2)
+                // {
+                //     target_x = float(target_loc.at(0)) / vis_size.width - 0.5;
+                //     speed_x = - (1/0.5) * target_x * 100;
+                //     delay_ms(500);
+                //     server.sendMsg(0, 0, speed_x, 0, 0, -100);
+                //     print(RED, "target_x: " << target_x);
+                // }
                 
                 // if (std::abs(target_x) > 0.2)
                 // {
                 //     speed_x = - (1/0.5) * target_x * 100;
                 //     print(YELLOW, "speed_x: " << speed_x);
                 // }
-
-                if (std::abs(target_y) > 0.15)
+                if (std::abs(target_y) > 0.20)
                 {
-                    speed_y = -target_y * 100;
-                    print(YELLOW, "speed_y: " << speed_y);
+                    speed_y = -target_y * 100 * 0.6;
+                    if (speed_y > 100)
+                    {
+                        speed_y = 100;
+                    }
                 }
-                
+                else if (std::abs(target_x) > 0.25)
+                {
+                    speed_x = -(1/0.5) * target_x * 100;
+                    if (speed_x > 100)
+                        speed_x = 100;
+                }
+                // if (std::abs(target_y) > 0.15)
+                // {
+                //     speed_y = -target_y * 100 * 2;
+                //     if (speed_y > 100)
+                //         speed_y = 100;
+                //     print(YELLOW, "speed_y: " << speed_y);
+                // }
+                speed_y = std::abs(speed_x) > std::abs(speed_y) ? 0 : speed_y;
+                speed_x = std::abs(speed_x) > std::abs(speed_y) ? speed_x : 0;
                 while(!land)
                 {
+                    print(YELLOW, "speed_x:" << speed_x << "speed_y: " << speed_y);
                     print(RED, "target_loc_0: " << target_loc.at(0));
-                    // server.sendMsg(1, 0, speed_x, speed_y, 0, -100);
-                    server.sendMsg(1, 0, 0, speed_y, 0, -100);
+                    server.sendMsg(1, 0, speed_y, speed_x, 0, -100);
                     server.recvMsg();
                     land = server.is_landed(land);
                 }
@@ -618,15 +635,18 @@ void run_rov()
                 if(std::abs(target_x) > 0.25 || std::abs(target_y) > 0.2)
                 {
                     print(RED, "No");
-                    speed_x = -(1/0.5) * target_x * 100 * 2;
-                    speed_y = -target_y * 100 * 2;
-                    if (speed_x > 100)
-                        speed_x = 100;
-                    if (speed_y > 100)
-                    {
-                        speed_y = 100;
-                    }
-                    
+                    speed_x = -(1/0.5) * target_x * 100;
+                    speed_y = -target_y * 100;
+                    speed_x = std::abs(speed_x) > 40 ? speed_x : 40;
+                    speed_x = std::abs(speed_x) > 100 ? 100 : speed_x;
+                    speed_y = std::abs(speed_y) > 40 ? speed_y : 40;
+                    speed_y = std::abs(speed_y) > 100 ? 100 : speed_y;
+                    // if (speed_x > 100)
+                    //     speed_x = 100;
+                    // if (speed_y > 100)
+                    // {
+                    //     speed_y = 100;
+                    // }
                     // speed_x = target_x / std::min(target_x, target_y) *  100;
                     // speed_y = target_y / std::min(target_x, target_y) *  100;
                 }
@@ -637,13 +657,14 @@ void run_rov()
                     break;
                 }
                 // FIXME 向记录方向水平全速, 全速上浮x秒
-                if (speed_x > speed_y)
+                print(GREEN, "speed_x:" << speed_x << "speed_y: " << speed_y);
+                if (std::abs(speed_x) > std::abs(speed_y))
                 {
-                    server.sendMsg(1, 0, 0, speed_y, 0, 100);
+                    server.sendMsg(0, 0, 0, speed_x, 0, 99);
                 }
                 else
                 {
-                    server.sendMsg(1, 0, speed_x, 0, 0, 100);
+                    server.sendMsg(0, 0, speed_y, 0, 0, 99);
                 }
                 
                 delay_ms(1500);

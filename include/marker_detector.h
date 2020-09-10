@@ -15,6 +15,11 @@ namespace marker
     const char MODE_DETECT = 2;
     const char MODE_TRACK = 3;
     
+    const std::map<int, cv::Point2f> MARKER_OFFSETS = {
+        {39, cv::Point2f(120, 110)},
+        {35, cv::Point2f(-120, 160)}
+    };
+
     struct MarkerInfo
     {
         int id;
@@ -26,6 +31,13 @@ namespace marker
         {
             id = -1;
             center = cv::Point2f(0.0, 0.0);
+            Rvec = (cv::Mat_<float>(3, 1) << 0, 0, 0);
+            Tvec = (cv::Mat_<float>(3, 1) << 0, 0, 0);
+        }
+        MarkerInfo(int _id, cv::Point2f _center)
+        {
+            id = _id;
+            center = _center;
             Rvec = (cv::Mat_<float>(3, 1) << 0, 0, 0);
             Tvec = (cv::Mat_<float>(3, 1) << 0, 0, 0);
         }
@@ -103,6 +115,7 @@ namespace marker
         void camera_resize(cv::Size new_size);
         void set_dict_o(cv::aruco::PREDEFINED_DICTIONARY_NAME dict_o);
         marker::MarkerInfo detect_single_marker(cv::Mat &img, bool visible=true, char ver=marker::VER_ARUCO, char mode=marker::MODE_DETECT);
+        marker::MarkerInfo detect_average_marker(cv::Mat &img, bool visible=true, char ver=marker::VER_ARUCO, char mode=marker::MODE_DETECT);
         std::vector<marker::MarkerInfo> detect_markers(cv::Mat &img, bool visible=true, char ver=marker::VER_ARUCO, char mode=marker::MODE_DETECT);
     };
 };

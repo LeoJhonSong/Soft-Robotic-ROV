@@ -28,10 +28,10 @@ extern float adjust_scale;
 //                                  环 灯    前后  左右   转向  上下
 #define SEND_LIGHTS_ON              0, 1,    0,    0,    0,    0
 #define SEND_LIGHTS_OFF             0, 2,    0,    0,    0,    0
-#define SEND_FORWARD                0, 0,   99,    0,    1,    0
-#define SEND_BACKWARD               0, 0, -100,    0,    1,    0
-#define SEND_LEFT                   0, 0,    0,   99,    1,    0
-#define SEND_RIGHT                  0, 0,    0, -100,    1,    0
+#define SEND_FORWARD                0, 0,   99,    0,    0,    0
+#define SEND_BACKWARD               0, 0, -100,    0,    0,    0
+#define SEND_LEFT                   0, 0,    0,   99,    0,    0
+#define SEND_RIGHT                  0, 0,    0, -100,    0,    0
 #define SEND_TURN_LEFT              0, 0,    0,    0,   99,    0
 #define SEND_TURN_RIGHT             0, 0,    0,    0, -100,    0
 #define SEND_UP                     0, 0,    0,    0,    0,   99
