@@ -12,6 +12,11 @@ extern std::queue<std::pair<cv::Mat, int>> img_queue;
 extern float max_depth, curr_depth;
 extern int send_byte;
 extern bool detect_scallop;
+extern const float GRAP_THRESH_XC;
+extern const float GRAP_THRESH_XW;
+extern const float GRAP_THRESH_YC;
+extern const float GRAP_THRESH_YW;
+const int MATCHED_TIMES_THRESH = 15;
 
 Detector::~Detector()=default;
 
@@ -382,7 +387,7 @@ std::vector<int> Detector::visualization(cv::Mat& img, std::ofstream& log_file){
                     int x2 = boxes[i][2].item<int>();
                     int y2 = boxes[i][3].item<int>();
                     if ((y1 + y2)/2.0 > img.rows * 0.9) continue;
-                    if (this->track && this->track_cl == 0 && score > 0.7 && matched_times[i].item<int>() > 30) {
+                    if (this->track && this->track_cl == 0 && score > 0.7 && matched_times[i].item<int>() > MATCHED_TIMES_THRESH) {
                         this->track_cl = j;
                         this->track_id = id;
                     }
@@ -419,7 +424,7 @@ std::vector<int> Detector::visualization(cv::Mat& img, std::ofstream& log_file){
                     1, this->color.at(4), 2);
     }
     cv::imshow("ResDet", img);
-    det_frame_queue.push(img);
+    // det_frame_queue.push(img);
     save_a_frame = false;
     return loc;
 }
@@ -503,10 +508,8 @@ std::vector<int> Detector::get_relative_position(Uart& uart){
     // xc, yc为0-1的数
     float xc = (dets[1].item<float>() + dets[3].item<float>()) / 2;
     float yc = (dets[2].item<float>() + dets[4].item<float>()) / 2;
-    // FIXME 这个阈值不知道需不需要调大
-    // 如果目标不在横向距图像中心0.15个宽, 纵向距离图像下边0.5个高的阈值框内, 返回1
-    // if(std::abs(xc-0.5) > 0.15 || std::abs(yc-1) > 0.5)
-    if(std::abs(xc-0.5) > 0.25 || std::abs(yc-0.8) > 0.2)
+    // 如果目标不在抓取阈值框内, 返回1
+    if(std::abs(xc-GRAP_THRESH_XC) > GRAP_THRESH_XW || std::abs(yc-GRAP_THRESH_YC) > GRAP_THRESH_YW)
     {
         // 对应send_byte == 1
         target_info.push_back(2000);

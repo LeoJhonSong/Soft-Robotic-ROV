@@ -78,8 +78,13 @@ float adjust_scale = 1.5;
 bool detect_scallop = true;
 
 std::vector<int> target_info;
+const int TIME_PER_GRAP = 90;
 const int MARKER_OFFSET_X = 50;
 const int MARKER_OFFSET_Y = 75;
+extern const float GRAP_THRESH_XC = 0.5;
+extern const float GRAP_THRESH_XW = 0.2;
+extern const float GRAP_THRESH_YC = 0.75;
+extern const float GRAP_THRESH_YW = 0.15;
 
 int main(int argc, char* argv[]) {
     time_t now = std::time(0);
@@ -188,7 +193,8 @@ int main(int argc, char* argv[]) {
 	marker::MarkerDetector marker_detector(vis_size);
 	marker::MarkerInfo marker_info_current;
 	marker::MarkerInfo marker_info;
-
+    int i = 0;
+    int key_1 = -1;
     while(capture.isOpened() && !quit){
         // 获取视频流中最新帧
         bool read_ret = capture.read(frame);
@@ -256,18 +262,35 @@ int main(int argc, char* argv[]) {
         // 补偿后原点
         cv::circle(img_vis, marker_info.center, 6, cv::Scalar(0, 0, 255), -1, 8, 0);
         // print(BOLDYELLOW, "x: " << marker_info.center.x << " y: " << marker_info.center.y);
+        cv::rectangle(
+            img_vis, 
+            cv::Point2f(vis_size.width*(GRAP_THRESH_XC-GRAP_THRESH_XW), vis_size.height*(GRAP_THRESH_YC-GRAP_THRESH_YW)),
+            cv::Point2f(vis_size.width*(GRAP_THRESH_XC+GRAP_THRESH_XW), vis_size.height*(GRAP_THRESH_YC+GRAP_THRESH_YW)),
+            cv::Scalar(0, 0, 255),
+            2
+        );
 
         target_loc = Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, log_file);
         // print(BOLDRED, (float)target_loc[0]/vis_size.width << ", " << (float)target_loc[1]/vis_size.height << ", "<< (float)target_loc[2]/vis_size.width << ", " << (float)target_loc[3]/vis_size.height );
-
+        
+        // 半自主时 按空格开始抓取
+        if (!FLAGS_WITH_ROV)
+        {
+            if (key_1 == ' ')
+            {
+                land = true;
+            }
+        }
         // 坐底后的串口通信
-        if (land)
+        if (land && ((!grasping_done) || (!FLAGS_WITH_ROV)))//
         {
             if (FLAGS_UART)
             {
                 if (send_byte == -1)
                 {
+                    print(RED, "target_loc: " << target_loc);
                     target_info = Detect.get_relative_position(uart);
+                    print(RED, "target_info: " << target_info);
                     if(target_info[0] == 1000)
                     {
                         send_byte = 0;
@@ -283,7 +306,10 @@ int main(int argc, char* argv[]) {
                     {
                         // 发送marker相对于目标的坐标
                         std::string send_array = "#";
-                        send_array = send_array + std::to_string(-(marker_info.center.x / vis_size.width * 100 - target_info[1])) + "," + std::to_string(-(marker_info.center.y / vis_size.height * 100 - target_info[2]))+ "\n";
+                        send_array = send_array + std::to_string(-(marker_info.center.x / vis_size.width * 100 - target_info[1])) + "," + 
+                                    std::to_string(-(marker_info.center.y / vis_size.height * 100 - target_info[2]))+ "," + 
+                                    // std::to_string(curr_depth) + 
+                                    "\n";
                         print(BOLDYELLOW, "t_x: " << target_info[1] << " t_y: " << target_info[2]);
 
                         send_byte = uart.send(send_array);
@@ -325,8 +351,9 @@ int main(int argc, char* argv[]) {
         // 串口通信成功后
         if (send_byte == 6)
         {
-            if ((time(nullptr) - t_send) > 60)  // 时间超过180s, 判断再尝试一次还是放弃当前目标
+            if ((time(nullptr) - t_send) > TIME_PER_GRAP)  // 时间超过180s, 判断再尝试一次还是放弃当前目标
             {
+                print(YELLOW, "\none done");
                 // 再试一次
                 send_byte = -1;
                 // 两次尝试后放弃抓取当前目标
@@ -342,14 +369,37 @@ int main(int argc, char* argv[]) {
             {
                 // 发送marker相对于目标的坐标
                 std::string send_array = "#";
-                send_array = send_array + std::to_string(-(marker_info.center.x / vis_size.width * 100 - target_info[1])) + "," + std::to_string(-(marker_info.center.y / vis_size.height * 100 - target_info[2])) + "\n";
-                print(BOLDYELLOW, "t1_x: " << target_info[1] << " t1_y: " << target_info[2]);
+                send_array = send_array + std::to_string(-(marker_info.center.x / vis_size.width * 100 - target_info[1])) + "," + 
+                            std::to_string(-(marker_info.center.y / vis_size.height * 100 - target_info[2])) + "," + 
+                            // std::to_string(curr_depth) + 
+                            "\n";
 
                 uart.send(send_array);
-                print(BOLDGREEN, "[marker relative position] " << send_array);
+                // print(BOLDGREEN, "[marker relative position] " << send_array);
+                std::cout << "\r[marker relative position] " << std::setw(6) << std::setfill(' ') << std::setprecision(3) << -(marker_info.center.x / vis_size.width * 100 - target_info[1]) << ", " 
+                << std::setw(6) << std::setfill(' ') << std::setprecision(3) << -(marker_info.center.y / vis_size.height * 100 - target_info[2]) << ", " 
+                <<  std::setw(6) << std::setfill(' ') << std::setprecision(3) << curr_depth;
+                std::cout << "  [";
+                for (int t=0; t<30; t++)
+                {
+                    if (t < (time(nullptr) - t_send)*30/TIME_PER_GRAP)
+                    {
+                        std::cout << '>';
+                    }else
+                    {
+                        std::cout << ' ';
+                    }
+                }
+                std::cout << ']' << ' ' << time(nullptr) - t_send << "s   ";
             }
         }
         int key = cv::waitKey(1) & 0xFF;
+        key_1 = key;
+        if (key == 255)
+        {
+            key = -1;
+        }
+        
         if (key != -1)
             rov_key = key;
         parse_key(key, quit, reset_id, conf_thresh, FLAGS_K, FLAGS_R, filter);

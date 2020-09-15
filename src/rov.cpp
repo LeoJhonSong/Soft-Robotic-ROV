@@ -8,6 +8,8 @@
 
 #include <random>
 
+extern float max_depth, curr_depth;
+
 TCP_Server::TCP_Server(void)
 // initial the socket
 {
@@ -145,9 +147,18 @@ void TCP_Server::recvMsg(void)
     {
         isTwoLeak = 1;
     }
-    depth = (float)((int)(receive[8]) * 256 + (int)(receive[9])); // the unit is cm
+    float new_depth = (float)((int)(receive[8]) * 256 + (unsigned int)(receive[9])); // the unit is cm
     // 此处adjust_rate即README中修正参数k
-    depth = depth / adjust_rate;
+    new_depth = new_depth / adjust_rate;
+    if (std::abs(new_depth-depth) <= 100 || true)
+    {
+        depth = new_depth;
+        if (depth > 0)
+        {
+            curr_depth = depth;
+        }
+    }
+    
     // std::cout << isOneLeak << std::endl;
     // std::cout << isTwoLeak << std::endl;
     // std::cout << depth << std::endl;
@@ -221,19 +232,19 @@ void TCP_Server::sendMsg(bool is_close_loop, int is_lights_on, int front_back, i
         response = response + "\xfd\xfd";
     }
     auto bytes_sent = send(newFD, response.data(), response.length(), 0);
+    delay_ms(50);
 }
 
-extern float max_depth, curr_depth;
 // 结合上一时刻是否位于海底和深度波动判断当前是否位于海底
 bool TCP_Server::is_landed(bool land)
 {
     this->depth_diff = this->depth - this->pre_depth;
-    if (this->depth == 0)
+    // print(RED, "depth: " << this->depth);
+    if (this->depth <= 0)
     {
-        return false;
+        return land;
     }
     this->pre_depth = this->depth;
-    print(RED, "depth: " << this->pre_depth);
     if (land)
     { // 更新海底深度
     }
@@ -265,6 +276,11 @@ extern bool rov_half_speed, land, manual_stop, grasping_done;
 extern std::vector<int> target_loc;
 extern cv::Size vis_size;
 extern bool second_dive;
+extern const float GRAP_THRESH_XC;
+extern const float GRAP_THRESH_XW;
+extern const float GRAP_THRESH_YC;
+extern const float GRAP_THRESH_YW;
+const int REVERSE_TIME = 3;
 
 void run_rov()
 {
@@ -300,13 +316,19 @@ void run_rov()
         print(BOLDGREEN, "ROV: first receive done, current depth: " << server.depth);
         server.sendMsg(SEND_LIGHTS_ON);
     }
-    // 进入ROV动作控制循环, 整个比赛过程中都应当处于这个循环中
     int chances = 0;
+    // 进入ROV动作控制循环, 整个比赛过程中都应当处于这个循环中
     while (run_rov_flag)
     {
+        // delay_ms(100);
         server.recvMsg();
         if (server.depth > 0)
             curr_depth = server.depth;
+        if (rov_key != 111)
+        {
+            chances = 0;
+        }
+        
         // 键盘键值与ROV动作映射
         switch (rov_key)
         {
@@ -373,19 +395,18 @@ void run_rov()
             rov_key = 32;
             break;
         case 13: // 坐底, 回车 (\r) (从这一步开始为自主控制)
-            print(BOLDGREEN, "ROV: diving !!!");
+            print(BOLDGREEN, "ROV: diving !!!\n");
             grasping_done = false;
             second_dive = false;
             second_dive_lost = false;
             // 当未人为操作且软体臂抓取未完成时持续坐底
             while (!manual_stop && !grasping_done && !second_dive)
             {
-                print(YELLOW, "hello");
                 server.sendMsg(SEND_DOWN);
+                // delay_ms(100);
                 server.recvMsg();
                 if (server.depth > 0)
                     land = server.is_landed(land); // 判定是否到达海底
-                print(RED, "land: " << land);
             }
             server.land_count = 0;
             land = false; // 结束坐底
@@ -401,19 +422,19 @@ void run_rov()
                 if (!second_dive_lost)
                 {
                     server.sendMsg(SEND_SLEEP);
-                    delay_ms(100);
+                    // delay_ms(100);
                 }
                 else
                 {
                     for (unsigned char i = 0; i < 1; i++)
                     {
                         server.sendMsg(SEND_UP);
-                        delay(1);
+                        // delay(1);
                     }
                     for (unsigned char i = 0; i < 1; i++)
                     {
                         server.sendMsg(SEND_SLEEP);
-                        delay(1);
+                        // delay(1);
                     }
                     second_dive = false;
                     second_dive_lost = false;
@@ -434,7 +455,7 @@ void run_rov()
             }
             while (true)
             {
-                delay(1);
+                // delay(1);
                 for (unsigned char i = 0; i < 10; i++)
                     server.sendMsg(SEND_UP);
                 server.recvMsg();
@@ -457,12 +478,11 @@ void run_rov()
             start = time(nullptr);
             while (!manual_stop)
             {
-                delay_ms(10);
                 // 抓到目标后往前抖一下确保目标进框里
                 if (grasping_done)
                 {
                     print(BOLDMAGENTA, "ROV: grasping_done SEND_HALF_FORWARD for 2s before detection");
-                    for (unsigned char i = 0; i < 2; i++)
+                    for (unsigned char i = 0; i < REVERSE_TIME; i++)
                     {
                         server.sendMsg(SEND_FORWARD);
                         delay(1);
@@ -478,8 +498,9 @@ void run_rov()
                     if (last_opt == 1)
                     {
                         print(BOLDMAGENTA, "ROV: SEND_HALF_BACKWARD for 2s");
-                        for (unsigned char i = 0; i < 2; i++)
+                        for (unsigned char i = 0; i < REVERSE_TIME; i++)
                         {
+                            print(RED, "BACK");
                             server.sendMsg(SEND_HALF_BACKWARD);
                             delay(1);
                         }
@@ -487,8 +508,9 @@ void run_rov()
                     else if (last_opt == 2)
                     {
                         print(BOLDMAGENTA, "ROV: SEND_HALF_LEFT for 2s");
-                        for (unsigned char i = 0; i < 2; i++)
+                        for (unsigned char i = 0; i < REVERSE_TIME; i++)
                         {
+                            print(RED, "LEFT");
                             server.sendMsg(SEND_HALF_LEFT);
                             delay(1);
                         }
@@ -496,15 +518,17 @@ void run_rov()
                     else if (last_opt == 3)
                     {
                         print(BOLDMAGENTA, "ROV: SEND_HALF_RIGHT for 2s");
-                        for (unsigned char i = 0; i < 2; i++)
+                        for (unsigned char i = 0; i < REVERSE_TIME; i++)
                         {
+                            print(RED, "RIGHT");
                             server.sendMsg(SEND_HALF_RIGHT);
                             delay(1);
                         }
                     }
                     if (last_opt > 0)
-                        for (unsigned char i = 0; i < 2; i++)
+                        for (unsigned char i = 0; i < REVERSE_TIME; i++)
                         {
+                            print(RED, "SLEEP");
                             server.sendMsg(SEND_SLEEP);
                             delay(1);
                         }
@@ -549,126 +573,173 @@ void run_rov()
         case 111: // 坐底至目标处, o
             print(BOLDYELLOW, "ROV: aiming");
             // FIXME 跳动超过x次, 放弃靠近目标, 转case13 (坐底)
-            while ((!manual_stop) && chances < 3)
+            while ((!manual_stop) && chances < 4)
             {
-                chances++;
+                print(RED, "land1: " << land);
                 delay(1);  // 限制循环频率, 避免占用过高CPU
                 // 目标丢失, 放弃靠近目标, 转case13 (坐底)
                 if (target_loc.at(2) == 0 || target_loc.at(3) == 0)
                 {
-                    print(RED, "aaa");
                     rov_key = 13;
                     break;
                 }
-                // float target_x = std::abs(target_loc.at(0) / vis_size.width - 0.5);
-                // float target_y = std::abs(target_loc.at(1) / vis_size.height - 1.0);
-                float target_x = float(target_loc.at(0)) / vis_size.width - 0.5;
-                print(RED, target_loc.at(0));
-                float target_y = float(target_loc.at(1)) / vis_size.height - 0.8;
-                // FIXME 如果目标在一个较大的阈值框外, 设置指向图像中心的水平满速; 如果目标在阈值框内, 水平速度置零. 同时全速坐底
-                int speed_x = 0;
+                float target_x = 0;
+                float target_y = 0;
                 int speed_y = 0;
-                // if(std::abs(target_x) > 0.5 || std::abs(target_y) > 1.0)
-                // {
-                //     speed_x = target_x / std::min(target_x, target_y) *  100;
-                //     speed_y = target_y / std::min(target_x, target_y) *  100;
-                // }
-                // if(target_x > 0.4)
-                // {
-                //     speed_x = target_x / std::min(target_x, target_y) *  100;
-                //     speed_y = target_y / std::min(target_x, target_y) *  100;
-                // }
-                // while (std::abs(target_x) > 0.2)
-                // {
-                //     target_x = float(target_loc.at(0)) / vis_size.width - 0.5;
-                //     speed_x = - (1/0.5) * target_x * 100;
-                //     delay_ms(500);
-                //     server.sendMsg(0, 0, speed_x, 0, 0, -100);
-                //     print(RED, "target_x: " << target_x);
-                // }
-                
-                // if (std::abs(target_x) > 0.2)
-                // {
-                //     speed_x = - (1/0.5) * target_x * 100;
-                //     print(YELLOW, "speed_x: " << speed_x);
-                // }
-                if (std::abs(target_y) > 0.20)
-                {
-                    speed_y = -target_y * 100 * 0.6;
-                    if (speed_y > 100)
-                    {
-                        speed_y = 100;
-                    }
-                }
-                else if (std::abs(target_x) > 0.25)
-                {
-                    speed_x = -(1/0.5) * target_x * 100;
-                    if (speed_x > 100)
-                        speed_x = 100;
-                }
-                // if (std::abs(target_y) > 0.15)
-                // {
-                //     speed_y = -target_y * 100 * 2;
-                //     if (speed_y > 100)
-                //         speed_y = 100;
-                //     print(YELLOW, "speed_y: " << speed_y);
-                // }
-                speed_y = std::abs(speed_x) > std::abs(speed_y) ? 0 : speed_y;
-                speed_x = std::abs(speed_x) > std::abs(speed_y) ? speed_x : 0;
+                int speed_rotate = 0;
+                float tan_theta = 0;
+                float theta = 0;
+                // 策略为坐底时一直调整(P)，调整量为前后或旋转
                 while(!land)
                 {
-                    print(YELLOW, "speed_x:" << speed_x << "speed_y: " << speed_y);
-                    print(RED, "target_loc_0: " << target_loc.at(0));
-                    server.sendMsg(1, 0, speed_y, speed_x, 0, -100);
+                    speed_y = 0;
+                    speed_rotate = 0;
+                    // 如果坐底过程中目标跟丢，则执行只有竖直下潜
+                    if (target_loc.at(0) != 0 || target_loc.at(1) != 0)
+                    {
+                        // 级联阈值，粗调+细调，保证目标一直在视野范围内
+                        // 第一阈值 y方向0.7的原因为怕ROV冲过头
+                        target_x = float(target_loc.at(0)) / vis_size.width - 0.5;
+                        target_y = float(target_loc.at(1)) / vis_size.height - 0.7;
+                        // 分母-1像素保证永远不为0
+                        tan_theta = (float(target_loc.at(0)) - vis_size.width/2) / (float(target_loc.at(1)) - vis_size.height - 1);
+                        theta = atan(tan_theta);
+                        // 粗调x 保证横向不出视野
+                        if (std::abs(target_x) > 0.35)
+                        {
+                            speed_rotate = theta / (M_PI/2) * 99 * 1.3;
+                            if (std::abs(speed_rotate) > 99)
+                            {
+                                speed_rotate = speed_rotate > 0 ? 99 : -99;
+                            }
+                        }
+                        // 粗调y
+                        else if (std::abs(target_y) > 0.3)
+                        {
+                            // 近的时候速度小一点，以防冲过
+                            if (std::abs(target_y) > 0.4)
+                            {
+                                speed_y = -target_y * 100 * 1.1;
+                            }else
+                            {
+                                speed_y = -target_y * 100 * 0.9;
+                            }
+                            // 后退阻力大，放大后退速度
+                            speed_y = speed_y < 0 ? speed_y*1.5 : speed_y;
+                            
+                            if (std::abs(speed_y) > 99)
+                            {
+                                speed_y = speed_y > 0 ? 99 : -99;
+                            }
+                            speed_rotate = 0;
+                        }
+                        else if (std::abs(target_x) > 0.25)
+                        {
+                            speed_rotate = theta / (M_PI/2) * 99 * 0.8;
+                            if (std::abs(speed_rotate) > 99)
+                            {
+                                speed_rotate = speed_rotate > 0 ? 99 : -99;
+                            }
+                        }
+                        // 第一阈值满足，进入第二阈值
+                        else
+                        {
+                            // 第二阈值，即抓取阈值框，与detector中的阈值一致
+                            target_x = float(target_loc.at(0)) / vis_size.width - GRAP_THRESH_XC;
+                            target_y = float(target_loc.at(1)) / vis_size.height - GRAP_THRESH_YC;
+                            tan_theta = (float(target_loc.at(0)) - vis_size.width/2) / (float(target_loc.at(1)) - vis_size.height - 1);
+                            if (std::abs(target_y) > GRAP_THRESH_YW)
+                            {
+                                speed_y = -target_y * 99 * 0.8;
+                                if (std::abs(speed_y) > 99)
+                                {
+                                    speed_y = speed_y > 0 ? 99 : -99;
+                                }
+                            }
+                            else if (std::abs(target_x) > GRAP_THRESH_XW)
+                            {
+                                speed_rotate = theta / (M_PI/2) * 99 * 1.2;
+                                if (std::abs(speed_rotate) > 99)
+                                {
+                                    speed_rotate = speed_rotate > 0 ? 99 : -99;
+                                }
+                            }
+                            // else
+                            // {
+                            //     speed_y = speed_y > 0 ? 0 : -target_y * 99 * 2.0;
+                            // }
+                        }
+                    }
+                    print(RED, "speed_y1: " << speed_y << ", speed_rotate1: " << speed_rotate);
+                    server.sendMsg(0, 0, speed_y, 0, speed_rotate, -99);
                     server.recvMsg();
                     land = server.is_landed(land);
                 }
                 print(BLUE, "land!!!!!!!!!!!!!");
                 // 如果目标进入抓取阈值框, 转case13 (坐底)进行抓取; 否则记录目标相对与图像中心的方向
-                target_x = float(target_loc.at(0)) / vis_size.width - 0.5;
-                // print(RED, target_loc.at(0));
-                target_y = float(target_loc.at(1)) / vis_size.height - 0.8;
-                // target_x = std::abs(float(target_loc.at(0)) / vis_size.width - 0.5);
-                // target_y = std::abs(float(target_loc.at(1)) / vis_size.height - 0.8);
-                speed_x = 0;
+                target_x = float(target_loc.at(0)) / vis_size.width - GRAP_THRESH_XC;
+                target_y = float(target_loc.at(1)) / vis_size.height - (GRAP_THRESH_YC);
+                tan_theta = (float(target_loc.at(0)) - vis_size.width/2) / (float(target_loc.at(1)) - vis_size.height - 1);
                 speed_y = 0;
-                if(std::abs(target_x) > 0.25 || std::abs(target_y) > 0.2)
+                speed_rotate = 0;
+                if (target_loc.at(0) != 0 || target_loc.at(1) != 0)
                 {
-                    print(RED, "No");
-                    speed_x = -(1/0.5) * target_x * 100;
-                    speed_y = -target_y * 100;
-                    speed_x = std::abs(speed_x) > 40 ? speed_x : 40;
-                    speed_x = std::abs(speed_x) > 100 ? 100 : speed_x;
-                    speed_y = std::abs(speed_y) > 40 ? speed_y : 40;
-                    speed_y = std::abs(speed_y) > 100 ? 100 : speed_y;
-                    // if (speed_x > 100)
-                    //     speed_x = 100;
-                    // if (speed_y > 100)
-                    // {
-                    //     speed_y = 100;
-                    // }
-                    // speed_x = target_x / std::min(target_x, target_y) *  100;
-                    // speed_y = target_y / std::min(target_x, target_y) *  100;
-                }
-                else
-                {
-                    print(RED, "land and grap");
-                    rov_key = 13;
-                    break;
-                }
-                // FIXME 向记录方向水平全速, 全速上浮x秒
-                print(GREEN, "speed_x:" << speed_x << "speed_y: " << speed_y);
-                if (std::abs(speed_x) > std::abs(speed_y))
-                {
-                    server.sendMsg(0, 0, 0, speed_x, 0, 99);
-                }
-                else
-                {
-                    server.sendMsg(0, 0, speed_y, 0, 0, 99);
+                    // x偏差过大时优先旋转，保证目标在视野范围内
+                    if (std::abs(target_x) > 0.35)
+                    {
+                        speed_rotate = theta / (M_PI/2) * 99 * 1.0;
+                        if (std::abs(speed_rotate) > 99)
+                        {
+                            speed_rotate = speed_rotate > 0 ? 99 : -99;
+                        }
+                    }
+                    else if (std::abs(target_y) > GRAP_THRESH_YW)
+                    {
+                        // 分区间调整速度
+                        if (std::abs(target_y) > 0.3)
+                        {
+                            speed_y = -target_y * 99 * 1.4;
+                        }
+                        else
+                        {
+                            speed_y = -target_y * 99 * 1.8;
+                        }
+                        
+                        if (std::abs(speed_y) > 99)
+                        {
+                            speed_y = speed_y > 0 ? 99 : -99;
+                        }
+                    }else if (std::abs(target_x) > GRAP_THRESH_XW)
+                    {
+                        speed_rotate = theta / (M_PI/2) * 99 * 0.8;
+                        if (std::abs(speed_rotate) > 99)
+                        {
+                            speed_rotate = speed_rotate > 0 ? 99 : -99;
+                        }
+                    }
+                    else
+                    {
+                        print(RED, "land and grap");
+                        rov_key = 13;
+                        break;
+                    }
                 }
                 
-                delay_ms(1500);
+                // 上浮并调整
+                print(GREEN, "speed_y2: " << speed_y << ", speed_rotate2: " << speed_rotate);
+                
+                server.sendMsg(0, 0, speed_y, 0, speed_rotate, 99);
+                land = false;
+                print(RED, "land2: " << land);
+                delay_ms(900);
+                chances++;
             }
+            // 跳完仍不在可抓取范围，则进入case 13，准备上浮定深后巡航
+            if (chances >= 4)
+            {
+                rov_key = 13;
+            }
+            
             break;
         default:
             server.sendMsg(SEND_SLEEP);

@@ -10,6 +10,6 @@
 --NETG_DIM=256 \
 --TUB=1 \
 --UART=true \
---WITH_ROV=true \
+--WITH_ROV=false \
 --TRACK=true \
 --RECORD=false

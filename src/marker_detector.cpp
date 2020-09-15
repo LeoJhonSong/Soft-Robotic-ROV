@@ -110,15 +110,19 @@ marker::MarkerInfo marker::MarkerDetector::detect_average_marker(cv::Mat &img, b
         return marker::MarkerInfo();
     }
     cv::Point2f marker_centers_average(0, 0);
+    int marker_num = 0;
     for (int i = 0; i < resultes.size(); i++)
     {
+        if(MARKER_OFFSETS.count(resultes.at(i).id) <= 0)
+            continue;
+        marker_num++;
         cv::Point2f true_center = (resultes.at(i).center + marker::MARKER_OFFSETS.at(resultes.at(i).id));
         marker_centers_average.x += true_center.x;
         marker_centers_average.y += true_center.y;
         cv::circle(img, true_center, 6, cv::Scalar(0, 0, 255), 1, 8, 0);
     }
-    marker_centers_average.x /= resultes.size();
-    marker_centers_average.y /= resultes.size();
+    marker_centers_average.x /= marker_num;
+    marker_centers_average.y /= marker_num;
     return marker::MarkerInfo(1, marker_centers_average);
 }
 // 检测所有marker --aruco version
