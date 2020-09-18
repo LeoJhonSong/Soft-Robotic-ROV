@@ -12,4 +12,4 @@
 --UART=true \
 --WITH_ROV=false \
 --TRACK=true \
---RECORD=false
+--RECORD=true

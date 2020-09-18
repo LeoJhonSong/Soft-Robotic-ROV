@@ -424,7 +424,7 @@ std::vector<int> Detector::visualization(cv::Mat& img, std::ofstream& log_file){
                     1, this->color.at(4), 2);
     }
     cv::imshow("ResDet", img);
-    // det_frame_queue.push(img);
+    det_frame_queue.push(img);
     save_a_frame = false;
     return loc;
 }

@@ -78,7 +78,7 @@ float adjust_scale = 1.5;
 bool detect_scallop = true;
 
 std::vector<int> target_info;
-const int TIME_PER_GRAP = 90;
+const int TIME_PER_GRAP = 70;
 const int MARKER_OFFSET_X = 50;
 const int MARKER_OFFSET_Y = 75;
 extern const float GRAP_THRESH_XC = 0.5;
@@ -117,7 +117,7 @@ int main(int argc, char* argv[]) {
     unsigned int num_classes = 5;
     int top_k = 200;
     float nms_thresh = 0.3;
-    std::vector<float> conf_thresh = {0.6, 0.8, 0.3, 1.5};  // 海参, 海胆, 扇贝, 海星
+    std::vector<float> conf_thresh = {0.5, 0.8, 0.1, 1.5};  // 海参, 海胆, 扇贝, 海星
     float tub_thresh = 0.3;
     bool reset_id = false;
     Detector Detect(num_classes, top_k, nms_thresh, FLAGS_TUB, FLAGS_SSD_DIM, FLAGS_TRACK);
@@ -308,7 +308,7 @@ int main(int argc, char* argv[]) {
                         std::string send_array = "#";
                         send_array = send_array + std::to_string(-(marker_info.center.x / vis_size.width * 100 - target_info[1])) + "," + 
                                     std::to_string(-(marker_info.center.y / vis_size.height * 100 - target_info[2]))+ "," + 
-                                    // std::to_string(curr_depth) + 
+                                    std::to_string(curr_depth) + 
                                     "\n";
                         print(BOLDYELLOW, "t_x: " << target_info[1] << " t_y: " << target_info[2]);
 
@@ -371,7 +371,7 @@ int main(int argc, char* argv[]) {
                 std::string send_array = "#";
                 send_array = send_array + std::to_string(-(marker_info.center.x / vis_size.width * 100 - target_info[1])) + "," + 
                             std::to_string(-(marker_info.center.y / vis_size.height * 100 - target_info[2])) + "," + 
-                            // std::to_string(curr_depth) + 
+                            std::to_string(curr_depth) + 
                             "\n";
 
                 uart.send(send_array);
