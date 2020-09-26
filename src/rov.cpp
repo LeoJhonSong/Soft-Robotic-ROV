@@ -280,13 +280,13 @@ extern const float GRAP_THRESH_XC;
 extern const float GRAP_THRESH_XW;
 extern const float GRAP_THRESH_YC;
 extern const float GRAP_THRESH_YW;
-const int REVERSE_TIME = 3;
+const int REVERSE_TIME = 2;
 
 void run_rov()
 {
     // 巡航路线
-    int side_sec = 3;
-    int for_sec = 3;
+    int side_sec = 1;
+    int for_sec = 1;
     std::vector<int> cruise_second = {
             for_sec,
             for_sec +     side_sec,
@@ -416,6 +416,11 @@ void run_rov()
                 rov_key = 117; // 开始上浮并定深
             break;
         case 117: // 上浮定深, u (全速上浮3s, 悬停2s等ROV静止后获取当前深度)
+            // 不上浮，直接巡航
+            if (manual_stop)
+                rov_key = 32;
+            rov_key = 99;
+            break;
             print(BOLDBLUE, "ROV: try to stably floating, second_dive? " << second_dive << ", second_dive_lost? " << second_dive_lost);
             if (second_dive)
             {
@@ -429,12 +434,12 @@ void run_rov()
                     for (unsigned char i = 0; i < 1; i++)
                     {
                         server.sendMsg(SEND_UP);
-                        // delay(1);
+                        delay_ms(500);
                     }
                     for (unsigned char i = 0; i < 1; i++)
                     {
                         server.sendMsg(SEND_SLEEP);
-                        // delay(1);
+                        delay(1);
                     }
                     second_dive = false;
                     second_dive_lost = false;
@@ -455,7 +460,7 @@ void run_rov()
             }
             while (true)
             {
-                // delay(1);
+                delay(1);
                 for (unsigned char i = 0; i < 10; i++)
                     server.sendMsg(SEND_UP);
                 server.recvMsg();
@@ -501,35 +506,38 @@ void run_rov()
                         for (unsigned char i = 0; i < REVERSE_TIME; i++)
                         {
                             print(RED, "BACK");
-                            server.sendMsg(SEND_HALF_BACKWARD);
+                            // server.sendMsg(SEND_HALF_BACKWARD);
+                            server.sendMsg(0, 0, -70, 0, 0, -99);
                             delay(1);
                         }
                     }
                     else if (last_opt == 2)
                     {
-                        print(BOLDMAGENTA, "ROV: SEND_HALF_LEFT for 2s");
-                        for (unsigned char i = 0; i < REVERSE_TIME; i++)
-                        {
-                            print(RED, "LEFT");
-                            server.sendMsg(SEND_HALF_LEFT);
-                            delay(1);
-                        }
+                        // print(BOLDMAGENTA, "ROV: SEND_HALF_LEFT for 2s");
+                        // for (unsigned char i = 0; i < REVERSE_TIME; i++)
+                        // {
+                        //     print(RED, "LEFT");
+                        //     // server.sendMsg(SEND_HALF_LEFT);
+                        //     server.sendMsg(0, 0, -70, 0, 0, -99);
+                        //     delay(1);
+                        // }
                     }
                     else if (last_opt == 3)
                     {
-                        print(BOLDMAGENTA, "ROV: SEND_HALF_RIGHT for 2s");
-                        for (unsigned char i = 0; i < REVERSE_TIME; i++)
-                        {
-                            print(RED, "RIGHT");
-                            server.sendMsg(SEND_HALF_RIGHT);
-                            delay(1);
-                        }
+                        // print(BOLDMAGENTA, "ROV: SEND_HALF_RIGHT for 2s");
+                        // for (unsigned char i = 0; i < REVERSE_TIME; i++)
+                        // {
+                        //     print(RED, "RIGHT");
+                        //     server.sendMsg(SEND_HALF_RIGHT);
+                        //     delay(1);
+                        // }
                     }
                     if (last_opt > 0)
-                        for (unsigned char i = 0; i < REVERSE_TIME; i++)
+                        for (unsigned char i = 0; i < 3; i++)
                         {
                             print(RED, "SLEEP");
-                            server.sendMsg(SEND_SLEEP);
+                            // server.sendMsg(SEND_SLEEP);
+                            server.sendMsg(0, 0, 0, 0, 0, -99);
                             delay(1);
                         }
                     break;
@@ -540,23 +548,27 @@ void run_rov()
                          (time_interval > cruise_second.at(3) && time_interval <= cruise_second.at(4)) ||
                          (time_interval > cruise_second.at(5) && time_interval <= cruise_second.at(6)))
                 {
-                    print(BOLDMAGENTA, "ROV: SEND_HALF_FORWARD");
+                    print(BOLDMAGENTA, "ROV: SEND_UP_FORWARD");
                     last_opt = 1;
-                    server.sendMsg(SEND_HALF_FORWARD);
+                    // server.sendMsg(SEND_HALF_FORWARD);
+                    server.sendMsg(0, 0, 70, 0, 0, 30);
                 }
                 else if ((time_interval > cruise_second.at(0) && time_interval <= cruise_second.at(1)) ||
                          (time_interval > cruise_second.at(6) && time_interval <= cruise_second.at(7)))
                 {
-                    print(BOLDMAGENTA, "ROV: SEND_HALF_RIGHT");
+                    // print(BOLDMAGENTA, "ROV: SEND_HALF_RIGHT");
+                    print(BOLDMAGENTA, "ROV: SEND_DOWN_RIGHT");
                     last_opt = 2;
-                    server.sendMsg(SEND_HALF_RIGHT);
+                    // server.sendMsg(SEND_HALF_RIGHT);
+                    server.sendMsg(0, 0, 0, 0, -50, -99);
                 }
                 else if ((time_interval > cruise_second.at(2) && time_interval <= cruise_second.at(3)) ||
                          (time_interval > cruise_second.at(4) && time_interval <= cruise_second.at(5)))
                 {
-                    print(BOLDMAGENTA, "ROV: SEND_HALF_LEFT");
+                    print(BOLDMAGENTA, "ROV: SEND_DOWN_LEFT");
                     last_opt = 3;
-                    server.sendMsg(SEND_HALF_LEFT);
+                    // server.sendMsg(SEND_HALF_LEFT);
+                    server.sendMsg(0, 0, 0, 0, 50, -99);
                 }
                 else
                 {
@@ -575,8 +587,8 @@ void run_rov()
             // FIXME 跳动超过x次, 放弃靠近目标, 转case13 (坐底)
             while ((!manual_stop) && chances < 4)
             {
-                print(RED, "land1: " << land);
-                delay(1);  // 限制循环频率, 避免占用过高CPU
+                // print(RED, "land1: " << land);
+                delay_ms(500);  // 限制循环频率, 避免占用过高CPU
                 // 目标丢失, 放弃靠近目标, 转case13 (坐底)
                 if (target_loc.at(2) == 0 || target_loc.at(3) == 0)
                 {
@@ -730,8 +742,8 @@ void run_rov()
                 
                 server.sendMsg(0, 0, speed_y, 0, speed_rotate, 99);
                 land = false;
-                print(RED, "land2: " << land);
-                delay_ms(900);
+                // print(RED, "land2: " << land);
+                delay_ms(500);
                 chances++;
             }
             // 跳完仍不在可抓取范围，则进入case 13，准备上浮定深后巡航
