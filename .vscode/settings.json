@@ -8,4 +8,5 @@
         "glog"
     ],
     "cmake.configureOnEdit": false,
+    "C_Cpp.autoAddFileAssociations": false,
 }

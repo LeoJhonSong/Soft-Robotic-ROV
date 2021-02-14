@@ -1,17 +1,11 @@
-//
-// Created by sean on 7/17/19.
-//
-
 #ifndef RESDET_DETECTOR_H
 #define RESDET_DETECTOR_H
 
-#include <torch/torch.h>
 #include <opencv2/opencv.hpp>
-#include <sstream>
-#include <iomanip>
+#include <torch/torch.h>
 
-
-class Detector {
+class Detector
+{
 private:
     unsigned int num_classes;
     int top_k;
@@ -33,18 +27,19 @@ private:
     int track_id;
     unsigned int frame_num;
     std::vector<char> send_list;
-    std::vector<cv::Scalar> color{cv::Scalar(255,0,0), cv::Scalar(255,255,0), cv::Scalar(0, 255,255), cv::Scalar(0,0,255), cv::Scalar(255,0,255)};
+    std::vector<cv::Scalar> color{cv::Scalar(255, 0, 0), cv::Scalar(255, 255, 0), cv::Scalar(0, 255, 255), cv::Scalar(0, 0, 255), cv::Scalar(255, 0, 255)};
+
 public:
     Detector(unsigned int, int, float, unsigned char, int, bool);
     void log_params();
-    void detect(const torch::Tensor&, const torch::Tensor&, std::vector<float>);
-    void detect(const torch::Tensor&, const torch::Tensor&, std::vector<float>, float);
-    void detect_track(const torch::Tensor&, const torch::Tensor&, std::vector<float>);
-    std::vector<int> visual_detect(const torch::Tensor&, const torch::Tensor&, const std::vector<float>&, float, bool&, cv::Mat&, std::ofstream&);
-    std::tuple<torch::Tensor, int> nms(torch::Tensor&, torch::Tensor&);
-    std::tuple<torch::Tensor, int> prev_nms(torch::Tensor&, torch::Tensor&, const torch::Tensor&);
-    torch::Tensor iou(const torch::Tensor&, unsigned char);
-    std::vector<int> visualization(cv::Mat&, std::ofstream&);
+    void detect(const torch::Tensor &, const torch::Tensor &, std::vector<float>);
+    void detect(const torch::Tensor &, const torch::Tensor &, std::vector<float>, float);
+    void detect_track(const torch::Tensor &, const torch::Tensor &, std::vector<float>);
+    std::vector<int> visual_detect(const torch::Tensor &, const torch::Tensor &, const std::vector<float> &, float, bool &, cv::Mat &, std::ofstream &);
+    std::tuple<torch::Tensor, int> nms(torch::Tensor &, torch::Tensor &);
+    std::tuple<torch::Tensor, int> prev_nms(torch::Tensor &, torch::Tensor &, const torch::Tensor &);
+    torch::Tensor iou(const torch::Tensor &, unsigned char);
+    std::vector<int> visualization(cv::Mat &, std::ofstream &);
     void init_tubelets();
     void delete_tubelets(unsigned char);
     void delete_tubelets();
@@ -54,6 +49,5 @@ public:
     void replenish_tubelets(unsigned char cl, int count);
     ~Detector();
 };
-
 
 #endif //RESDET_DETECTOR_H

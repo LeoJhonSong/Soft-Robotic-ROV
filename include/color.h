@@ -1,7 +1,3 @@
-/*
-Created by SONGZhuHeng on 2019.08.10
-*/
-
 #ifndef RESDET_COLOR_H
 #define RESDET_COLOR_H
 

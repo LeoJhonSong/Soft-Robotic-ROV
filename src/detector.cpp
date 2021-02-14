@@ -4,7 +4,7 @@
 
 #include "detector.h"
 #include "color.h"
-#include<cmath>
+#include <cmath>
 
 extern bool save_a_frame;
 extern std::queue<cv::Mat> det_frame_queue;
@@ -13,10 +13,10 @@ extern float max_depth, curr_depth;
 extern int send_byte;
 extern bool detect_scallop;
 
-Detector::~Detector()=default;
+Detector::~Detector() = default;
 
-
-Detector::Detector(unsigned int num_classes, int top_k, float nms_thresh, unsigned char tub, int ssd_dim, bool track){
+Detector::Detector(unsigned int num_classes, int top_k, float nms_thresh, unsigned char tub, int ssd_dim, bool track)
+{
     this->num_classes = num_classes;
     this->top_k = top_k;
     this->nms_thresh = nms_thresh;
@@ -29,18 +29,18 @@ Detector::Detector(unsigned int num_classes, int top_k, float nms_thresh, unsign
     this->track_id = -1;
     this->frame_num = 0;
     this->track = false;
-    if(this->tub > 0) {
+    if (this->tub > 0)
+    {
         this->track = track;
         this->init_tubelets();
         this->hold_len = 5;
     }
     this->output = torch::zeros({1, this->num_classes, this->top_k, 7}, torch::kFloat);
     this->log_params();
-
 }
 
-
-void Detector::log_params(){
+void Detector::log_params()
+{
     print(WHITE, "num_classes: " << num_classes);
     print(WHITE, "top_k: " << top_k);
     print(WHITE, "nms_thresh: " << nms_thresh);
@@ -52,12 +52,14 @@ void Detector::log_params(){
     print(WHITE, "tubelets class size: " << this->tubelets.size());
 }
 
-
-void Detector::detect(const torch::Tensor& loc, const torch::Tensor& conf, std::vector<float> conf_thresh){
+void Detector::detect(const torch::Tensor &loc, const torch::Tensor &conf, std::vector<float> conf_thresh)
+{
     this->output.zero_();
-    for(unsigned int cl=1; cl<this->num_classes; cl++){
-        torch::Tensor c_mask = conf[cl].gt(conf_thresh.at(cl-1));
-        if(c_mask.sum().item<int >() == 0){
+    for (unsigned int cl = 1; cl < this->num_classes; cl++)
+    {
+        torch::Tensor c_mask = conf[cl].gt(conf_thresh.at(cl - 1));
+        if (c_mask.sum().item<int>() == 0)
+        {
             continue;
         }
         torch::Tensor scores = conf[cl].masked_select(c_mask);
@@ -71,15 +73,17 @@ void Detector::detect(const torch::Tensor& loc, const torch::Tensor& conf, std::
         torch::Tensor nms_box = boxes.index_select(0, keep);
         this->output[0][cl].slice(0, 0, count) = torch::cat({nms_score.unsqueeze(1), nms_box, torch::zeros({count, 1}).fill_(-1), torch::zeros({count, 1}).fill_(100)}, 1);
     }
-//    return this->output;
+    //    return this->output;
 }
 
-
-void Detector::detect(const torch::Tensor& loc, const torch::Tensor& conf, std::vector<float> conf_thresh, float tub_thresh){
+void Detector::detect(const torch::Tensor &loc, const torch::Tensor &conf, std::vector<float> conf_thresh, float tub_thresh)
+{
     this->output.zero_();
-    for(unsigned char cl=1; cl<this->num_classes; cl++){
-        torch::Tensor c_mask = conf[cl].gt(conf_thresh.at(cl-1));
-        if(c_mask.sum().item<int >() == 0){
+    for (unsigned char cl = 1; cl < this->num_classes; cl++)
+    {
+        torch::Tensor c_mask = conf[cl].gt(conf_thresh.at(cl - 1));
+        if (c_mask.sum().item<int>() == 0)
+        {
             this->replenish_tubelets(cl, 0);
             this->delete_tubelets(cl);
             continue;
@@ -95,38 +99,48 @@ void Detector::detect(const torch::Tensor& loc, const torch::Tensor& conf, std::
         torch::Tensor nms_box = boxes.index_select(0, keep);
         torch::Tensor identity = torch::zeros({count}).fill_(-1);
         torch::Tensor matched_times = torch::zeros({count});
-        if(count == 0){
+        if (count == 0)
+        {
             this->replenish_tubelets(cl, 0);
             this->delete_tubelets(cl);
             continue;
         }
-        if(!this->tubelets.at(cl).empty()){
+        if (!this->tubelets.at(cl).empty())
+        {
             torch::Tensor iou = this->iou(nms_box.mul(this->ssd_dim), cl);
-            std::tuple<torch::Tensor,torch::Tensor> max_info = torch::max(iou, 1);
+            std::tuple<torch::Tensor, torch::Tensor> max_info = torch::max(iou, 1);
             torch::Tensor max_simi = std::get<0>(max_info);
             torch::Tensor max_idx = std::get<1>(max_info);
             torch::Tensor matched_mask = max_simi.gt(tub_thresh);
-            for(unsigned char mt=0; mt<count; mt++) {
-                if (matched_mask[mt].item<int>() > 0) {
+            for (unsigned char mt = 0; mt < count; mt++)
+            {
+                if (matched_mask[mt].item<int>() > 0)
+                {
                     identity[mt] = this->ides.at(cl).at(max_idx[mt].item<int>()).first;
                     matched_times[mt] = this->ides.at(cl).at(max_idx[mt].item<int>()).second + 1;
                 }
             }
         }
         torch::Tensor new_id_mask = identity.eq(-1);
-        if(new_id_mask.sum().item<int32_t >()>0){
-            int current = this->history_max_ides[cl].item<int32_t >() + 1;
-            torch::Tensor new_id = torch::arange(current, current + new_id_mask.sum().item<int >());
+        if (new_id_mask.sum().item<int32_t>() > 0)
+        {
+            int current = this->history_max_ides[cl].item<int32_t>() + 1;
+            torch::Tensor new_id = torch::arange(current, current + new_id_mask.sum().item<int>());
             this->history_max_ides[cl] = new_id[-1];
             int nid = 0;
-            for(unsigned char m=0; m<identity.size(0); m++)
-                if(new_id_mask[m].item<int >() > 0) identity[m] = new_id[nid++];
+            for (unsigned char m = 0; m < identity.size(0); m++)
+                if (new_id_mask[m].item<int>() > 0)
+                    identity[m] = new_id[nid++];
         }
-        for(unsigned int tc=0; tc<count; tc++) {
+        for (unsigned int tc = 0; tc < count; tc++)
+        {
             int curr_id = identity[tc].item<int>();
-            if (this->tubelets.at(cl).find(curr_id) == this->tubelets.at(cl).end()) {
+            if (this->tubelets.at(cl).find(curr_id) == this->tubelets.at(cl).end())
+            {
                 this->tubelets.at(cl)[curr_id] = std::tuple<torch::Tensor, int, int>{nms_box[tc].unsqueeze(0).mul(this->ssd_dim), this->hold_len + 1, 0};
-            } else {
+            }
+            else
+            {
                 this->ides_set.at(cl).erase(curr_id);
                 int id_matched_times = std::min(std::get<2>(this->tubelets.at(cl)[curr_id]) + 1, 100);
                 this->tubelets.at(cl)[curr_id] = std::tuple<torch::Tensor, int, int>{nms_box[tc].unsqueeze(0).mul(this->ssd_dim), this->hold_len + 1, id_matched_times};
@@ -135,33 +149,37 @@ void Detector::detect(const torch::Tensor& loc, const torch::Tensor& conf, std::
         this->output[0][cl].slice(0, 0, count) = torch::cat({nms_score.unsqueeze(1), nms_box, identity.unsqueeze(1), matched_times.unsqueeze(1)}, 1);
         this->replenish_tubelets(cl, count);
         int non_matched_size = 0;
-//        for(auto s:this->ides_set.at(cl) ) {
-//            torch::Tensor no_matched_box = std::get<0>(this->tubelets.at(cl)[s])[0];
-//            if (no_matched_box.lt(0.1*this->ssd_dim).sum().item<uint8_t >()>0 || no_matched_box.gt(0.9*this->ssd_dim).sum().item<uint8_t >()>0 || std::get<2>(this->tubelets.at(cl)[s])<5 ) continue;
-//            this->output[0][cl].slice(0, count + non_matched_size, count + non_matched_size+1) = torch::cat({torch::zeros({1}).fill_(0.01), std::get<0>(this->tubelets.at(cl)[s])[0].div(this->ssd_dim), torch::zeros({1}).fill_(s), torch::zeros({1}).fill_(std::get<2>(this->tubelets.at(cl)[s]))}, 0);
-//            non_matched_size++;
-//        }
+        //        for(auto s:this->ides_set.at(cl) ) {
+        //            torch::Tensor no_matched_box = std::get<0>(this->tubelets.at(cl)[s])[0];
+        //            if (no_matched_box.lt(0.1*this->ssd_dim).sum().item<uint8_t >()>0 || no_matched_box.gt(0.9*this->ssd_dim).sum().item<uint8_t >()>0 || std::get<2>(this->tubelets.at(cl)[s])<5 ) continue;
+        //            this->output[0][cl].slice(0, count + non_matched_size, count + non_matched_size+1) = torch::cat({torch::zeros({1}).fill_(0.01), std::get<0>(this->tubelets.at(cl)[s])[0].div(this->ssd_dim), torch::zeros({1}).fill_(s), torch::zeros({1}).fill_(std::get<2>(this->tubelets.at(cl)[s]))}, 0);
+        //            non_matched_size++;
+        //        }
         this->delete_tubelets(cl);
     }
-//    return this->output;
+    //    return this->output;
 }
 
-void Detector::replenish_tubelets(unsigned char cl, int count){
+void Detector::replenish_tubelets(unsigned char cl, int count)
+{
     int non_matched_size = 0;
-    for(auto s:this->ides_set.at(cl) ) {
+    for (auto s : this->ides_set.at(cl))
+    {
         torch::Tensor no_matched_box = std::get<0>(this->tubelets.at(cl)[s])[0];
-        if (no_matched_box.lt(0.1*this->ssd_dim).sum().item<uint8_t >()>0 || no_matched_box.gt(0.9*this->ssd_dim).sum().item<uint8_t >()>0 || std::get<2>(this->tubelets.at(cl)[s])<5 ) continue;
-        this->output[0][cl].slice(0, count + non_matched_size, count + non_matched_size+1) = torch::cat({torch::zeros({1}).fill_(0.01), std::get<0>(this->tubelets.at(cl)[s])[0].div(this->ssd_dim), torch::zeros({1}).fill_(s), torch::zeros({1}).fill_(std::get<2>(this->tubelets.at(cl)[s]))}, 0);
+        if (no_matched_box.lt(0.1 * this->ssd_dim).sum().item<uint8_t>() > 0 || no_matched_box.gt(0.9 * this->ssd_dim).sum().item<uint8_t>() > 0 || std::get<2>(this->tubelets.at(cl)[s]) < 5)
+            continue;
+        this->output[0][cl].slice(0, count + non_matched_size, count + non_matched_size + 1) = torch::cat({torch::zeros({1}).fill_(0.01), std::get<0>(this->tubelets.at(cl)[s])[0].div(this->ssd_dim), torch::zeros({1}).fill_(s), torch::zeros({1}).fill_(std::get<2>(this->tubelets.at(cl)[s]))}, 0);
         non_matched_size++;
     }
 }
 
-
-void Detector::detect_track(const torch::Tensor& loc, const torch::Tensor& conf, std::vector<float> conf_thresh){
+void Detector::detect_track(const torch::Tensor &loc, const torch::Tensor &conf, std::vector<float> conf_thresh)
+{
     this->output.zero_();
     torch::Tensor prev_box = std::get<0>(this->tubelets.at(this->track_cl)[this->track_id]);
-    torch::Tensor c_mask = conf[this->track_cl].gt(conf_thresh.at(this->track_cl-1));
-    if(c_mask.sum().item<int >() == 0){
+    torch::Tensor c_mask = conf[this->track_cl].gt(conf_thresh.at(this->track_cl - 1));
+    if (c_mask.sum().item<int>() == 0)
+    {
         this->output[0][this->track_cl].slice(0, 0, 1) = torch::cat({torch::zeros({1, 1}).fill_(0.01), std::get<0>(this->tubelets.at(this->track_cl)[this->track_id]).div(this->ssd_dim), torch::zeros({1, 1}).fill_(this->track_id), torch::zeros({1, 1}).fill_(std::get<2>(this->tubelets.at(this->track_cl)[this->track_id]))}, 1);
         this->delete_tubelets();
         return;
@@ -173,7 +191,8 @@ void Detector::detect_track(const torch::Tensor& loc, const torch::Tensor& conf,
     torch::Tensor keep = std::get<0>(nms_result);
     int count = std::get<1>(nms_result);
 
-    if (count == 0){
+    if (count == 0)
+    {
         this->output[0][this->track_cl].slice(0, 0, 1) = torch::cat({torch::zeros({1, 1}).fill_(0.01), std::get<0>(this->tubelets.at(this->track_cl)[this->track_id]).div(this->ssd_dim), torch::zeros({1, 1}).fill_(this->track_id), torch::zeros({1, 1}).fill_(std::get<2>(this->tubelets.at(this->track_cl)[this->track_id]))}, 1);
         this->delete_tubelets();
         return;
@@ -184,23 +203,23 @@ void Detector::detect_track(const torch::Tensor& loc, const torch::Tensor& conf,
     this->tubelets.at(this->track_cl)[this->track_id] = std::tuple<torch::Tensor, int, int>{nms_box[0].unsqueeze(0).mul(this->ssd_dim), this->hold_len + 1, id_matched_times};
     this->output[0][this->track_cl].slice(0, 0, count) = torch::cat({nms_score.unsqueeze(1), nms_box, torch::zeros({count, 1}).fill_(this->track_id), torch::zeros({count, 1}).fill_(id_matched_times)}, 1);
     this->delete_tubelets();
-
 }
 
-
-std::tuple<torch::Tensor, int> Detector::nms(torch::Tensor& boxes, torch::Tensor& scores){
+std::tuple<torch::Tensor, int> Detector::nms(torch::Tensor &boxes, torch::Tensor &scores)
+{
     torch::Tensor keep = torch::zeros(scores.sizes()).to(torch::kLong);
     int count = 0;
     std::tuple<torch::Tensor, int> nms_result(keep, count);
-    if(boxes.numel() == 0){
+    if (boxes.numel() == 0)
+    {
         return nms_result;
     }
     torch::Tensor x1 = boxes.slice(1, 0, 1).squeeze(-1);
     torch::Tensor y1 = boxes.slice(1, 1, 2).squeeze(-1);
     torch::Tensor x2 = boxes.slice(1, 2, 3).squeeze(-1);
     torch::Tensor y2 = boxes.slice(1, 3, 4).squeeze(-1);
-    torch::Tensor area = torch::mul(x2-x1, y2-y1);
-//    torch::Tensor y;
+    torch::Tensor area = torch::mul(x2 - x1, y2 - y1);
+    //    torch::Tensor y;
     torch::Tensor area_mask = area.gt(this->small_size_filter) * area.lt(this->large_size_filter) * y2.lt(this->y_max_filter);
     x1 = x1.masked_select(area_mask);
     y1 = y1.masked_select(area_mask);
@@ -217,14 +236,17 @@ std::tuple<torch::Tensor, int> Detector::nms(torch::Tensor& boxes, torch::Tensor
 
     std::tuple<torch::Tensor, torch::Tensor> sorted_scores = scores.sort(0, false);
     torch::Tensor idx = std::get<1>(sorted_scores);
-    if(idx.size(0) > this->top_k) idx = idx.slice(0, idx.size(0)-this->top_k, idx.size(0));
-    while(idx.numel() > 0){
-        int i = idx[idx.size(0)-1].item<int >();
+    if (idx.size(0) > this->top_k)
+        idx = idx.slice(0, idx.size(0) - this->top_k, idx.size(0));
+    while (idx.numel() > 0)
+    {
+        int i = idx[idx.size(0) - 1].item<int>();
         keep[count++] = i;
-        if(idx.size(0) == 1) break;
-        idx = idx.slice(0, 0, idx.size(0)-1);
-        torch::Tensor inners = (x2.index_select(0, idx).clamp_max(x2[i].item<float>()) - x1.index_select(0, idx).clamp_min(x1[i].item<float>())).clamp_min(0.0)
-                               * (y2.index_select(0, idx).clamp_max(y2[i].item<float>()) - y1.index_select(0, idx).clamp_min(y1[i].item<float>())).clamp_min(0.0);;
+        if (idx.size(0) == 1)
+            break;
+        idx = idx.slice(0, 0, idx.size(0) - 1);
+        torch::Tensor inners = (x2.index_select(0, idx).clamp_max(x2[i].item<float>()) - x1.index_select(0, idx).clamp_min(x1[i].item<float>())).clamp_min(0.0) * (y2.index_select(0, idx).clamp_max(y2[i].item<float>()) - y1.index_select(0, idx).clamp_min(y1[i].item<float>())).clamp_min(0.0);
+        ;
         torch::Tensor rem_areas = area.index_select(0, idx);
         torch::Tensor unions = (rem_areas - inners) + area[i];
         torch::Tensor IoU = inners / unions;
@@ -235,19 +257,20 @@ std::tuple<torch::Tensor, int> Detector::nms(torch::Tensor& boxes, torch::Tensor
     return nms_result;
 }
 
-
-std::tuple<torch::Tensor, int> Detector::prev_nms(torch::Tensor& boxes, torch::Tensor& scores, const torch::Tensor& prev_box){
+std::tuple<torch::Tensor, int> Detector::prev_nms(torch::Tensor &boxes, torch::Tensor &scores, const torch::Tensor &prev_box)
+{
     torch::Tensor keep = torch::zeros(scores.sizes()).to(torch::kLong);
     int count = 0;
     std::tuple<torch::Tensor, int> nms_result(keep, count);
-    if(boxes.numel() == 0){
+    if (boxes.numel() == 0)
+    {
         return nms_result;
     }
     torch::Tensor x1 = boxes.slice(1, 0, 1).squeeze(-1);
     torch::Tensor y1 = boxes.slice(1, 1, 2).squeeze(-1);
     torch::Tensor x2 = boxes.slice(1, 2, 3).squeeze(-1);
     torch::Tensor y2 = boxes.slice(1, 3, 4).squeeze(-1);
-    torch::Tensor area = torch::mul(x2-x1, y2-y1);
+    torch::Tensor area = torch::mul(x2 - x1, y2 - y1);
     torch::Tensor area_mask = area.gt(this->small_size_filter) * area.lt(this->large_size_filter);
     x1 = x1.masked_select(area_mask);
     y1 = y1.masked_select(area_mask);
@@ -255,7 +278,7 @@ std::tuple<torch::Tensor, int> Detector::prev_nms(torch::Tensor& boxes, torch::T
     y2 = y2.masked_select(area_mask);
     area = area.masked_select(area_mask);
     boxes = torch::cat({x1.unsqueeze(-1), y1.unsqueeze(-1), x2.unsqueeze(-1), y2.unsqueeze(-1)}, 1);
-//    boxes = boxes.masked_select(area_mask.unsqueeze(-1).expand_as(boxes));
+    //    boxes = boxes.masked_select(area_mask.unsqueeze(-1).expand_as(boxes));
     scores = scores.masked_select(area_mask);
     x1 *= this->ssd_dim;
     y1 *= this->ssd_dim;
@@ -267,37 +290,40 @@ std::tuple<torch::Tensor, int> Detector::prev_nms(torch::Tensor& boxes, torch::T
     torch::Tensor idx = std::get<1>(sorted_scores);
     // pre-box
     torch::Tensor area_tube = torch::mul(prev_box[2] - prev_box[0], prev_box[3] - prev_box[1]);
-    torch::Tensor inners_tube = (x2.index_select(0, idx).clamp_max(prev_box[2].item<float>())-x1.index_select(0, idx).clamp_min(prev_box[0].item<float>())).clamp_min(0.0)
-                                * (y2.index_select(0, idx).clamp_max(prev_box[3].item<float>())-y1.index_select(0, idx).clamp_min(prev_box[1].item<float>())).clamp_min(0.0);
+    torch::Tensor inners_tube = (x2.index_select(0, idx).clamp_max(prev_box[2].item<float>()) - x1.index_select(0, idx).clamp_min(prev_box[0].item<float>())).clamp_min(0.0) * (y2.index_select(0, idx).clamp_max(prev_box[3].item<float>()) - y1.index_select(0, idx).clamp_min(prev_box[1].item<float>())).clamp_min(0.0);
     torch::Tensor unions_tube = area.index_select(0, idx) - inners_tube + area_tube;
     torch::Tensor IoU_tube = inners_tube.div(unions_tube);
     idx = idx.masked_select(IoU_tube.gt(0.3));
-    if(idx.size(0) > this->top_k) idx = idx.slice(0, idx.size(0)-this->top_k, idx.size(0));
-    while(idx.numel() > 0){
-        int i = idx[-1].item<int >();
+    if (idx.size(0) > this->top_k)
+        idx = idx.slice(0, idx.size(0) - this->top_k, idx.size(0));
+    while (idx.numel() > 0)
+    {
+        int i = idx[-1].item<int>();
         keep[count++] = i;
-        if(idx.size(0) == 1) break;
-        idx = idx.slice(0, 0, idx.size(0)-1);
-        torch::Tensor inners = (x2.index_select(0, idx).clamp_max(x2[i].item<float>()) - x1.index_select(0, idx).clamp_min(x1[i].item<float>())).clamp_min(0.0)
-                               * (y2.index_select(0, idx).clamp_max(y2[i].item<float>()) - y1.index_select(0, idx).clamp_min(y1[i].item<float>())).clamp_min(0.0);
+        if (idx.size(0) == 1)
+            break;
+        idx = idx.slice(0, 0, idx.size(0) - 1);
+        torch::Tensor inners = (x2.index_select(0, idx).clamp_max(x2[i].item<float>()) - x1.index_select(0, idx).clamp_min(x1[i].item<float>())).clamp_min(0.0) * (y2.index_select(0, idx).clamp_max(y2[i].item<float>()) - y1.index_select(0, idx).clamp_min(y1[i].item<float>())).clamp_min(0.0);
         torch::Tensor rem_areas = area.index_select(0, idx);
         torch::Tensor unions = (rem_areas - inners) + area[i];
         torch::Tensor IoU = inners / unions;
         idx = idx.masked_select(IoU.le(this->nms_thresh));
     }
-    if (count == 0){
+    if (count == 0)
+    {
         std::get<0>(nms_result) = keep.slice(0, 0, count);
         std::get<1>(nms_result) = 0;
     }
-    else {
+    else
+    {
         std::get<0>(nms_result) = keep[0];
         std::get<1>(nms_result) = 1;
     }
     return nms_result;
 }
 
-
-torch::Tensor Detector::iou(const torch::Tensor& boxes, unsigned char cl){
+torch::Tensor Detector::iou(const torch::Tensor &boxes, unsigned char cl)
+{
     std::map<int, std::tuple<torch::Tensor, int, int>> tubs = this->tubelets.at(cl);
     int tubs_size = tubs.size();
     torch::Tensor iou = torch::zeros({boxes.size(0), tubs_size});
@@ -305,32 +331,33 @@ torch::Tensor Detector::iou(const torch::Tensor& boxes, unsigned char cl){
     torch::Tensor y1 = boxes.slice(1, 1, 2).squeeze(-1);
     torch::Tensor x2 = boxes.slice(1, 2, 3).squeeze(-1);
     torch::Tensor y2 = boxes.slice(1, 3, 4).squeeze(-1);
-    torch::Tensor area = torch::mul(x2-x1, y2-y1);
+    torch::Tensor area = torch::mul(x2 - x1, y2 - y1);
     unsigned char i = 0;
-    for(auto& tube:tubs){
-//        this->ides.at(cl).emplace_back(std::pair<int, int>{tube.first, std::get<2>(tube.second)});
-//        this->ides_set.at(cl).insert(tube.first);
+    for (auto &tube : tubs)
+    {
+        //        this->ides.at(cl).emplace_back(std::pair<int, int>{tube.first, std::get<2>(tube.second)});
+        //        this->ides_set.at(cl).insert(tube.first);
         torch::Tensor last_tube = std::get<0>(tube.second)[0];
         torch::Tensor area_tube = torch::mul(last_tube[2] - last_tube[0], last_tube[3] - last_tube[1]);
-        torch::Tensor inner = (x2.clamp_max(last_tube[2].item<float>())-x1.clamp_min(last_tube[0].item<float>())).clamp_min(0.0)
-                              * (y2.clamp_max(last_tube[3].item<float>())-y1.clamp_min(last_tube[1].item<float>())).clamp_min(0.0);
+        torch::Tensor inner = (x2.clamp_max(last_tube[2].item<float>()) - x1.clamp_min(last_tube[0].item<float>())).clamp_min(0.0) * (y2.clamp_max(last_tube[3].item<float>()) - y1.clamp_min(last_tube[1].item<float>())).clamp_min(0.0);
         torch::Tensor unions = area - inner + area_tube;
-        iou.slice(1, i, i+1) = inner.div(unions).unsqueeze(-1);
+        iou.slice(1, i, i + 1) = inner.div(unions).unsqueeze(-1);
         i++;
     }
     return iou;
 }
 
-
-std::vector<int> Detector::visualization(cv::Mat& img, std::ofstream& log_file){
+std::vector<int> Detector::visualization(cv::Mat &img, std::ofstream &log_file)
+{
     ++this->frame_num;
     std::stringstream stream;
     std::vector<int> loc;
-    if (send_byte == 6) {
-        int x1 = (int)(((float)this->send_list.at(1) / 100 - (float) this->send_list.at(3) / 100 / 2) * img.cols);
-        int y1 = (int)(((float)this->send_list.at(2) / 100 - (float) this->send_list.at(4) / 100 / 2) * img.rows);
-        int x2 = (int)(((float)this->send_list.at(1) / 100 + (float) this->send_list.at(3) / 100 / 2) * img.cols);
-        int y2 = (int)(((float)this->send_list.at(2) / 100 + (float) this->send_list.at(4) / 100 / 2) * img.rows);
+    if (send_byte == 6)
+    {
+        int x1 = (int)(((float)this->send_list.at(1) / 100 - (float)this->send_list.at(3) / 100 / 2) * img.cols);
+        int y1 = (int)(((float)this->send_list.at(2) / 100 - (float)this->send_list.at(4) / 100 / 2) * img.rows);
+        int x2 = (int)(((float)this->send_list.at(1) / 100 + (float)this->send_list.at(3) / 100 / 2) * img.cols);
+        int y2 = (int)(((float)this->send_list.at(2) / 100 + (float)this->send_list.at(4) / 100 / 2) * img.rows);
         cv::rectangle(img, cv::Point(x1, y1), cv::Point(x2, y2), this->color.at(0), 2, 1, 0);
     }
     else {

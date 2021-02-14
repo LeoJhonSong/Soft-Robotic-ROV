@@ -1,17 +1,12 @@
-//
-// Created by sean on 19-7-22.
-//
-
 #ifndef RESDET_RUAS_H
 #define RESDET_RUAS_H
-#include <opencv2/opencv.hpp>
 #include <opencv2/cudaarithm.hpp>
-#include <opencv2/cudawarping.hpp>
 #include <opencv2/cudaimgproc.hpp>
+#include <opencv2/cudawarping.hpp>
+#include <opencv2/opencv.hpp>
 
-
-class CFilt{
-
+class CFilt
+{
 private:
     int row;
     int col;
@@ -23,14 +18,13 @@ private:
     cv::Ptr<cv::cuda::DFT> dft_gpu;
     cv::Ptr<cv::cuda::DFT> dft_inv_gpu;
     cv::cuda::Stream stream;
+
 public:
     CFilt(int, int, int);
     void get_wf(float, float);
-    void clahe_gpu(cv::Mat&);
-    void wiener_gpu(cv::Mat&);
+    void clahe_gpu(cv::Mat &);
+    void wiener_gpu(cv::Mat &);
     ~CFilt();
 };
-
-
 
 #endif //RESDET_RUAS_H

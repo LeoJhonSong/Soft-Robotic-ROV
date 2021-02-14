@@ -1,32 +1,23 @@
-//
-// Created by sean on 7/11/19.
-//
-#include "detector.h"
-#include "ruas.h"
-#include "color.h"
-#include "marker_detector.h"
-#include "parallel_camera.h"
-
+//for Linux file system
+#include <dirent.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+//for command line args
+#include <gflags/gflags.h>
+// for cuda and torch
 #include <cuda_runtime.h>
-
 #include <torch/script.h>
 #include <torch/torch.h>
-#include <opencv2/opencv.hpp>
-#include <opencv2/imgproc.hpp>
+// for OpenCV
 #include <opencv2/imgcodecs.hpp>
-
-#include <iostream>
-#include <memory>
-#include <string>
-#include <vector>
-#include <gflags/gflags.h>
-#include <thread>
-#include <fstream>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <dirent.h>
-#include <cstddef>
-
+#include <opencv2/imgproc.hpp>
+#include <opencv2/opencv.hpp>
+// for project
+#include "color.h"
+#include "detector.h"
+#include "marker_detector.h"
+#include "parallel_camera.h"
+#include "ruas.h"
 
 DEFINE_int32(K, 100, "turbulence intensity. The greater, the intensive");
 DEFINE_int32(R, 50, "Signal to Noise Ratio. The greater, the more serious of noise");
