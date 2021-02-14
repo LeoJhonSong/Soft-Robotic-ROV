@@ -480,7 +480,7 @@ void Detector::delete_tubelets(){
     }
 }
 
-std::vector<int> Detector::get_relative_position(Uart& uart){
+std::vector<int> Detector::get_relative_position(){
     int selected_cls;
     std::vector<int> target_info;
     int detect_cls_num = detect_scallop ? 4 : 3;

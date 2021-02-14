@@ -9,7 +9,5 @@
 --SSD_DIM=320 \
 --NETG_DIM=256 \
 --TUB=1 \
---UART=false \
---WITH_ROV=false \
 --TRACK=true \
 --RECORD=false

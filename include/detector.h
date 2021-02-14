@@ -7,8 +7,6 @@
 
 #include <torch/torch.h>
 #include <opencv2/opencv.hpp>
-#include <utils.h>
-#include <uart.h>
 #include <sstream>
 #include <iomanip>
 
@@ -50,7 +48,7 @@ public:
     void init_tubelets();
     void delete_tubelets(unsigned char);
     void delete_tubelets();
-    std::vector<int> get_relative_position(Uart&);
+    std::vector<int> get_relative_position();
     void reset_tracking_state();
     int get_class_num(unsigned char);
     void replenish_tubelets(unsigned char cl, int count);

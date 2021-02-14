@@ -1,18 +1,12 @@
 #include "parallel_camera.h"
 #include "color.h"
+#include <functional>
 #include <unistd.h>
-#include <functional> 
 
 extern std::queue<cv::Mat> frame_queue;
 const int CAPTURE_TYPE_NULL = 0;
 const int CAPTURE_TYPE_CAMERA = 1;
 const int CAPTURE_TYPE_VIDEO = 2;
-
-void test()
-{
-    print(RED, 233);
-    cv::waitKey(1);
-}
 
 void ParallelCamera::receive()
 {

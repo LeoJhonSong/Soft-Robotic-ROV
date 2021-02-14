@@ -1,11 +1,8 @@
 //
 // Created by sean on 7/11/19.
 //
-#include "utils.h"
 #include "detector.h"
-#include "uart.h"
 #include "ruas.h"
-#include "rov.h"
 #include "color.h"
 #include "marker_detector.h"
 #include "parallel_camera.h"
@@ -39,21 +36,14 @@ DEFINE_uint32(SSD_DIM, 320, "" );
 DEFINE_uint32(NETG_DIM, 256, "" );
 DEFINE_uint32(TUB, 1, "" );
 DEFINE_int32(MODE, -1, "-2: load web camra; -1: load local video; >0: load camera" );
-DEFINE_bool(UART, false, "false: do not try to communicate by UART; true: try to communicate by UART" );
-DEFINE_bool(WITH_ROV, false, "false: do not try to connect ROV; true: try to connect to ROV" );
 DEFINE_bool(TRACK, true, "0: not use it; >0 use it" );
 DEFINE_bool(RECORD, false, "false: do not record raw and detected videos; true: record them");
 
 // for video_write thread
 char EXT[] = "MJPG";
 int ex1 = EXT[0] | (EXT[1] << 8) | (EXT[2] << 16) | (EXT[3] << 24);
-time_t now = time(nullptr);
-tm *ltm = localtime(&now);
-std::string save_path =  std::to_string(1900 + ltm->tm_year) + "_" + std::to_string(1+ltm->tm_mon)+ "_" + std::to_string(ltm->tm_mday)
-                         + "_" + std::to_string(ltm->tm_hour) + "_" + std::to_string(ltm->tm_min) + "_" + std::to_string(ltm->tm_sec);
 cv::Size vis_size(640, 360);
 bool save_a_frame = false;
-bool save_a_count = false;
 std::queue<cv::Mat> frame_queue, det_frame_queue;
 std::queue<std::pair<cv::Mat, unsigned int>> img_queue;
 
@@ -61,25 +51,72 @@ int frame_w, frame_h;
 bool video_write_flag = false;
 
 // for run_rov thread
-bool run_rov_flag = true;
-int rov_key = 32;
-bool rov_half_speed = false;
-bool land = false;
 int send_byte = -1;
 unsigned char max_attempt = 0;
 std::vector<int> target_loc = {0,0,0,0};
-bool manual_stop = false;
-bool grasping_done = false;
-bool second_dive = false;
 float max_depth = 0;
 float curr_depth = 0;
-float half_scale = 1.5;
-float adjust_scale = 1.5;
 bool detect_scallop = false;
 
 std::vector<int> target_info;
 const int MARKER_OFFSET_X = 50;
 const int MARKER_OFFSET_Y = 75;
+
+// intermediate variable
+cv::Mat frame, img_float, img_vis;
+torch::Tensor img_tensor, fake_B, loc, conf, ota_feature;
+std::vector<torch::jit::IValue> net_input, net_output;
+cv::cuda::GpuMat img_gpu;
+bool quit = false;
+unsigned char loc_idex = 0;
+int count_times = 0;
+
+time_t now = time(nullptr);
+tm *ltm = localtime(&now);
+std::string save_path = std::to_string(1900 + ltm->tm_year) + "_" + std::to_string(1 + ltm->tm_mon) + "_" + std::to_string(ltm->tm_mday) + "_" + std::to_string(ltm->tm_hour) + "_" + std::to_string(ltm->tm_min) + "_" + std::to_string(ltm->tm_sec);
+std::ofstream log_file("./record/" + save_path + "/log.txt");
+
+cv::Mat tensor2im(torch::Tensor tensor) {
+    tensor = tensor[0].add(1.0).div(2.0).mul(255.0).permute({1,2,0}).to(torch::kU8).to(torch::kCPU);
+    cv::Mat img(tensor.size(0), tensor.size(1), CV_8UC3);
+    std::memcpy((void*)img.data, tensor.data_ptr(), sizeof(torch::kU8)*tensor.numel());
+    return img;
+}
+
+void video_write(){
+    // 如果不录制视频, 退出视频录制线程
+    if (!video_write_flag) return;
+    //raw video
+    cv::VideoWriter writer_raw;
+    writer_raw.open("./record/" + save_path + "/" + save_path + "_raw.avi", ex1, 20, cv::Size(frame_w, frame_h), true);
+    if(!writer_raw.isOpened()){
+        print(BOLDRED, "ERROR: Can not open the output video for raw write");
+    }
+    //det video
+    cv::VideoWriter writer_det;
+    writer_det.open("./record/" + save_path + "/" + save_path + "_det.avi", ex1, 20, vis_size, true);
+    if(!writer_det.isOpened()){
+        print(BOLDRED, "ERROR: Can not open the output video for det write");
+    }
+
+    while(video_write_flag) {
+        if (!frame_queue.empty()) {
+            writer_raw << frame_queue.front();
+            frame_queue.pop();
+        }
+        if (!det_frame_queue.empty()) {
+            writer_det << det_frame_queue.front();
+            det_frame_queue.pop();
+        }
+        if (!img_queue.empty()) {
+            cv::imwrite("./record/" + save_path + "/" + std::to_string(img_queue.front().second) + ".jpg", img_queue.front().first);
+            img_queue.pop();
+        }
+    }
+    print(RED, "QUIT: video write thread quit");
+    writer_raw.release();
+    writer_det.release();
+}
 
 int main(int argc, char* argv[]) {
     time_t now = std::time(0);
@@ -90,11 +127,11 @@ int main(int argc, char* argv[]) {
     // 设置是否录制
     video_write_flag = FLAGS_RECORD;
     // make record dir and file
-    if(FLAGS_RECORD)
-        if(nullptr==opendir(("./record/" + save_path).c_str()))
-            mkdir(("./record/" + save_path).c_str(), S_IRWXU|S_IRWXG|S_IRWXO);
-    std::ofstream log_file("./record/" + save_path + "/log.txt");
-
+    if (FLAGS_RECORD)
+    {
+        if (nullptr == opendir(("./record/" + save_path).c_str()))
+            mkdir(("./record/" + save_path).c_str(), S_IRWXU | S_IRWXG | S_IRWXO);
+    }
     // load models
     torch::NoGradGuard no_grad_guard;
     std::string model_path;
@@ -151,39 +188,11 @@ int main(int argc, char* argv[]) {
     frame_w = (int)capture.get(cv::CAP_PROP_FRAME_WIDTH);
     frame_h = (int)capture.get(cv::CAP_PROP_FRAME_HEIGHT);
 
-    // intermediate variable
-    cv::Mat frame, img_float, img_vis;
-    torch::Tensor img_tensor, fake_B, loc, conf, ota_feature;
-    std::vector<torch::jit::IValue> net_input, net_output;
-    cv::cuda::GpuMat img_gpu;
-    bool quit = false;
-    unsigned char loc_idex = 0;
-    time_t t_send = 0;
-    int conut_times = 0;
-
-    // UART
-    Uart uart("ttyUSB0", 9600);
-    if(FLAGS_UART) {
-        bool uart_open_flag, uart_init_flag;
-        uart_open_flag = uart.openFile();
-        if (!uart_open_flag)
-            print(BOLDRED, "ERROR: UART fails to open ");
-        uart_init_flag = uart.initPort();
-        if (!uart_init_flag)
-            print(BOLDRED, "ERROR: UART fails to be initialed ");
-    }
-
-
-    // multi thread
-    if (!FLAGS_WITH_ROV)
-        run_rov_flag = false;
-    std::thread rov_runner(run_rov);
     std::thread video_writer(video_write);
     capture.receive_start();  // 视频流读取线程
 
     // marker detector
     // 初始化的size要对应上后面输入图片的size,看到时候用哪个图片(原始的frame, net_G输出的fake_B, 或者resize后的img_vis)比较好
-    // capture.read(frame);
 	// marker::MarkerDetector marker_detector(frame.size());
 	marker::MarkerDetector marker_detector(vis_size);
 	marker::MarkerInfo marker_info_current;
@@ -258,121 +267,12 @@ int main(int argc, char* argv[]) {
 
         target_loc = Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, log_file);
         // print(BOLDRED, (float)target_loc[0]/vis_size.width << ", " << (float)target_loc[1]/vis_size.height << ", "<< (float)target_loc[2]/vis_size.width << ", " << (float)target_loc[3]/vis_size.height );
-
-        // 坐底后的串口通信
-        if (land)
-        {
-            if (FLAGS_UART)
-            {
-                if (send_byte == -1)
-                {
-                    target_info = Detect.get_relative_position(uart);
-                    if(target_info[0] == 1000)
-                    {
-                        send_byte = 0;
-                        uart.send("No target");
-                    }
-                    else if(target_info[0] == 2000)
-                    {
-                    // else if(false)
-                        send_byte = 1;
-                        uart.send("No target");
-                    }
-                    else
-                    {
-                        // 发送marker相对于目标的坐标
-                        std::string send_array = "#";
-                        send_array = send_array + std::to_string(-(marker_info.center.x / vis_size.width * 100 - target_info[1])) + "," + std::to_string(-(marker_info.center.y / vis_size.height * 100 - target_info[2]))+ "\n";
-                        print(BOLDYELLOW, "t_x: " << target_info[1] << " t_y: " << target_info[2]);
-
-                        send_byte = uart.send(send_array);
-
-                        print(BOLDGREEN, "[marker relative position] " << send_array);
-                    }
-
-                    if (send_byte == 6)
-                    {
-                        print(BOLDCYAN, "MAIN: uart send successfully, clock start");
-                        t_send = time(nullptr);
-                    }
-                    else
-                    {
-                        if (send_byte == 0)
-                            print(BOLDCYAN, "MAIN: uart fail to send");
-                        else if (send_byte == 1)
-                        {
-                            print(BOLDCYAN, "MAIN: out of grasping area, try a second dive");
-                            second_dive = true;
-                        }
-                        land = false;
-                        grasping_done = true;
-                        max_attempt = 0;
-                        send_byte = -1;
-                    }
-                }
-            }
-            else
-            {
-                print(BOLDCYAN, "MAIN: uart is closed");
-                land = false;
-                grasping_done = true;
-                max_attempt = 0;
-                send_byte = -1;
-            }
-        }
-        // 串口通信成功后
-        if (send_byte == 6)
-        {
-            if ((time(nullptr) - t_send) > 180)  // 时间超过180s, 判断再尝试一次还是放弃当前目标
-            {
-                // 再试一次
-                send_byte = -1;
-                // TODO 这个再试一次好像没起作用
-                // 两次尝试后放弃抓取当前目标
-                if (++max_attempt > 1)
-                {
-                    print(BOLDCYAN, "MAIN: tried for 2 times, grasping done");
-                    land = false;
-                    grasping_done = true;
-                    max_attempt = 0;
-                }
-            }
-            else
-            {
-                // 发送marker相对于目标的坐标
-                std::string send_array = "#";
-                send_array = send_array + std::to_string(-(marker_info.center.x / vis_size.width * 100 - target_info[1])) + "," + std::to_string(-(marker_info.center.y / vis_size.height * 100 - target_info[2])) + "\n";
-                print(BOLDYELLOW, "t1_x: " << target_info[1] << " t1_y: " << target_info[2]);
-
-                uart.send(send_array);
-                print(BOLDGREEN, "[marker relative position] " << send_array);
-            }
-        }
-        int key = cv::waitKey(1) & 0xFF;
-        if (key != -1)
-            rov_key = key;
-        parse_key(key, quit, reset_id, conf_thresh, FLAGS_K, FLAGS_R, filter);
-        if (save_a_count)
-        {
-            print(BOLDWHITE, "save couting " + std::to_string(conut_times) + ": holothurian," << Detect.get_class_num(1) << ",echinus," << Detect.get_class_num(2)
-                                                                                              << ",scallop," << Detect.get_class_num(3));
-            std::ofstream result_file("./record/" + save_path + "/result_" + std::to_string(conut_times++) + ".txt");
-            result_file << "Couting: holothurian," << Detect.get_class_num(1) << ",echinus," << Detect.get_class_num(2) << ",scallop," << Detect.get_class_num(3) << std::endl;
-            result_file.close();
-            save_a_count = false;
-        }
+        if((cv::waitKey(1) & 0xFF) == 27) quit = true;
     }
-    print(BOLDWHITE, "save couting " + std::to_string(conut_times) + ": holothurian," << Detect.get_class_num(1) << ",echinus," << Detect.get_class_num(2)  << ",scallop," << Detect.get_class_num(3));
-    std::ofstream result_file("./record/" + save_path + "/result_" + std::to_string(conut_times) + ".txt");
-    result_file << "Couting: holothurian," << Detect.get_class_num(1) << ",echinus," << Detect.get_class_num(2)
-                << ",scallop," << Detect.get_class_num(3) << std::endl;
-    result_file.close();
+    print(BOLDWHITE, "save couting " + std::to_string(count_times) + ": holothurian," << Detect.get_class_num(1) << ",echinus," << Detect.get_class_num(2)  << ",scallop," << Detect.get_class_num(3));
     log_file.close();
-    uart.closeFile();
     video_write_flag = false;
     video_writer.join();
-    run_rov_flag = false;
-    rov_runner.join();
     capture.receive_stop();
     print(BOLDGREEN, "bye!");
     return 0;
