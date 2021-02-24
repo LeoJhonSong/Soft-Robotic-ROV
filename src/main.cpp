@@ -1,7 +1,6 @@
 //for Linux file system
 #include <dirent.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 //for command line args
 #include <gflags/gflags.h>
 // for cuda and torch
@@ -25,8 +24,8 @@ DEFINE_uint32(RUAS, 0, "0: skip; 1: clahe; 2: wiener+clahe");
 DEFINE_uint32(NET_PHASE, 2, "0: skip; 1: netG; 2: netG+RefineDet; 3: RefineDet" );
 DEFINE_uint32(SSD_DIM, 320, "" );
 DEFINE_uint32(NETG_DIM, 256, "" );
-DEFINE_uint32(TUB, 1, "" );
-DEFINE_int32(MODE, -1, "-2: load web camra; -1: load local video; >0: load camera" );
+DEFINE_bool(TUB, true, "" );
+DEFINE_int32(MODE, -1, "-2: load web camera; -1: load local video; >0: load camera" );
 DEFINE_bool(TRACK, true, "0: not use it; >0 use it" );
 DEFINE_bool(RECORD, false, "false: do not record raw and detected videos; true: record them");
 
@@ -34,7 +33,6 @@ DEFINE_bool(RECORD, false, "false: do not record raw and detected videos; true: 
 char EXT[] = "MJPG";
 int ex1 = EXT[0] | (EXT[1] << 8) | (EXT[2] << 16) | (EXT[3] << 24);
 cv::Size vis_size(640, 360);
-bool save_a_frame = false;
 std::queue<cv::Mat> frame_queue, det_frame_queue;
 std::queue<std::pair<cv::Mat, unsigned int>> img_queue;
 
@@ -42,30 +40,24 @@ int frame_w, frame_h;
 bool video_write_flag = false;
 
 // for run_rov thread
-int send_byte = -1;
-unsigned char max_attempt = 0;
-std::vector<int> target_loc = {0,0,0,0};
-float max_depth = 0;
-float curr_depth = 0;
-bool detect_scallop = false;
+std::vector<float> target_loc = {0,0,0,0};
+bool detect_scallop = true;
 
-std::vector<int> target_info;
 const int MARKER_OFFSET_X = 50;
 const int MARKER_OFFSET_Y = 75;
 
 // intermediate variable
 cv::Mat frame, img_float, img_vis;
-torch::Tensor img_tensor, fake_B, loc, conf, ota_feature;
+torch::Tensor img_tensor, fake_B, loc, conf;
 std::vector<torch::jit::IValue> net_input, net_output;
-cv::cuda::GpuMat img_gpu;
+cv::cuda::GpuMat img_gpu;  //Fixme: uesless?
 bool quit = false;
-unsigned char loc_idex = 0;
+unsigned char loc_index = 0;
 int count_times = 0;
 
-time_t now = time(nullptr);
-tm *ltm = localtime(&now);
+time_t now_datetime = time(nullptr);
+tm *ltm = localtime(&now_datetime);
 std::string save_path = std::to_string(1900 + ltm->tm_year) + "_" + std::to_string(1 + ltm->tm_mon) + "_" + std::to_string(ltm->tm_mday) + "_" + std::to_string(ltm->tm_hour) + "_" + std::to_string(ltm->tm_min) + "_" + std::to_string(ltm->tm_sec);
-std::ofstream log_file("./record/" + save_path + "/log.txt");
 
 cv::Mat tensor2im(torch::Tensor tensor) {
     tensor = tensor[0].add(1.0).div(2.0).mul(255.0).permute({1,2,0}).to(torch::kU8).to(torch::kCPU);
@@ -104,6 +96,16 @@ void video_write(){
             img_queue.pop();
         }
     }
+    while (!frame_queue.empty()) {
+        frame_queue.pop();
+    }
+    while (!det_frame_queue.empty()) {
+        det_frame_queue.pop();
+    }
+    while (!img_queue.empty()) {
+        img_queue.pop();
+    }
+
     print(RED, "QUIT: video write thread quit");
     writer_raw.release();
     writer_det.release();
@@ -137,13 +139,15 @@ int main(int argc, char* argv[]) {
 
 
     // load detector
-    unsigned int num_classes = 5;
+    unsigned int num_classes = 5;  // 背景, 海参, 海胆, 扇贝, 海星
     int top_k = 200;
     float nms_thresh = 0.3;
-    std::vector<float> conf_thresh = {0.6, 0.8, 0.3, 1.5};  // 海参, 海胆, 扇贝, 海星
+    // 背景, 海参, 海胆, 扇贝, 海星. 顺序由模型决定, 顺序决定了哪个类别优先级更高
+    std::vector<float> conf_thresh = {0, 0.6, 0.8, 0.3, 1.5};
     float tub_thresh = 0.3;
     bool reset_id = false;
-    Detector Detect(num_classes, top_k, nms_thresh, FLAGS_TUB, FLAGS_SSD_DIM, FLAGS_TRACK);
+    detector::Detector detector(num_classes, top_k, nms_thresh, FLAGS_TUB, FLAGS_SSD_DIM, FLAGS_TRACK);
+    detector::Visual_info visual_info;
 
     // load filter
     CFilt filter(FLAGS_SSD_DIM, FLAGS_SSD_DIM, 3);
@@ -153,6 +157,7 @@ int main(int argc, char* argv[]) {
     }
 
     // load video
+    // FIXME
     ParallelCamera capture;
     while (!capture.isOpened())
     {
@@ -160,7 +165,7 @@ int main(int argc, char* argv[]) {
         {
             if (FLAGS_MODE == -1)
             {
-
+                // TODO: feature: set video as arg
                 capture.open("./test/echinus.mp4");
                 // 设置从视频的哪一帧开始读取
                 capture.set(cv::CAP_PROP_POS_FRAMES, 1100);
@@ -179,6 +184,7 @@ int main(int argc, char* argv[]) {
     frame_w = (int)capture.get(cv::CAP_PROP_FRAME_WIDTH);
     frame_h = (int)capture.get(cv::CAP_PROP_FRAME_HEIGHT);
 
+    // FIXME: need a no thread ver to debug
     std::thread video_writer(video_write);
     capture.receive_start();  // 视频流读取线程
 
@@ -193,7 +199,8 @@ int main(int argc, char* argv[]) {
         // 获取视频流中最新帧
         bool read_ret = capture.read(frame);
         if(!read_ret) break;
-        // pre processing
+		if((cv::waitKey(1) & 0xFF) == 27) quit = true;
+		// pre processing
         cv::resize(frame, frame, cv::Size(FLAGS_NETG_DIM, FLAGS_NETG_DIM));
         if(FLAGS_RUAS == 1){
             filter.clahe_gpu(frame);
@@ -217,7 +224,7 @@ int main(int argc, char* argv[]) {
         if (FLAGS_NET_PHASE == 1)
         {
             fake_B = net->forward(net_input).toTensor();
-            loc_idex = 1;
+			loc_index = 1;
             cudaDeviceSynchronize();
         }
         else if (FLAGS_NET_PHASE > 1)
@@ -227,14 +234,14 @@ int main(int argc, char* argv[]) {
             if (FLAGS_NET_PHASE == 2)
             {
                 fake_B = net_output.at(0).toTensor();
-                loc_idex = 1;
+				loc_index = 1;
             }
             else if (FLAGS_NET_PHASE == 3)
-                loc_idex = 0;
-            loc = net_output.at(loc_idex).toTensor().to(torch::kCPU);
-            conf = net_output.at(loc_idex + 1).toTensor().to(torch::kCPU);
+				loc_index = 0;
+            loc = net_output.at(loc_index).toTensor().to(torch::kCPU);
+            conf = net_output.at(loc_index + 1).toTensor().to(torch::kCPU);
         }
-        if (loc_idex == 1)
+        if (loc_index == 1)
             img_vis = tensor2im(fake_B);
         else
             img_vis = frame;
@@ -244,24 +251,47 @@ int main(int argc, char* argv[]) {
         cv::resize(img_vis, img_vis, vis_size);
 
         // detect marker
+        // TODO: if (visual_info.arm_is_working)
         marker_info_current = marker_detector.detect_single_marker(img_vis, true, marker::VER_OPENCV, marker::MODE_DETECT);
+        marker_info = marker_info_current;
         if (marker_info_current.center.x > 0 && marker_info_current.center.y > 0)
         {
-            marker_info = marker_info_current;
             // 补偿偏置
             marker_info.center.x += MARKER_OFFSET_X;
             marker_info.center.y += MARKER_OFFSET_Y;
+            // update visual_info.marker*
+            visual_info.has_marker = true;
+            visual_info.marker_position = cv::Point2f(marker_info.center.x / vis_size.width, marker_info.center.y / vis_size.height);
+        }
+        else
+        {
+            visual_info.has_marker = false;
+            visual_info.marker_position = cv::Point2f(0, 0);
         }
         // 补偿后原点
         cv::circle(img_vis, marker_info.center, 6, cv::Scalar(0, 0, 255), -1, 8, 0);
         // print(BOLDYELLOW, "x: " << marker_info.center.x << " y: " << marker_info.center.y);
 
-        target_loc = Detect.visual_detect(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis, log_file);
-        // print(BOLDRED, (float)target_loc[0]/vis_size.width << ", " << (float)target_loc[1]/vis_size.height << ", "<< (float)target_loc[2]/vis_size.width << ", " << (float)target_loc[3]/vis_size.height );
-        if((cv::waitKey(1) & 0xFF) == 27) quit = true;
+        target_loc = detector.detect_and_visualize(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis);  // cx, cy, width, height
+        // update visual_info.target*
+        if (detector.track_id > -1)
+        {
+            visual_info.has_target = true;
+            visual_info.target_class = detector.tracking_class;
+            visual_info.target_id = detector.track_id;
+            visual_info.target_center = cv::Point2f(target_loc[0], target_loc[1]);
+            visual_info.target_shape = cv::Point2f(target_loc[2], target_loc[3]);
+        }
+        else  // clear visual_info.target*
+        {
+            visual_info.has_target = false;
+            visual_info.target_class = 0;
+            visual_info.target_id = -1;
+            visual_info.target_center = cv::Point2f(0, 0);
+            visual_info.target_shape = cv::Point2f(0, 0);
+        }
     }
-    print(BOLDWHITE, "save couting " + std::to_string(count_times) + ": holothurian," << Detect.get_class_num(1) << ",echinus," << Detect.get_class_num(2)  << ",scallop," << Detect.get_class_num(3));
-    log_file.close();
+    print(BOLDWHITE, "save couting " + std::to_string(count_times) + ": holothurian," << detector.get_class_num(1) << ",echinus," << detector.get_class_num(2) << ",scallop," << detector.get_class_num(3));
     video_write_flag = false;
     video_writer.join();
     capture.receive_stop();

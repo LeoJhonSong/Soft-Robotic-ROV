@@ -4,8 +4,12 @@
         "-Wno-dev"
     ],
     "cSpell.words": [
+        "RUAS",
+        "aruco",
+        "cuda",
         "gflags",
-        "glog"
+        "glog",
+        "opencv"
     ],
     "cmake.configureOnEdit": false,
     "C_Cpp.autoAddFileAssociations": false,

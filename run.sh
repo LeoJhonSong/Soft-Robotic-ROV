@@ -8,6 +8,6 @@
 --MODE=-1 \
 --SSD_DIM=320 \
 --NETG_DIM=256 \
---TUB=1 \
+--TUB=true \
 --TRACK=true \
 --RECORD=false
