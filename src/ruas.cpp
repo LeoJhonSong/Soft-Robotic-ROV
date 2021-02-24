@@ -1,7 +1,3 @@
-//
-// Created by sean on 19-7-22.
-//
-
 #include "ruas.h"
 
 CFilt::CFilt(int row, int col, int clahe_thresh)

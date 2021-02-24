@@ -2,7 +2,6 @@
 #define MARKER_DETECTOR_H
 
 #include "aruco.h"
-// #include <iostream>
 #include <opencv2/aruco.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/opencv.hpp>

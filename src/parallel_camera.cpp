@@ -4,7 +4,6 @@
 #include <unistd.h>
 
 extern std::queue<cv::Mat> frame_queue;
-const int CAPTURE_TYPE_NULL = 0;
 const int CAPTURE_TYPE_CAMERA = 1;
 const int CAPTURE_TYPE_VIDEO = 2;
 

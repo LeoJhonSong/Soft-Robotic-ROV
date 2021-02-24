@@ -17,7 +17,7 @@ namespace detector
         cv::Point2f target_center = cv::Point2f(0, 0); // cx, cy
         cv::Point2f target_shape = cv::Point2f(0, 0);  //width, height
         // for arm
-        bool arm_is_working = false;  // from outside
+        bool arm_is_working = false; // from outside
         bool has_marker = false;
         cv::Point2f marker_position = cv::Point2f(0, 0);
     };
@@ -48,21 +48,20 @@ namespace detector
         int track_id;
         Detector(unsigned int, int, float, bool, int, bool);
         void log_params();
-        void update(const torch::Tensor &loc, const torch::Tensor &conf, std::vector<float> conf_thresh);
-        void update(const torch::Tensor &loc, const torch::Tensor &conf, std::vector<float> conf_thresh, float tub_thresh);
-        void tracking_update(const torch::Tensor &loc, const torch::Tensor &conf, std::vector<float> conf_thresh);
-        std::vector<float> detect_and_visualize(const torch::Tensor &, const torch::Tensor &, const std::vector<float> &, float, bool &, cv::Mat &);
+        int get_class_num(unsigned char);
         std::tuple<torch::Tensor, int> nms(torch::Tensor &, torch::Tensor &);
         std::tuple<torch::Tensor, int> prev_nms(torch::Tensor &, torch::Tensor &, const torch::Tensor &);
         torch::Tensor iou(const torch::Tensor &, unsigned char);
-        std::vector<float> visualization(cv::Mat &);
         void init_tubelets();
         void delete_tubelets(unsigned char);
         void delete_tubelets();
-        void get_relative_position();
-        void reset_tracking_state();
-        int get_class_num(unsigned char);
         void replenish_tubelets(unsigned char cl, int count);
+        void reset_tracking_state();
+        void update(const torch::Tensor &loc, const torch::Tensor &conf, std::vector<float> conf_thresh);
+        void update(const torch::Tensor &loc, const torch::Tensor &conf, std::vector<float> conf_thresh, float tub_thresh);
+        void tracking_update(const torch::Tensor &loc, const torch::Tensor &conf, std::vector<float> conf_thresh);
+        std::vector<float> visualization(cv::Mat &);
+        std::vector<float> detect_and_visualize(const torch::Tensor &, const torch::Tensor &, const std::vector<float> &, float, bool &, cv::Mat &);
         ~Detector();
     };
 } // namespace detector
