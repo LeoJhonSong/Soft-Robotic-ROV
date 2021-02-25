@@ -1,7 +1,6 @@
-*.MP4
-*.mp4
 *build*
-model*
-*idea*
+models/
 record/
 test/
+.idea/
+.cache/
