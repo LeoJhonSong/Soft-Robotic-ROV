@@ -34,7 +34,6 @@ char EXT[] = "MJPG";
 int ex1 = EXT[0] | (EXT[1] << 8) | (EXT[2] << 16) | (EXT[3] << 24);
 cv::Size vis_size(640, 360);
 std::queue<cv::Mat> frame_queue, det_frame_queue;
-std::queue<std::pair<cv::Mat, unsigned int>> img_queue;
 
 int frame_w, frame_h;
 bool video_write_flag = false;
@@ -99,25 +98,7 @@ void video_write()
             writer_det << det_frame_queue.front();
             det_frame_queue.pop();
         }
-        if (!img_queue.empty())
-        {
-            cv::imwrite("./record/" + save_path + "/" + std::to_string(img_queue.front().second) + ".jpg", img_queue.front().first);
-            img_queue.pop();
-        }
     }
-    while (!frame_queue.empty())
-    {
-        frame_queue.pop();
-    }
-    while (!det_frame_queue.empty())
-    {
-        det_frame_queue.pop();
-    }
-    while (!img_queue.empty())
-    {
-        img_queue.pop();
-    }
-
     print(RED, "QUIT: video write thread quit");
     writer_raw.release();
     writer_det.release();
@@ -293,6 +274,8 @@ int main(int argc, char *argv[])
         // print(BOLDYELLOW, "x: " << marker_info.center.x << " y: " << marker_info.center.y);
 
         target_loc = detector.detect_and_visualize(loc, conf, conf_thresh, tub_thresh, reset_id, img_vis); // cx, cy, width, height
+        if (video_write_flag)
+            det_frame_queue.push(img_vis);
         // update visual_info.target*
         if (detector.track_id > -1)
         {

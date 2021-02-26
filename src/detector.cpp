@@ -2,8 +2,6 @@
 #include "color.h"
 #include <cmath>
 
-extern std::queue<cv::Mat> det_frame_queue;
-extern std::queue<std::pair<cv::Mat, int>> img_queue;
 extern bool detect_scallop;
 
 using namespace detector;
@@ -522,7 +520,6 @@ std::vector<float> Detector::visualization(cv::Mat &img)
                     1, this->color.at(4), 2);
     }
     cv::imshow("ResDet", img);
-    det_frame_queue.push(img);
     return loc;
 }
 
