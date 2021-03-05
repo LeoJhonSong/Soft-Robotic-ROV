@@ -193,7 +193,7 @@ int main(int argc, char *argv[])
         bool read_ret = capture.read(frame);
         if (!read_ret)
             break;
-        if ((cv::waitKey(1) & 0xFF) == 27)
+        if ((cv::waitKey(1) & 0xFF) == 27) // ESC
             break;
         // pre processing
         cv::resize(frame, frame, cv::Size(FLAGS_NETG_DIM, FLAGS_NETG_DIM));
@@ -207,11 +207,11 @@ int main(int argc, char *argv[])
         }
         cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
         // run net
-        if (FLAGS_NET_PHASE < 3)
+        if (FLAGS_NET_PHASE != 3) // when not using netG as detect only
         {
             cv::normalize(frame, img_float, -1, 1, cv::NORM_MINMAX, CV_32F);
         }
-        else if (FLAGS_NET_PHASE == 3)
+        else
         {
             frame.convertTo(img_float, CV_32F);
             img_float = img_float - 128.0;

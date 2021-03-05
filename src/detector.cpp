@@ -1,6 +1,7 @@
 #include "detector.h"
 #include "color.h"
 #include <cmath>
+#include <opencv2/highgui.hpp>
 
 using namespace detector;
 
@@ -557,6 +558,7 @@ std::vector<float> Detector::visualization(cv::Mat &img)
         cv::putText(img, "starfish: " + std::to_string(this->stable_ides_set.at(4).size()), cv::Point(10, 75), 1, 1,
                     this->color.at(4), 2);
     }
+    cv::namedWindow("ResDet", cv::WINDOW_GUI_NORMAL);
     cv::imshow("ResDet", img);
     return loc;
 }
