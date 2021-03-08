@@ -28,9 +28,10 @@ void ParallelCamera::receive()
     }
 }
 
+// copy image read by ParallelCamera::receive()
 bool ParallelCamera::read(cv::Mat &image)
 {
-    image = this->current_frame.clone();
+    image = this->current_frame.clone();  // able to have 竞争冒险 if not copy
     return current_read_ret;
 }
 
@@ -61,7 +62,7 @@ void ParallelCamera::receive_start()
     if (this->receive_thread == nullptr)
     {
         this->current_read_ret = this->cv::VideoCapture::read(this->current_frame);
-        receive_thread = new std::thread(std::mem_fn(&ParallelCamera::receive), this);
+        this->receive_thread = new std::thread(std::mem_fn(&ParallelCamera::receive), this);
         this->is_running = true;
     }
     else
@@ -80,6 +81,6 @@ void ParallelCamera::receive_stop()
     {
         this->is_running = false;
         (*(this->receive_thread)).join();
-        this->receive_thread == nullptr;
+        this->receive_thread = nullptr;
     }
 }

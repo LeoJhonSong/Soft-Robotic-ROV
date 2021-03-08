@@ -2,7 +2,6 @@
 #include <dirent.h>
 #include <sys/stat.h>
 // for command line args
-#include <gflags/gflags.h>
 // for cuda and torch
 #include <cuda_runtime.h>
 #include <torch/script.h>
@@ -18,32 +17,34 @@
 #include "parallel_camera.h"
 #include "ruas.h"
 
-DEFINE_int32(K, 100, "turbulence intensity. The greater, the intensive");
-DEFINE_int32(R, 50, "Signal to Noise Ratio. The greater, the more serious of noise");
-DEFINE_uint32(RUAS, 0, "0: skip; 1: clahe; 2: wiener+clahe");
-DEFINE_uint32(NET_PHASE, 2, "0: skip; 1: netG; 2: netG+RefineDet; 3: RefineDet");
-DEFINE_uint32(SSD_DIM, 320, "");
-DEFINE_uint32(NETG_DIM, 256, "");
-DEFINE_bool(TUB, true, "");
-DEFINE_int32(MODE, -1, "-2: load web camera; -1: load local video; >0: load camera");
-DEFINE_bool(TRACK, true, "0: not use it; >0 use it");
-DEFINE_bool(RECORD, false, "false: do not record raw and detected videos; true: record them");
+const char *keys =
+    "{k         | 100                   | turbulence intensity. The greater, the intensive}"
+    "{r         | 50                    | Signal to Noise Ratio. The greater, the more serious of noise}"
+    "{ruas      | 0                     | RUAS algorithm selection. 0: skip; 1: clahe; 2: wiener+clahe}"
+    "{netg      | 256                   | netG dimension}"
+    "{ssd       | 320                   | SSD dimension}"
+    "{tub       | true                  | }"
+    "{mode      | 2                     | refinedet selection. 0: skip; 1: netG; 2: netG+RefineDet; 3: RefineDet}"
+    "{stream    | file                  | source of video stream. file; link; camera}"
+    "{cid       | 0                     | camera id if video stream come from camera}"
+    "{address   | ./test/test.mp4       | address of video stream if not come from camera}"
+    "{track     | true                  | track single target}"
+    "{record    | false                 | record raw and processed video}"
+    "{help      |                       | show help message}";
 
-// for video_write thread
-char EXT[] = "MJPG";
-int ex1 = EXT[0] | (EXT[1] << 8) | (EXT[2] << 16) | (EXT[3] << 24);
+// 一些配置项
+bool detect_scallop = true;
 cv::Size vis_size(640, 360);
-std::queue<cv::Mat> frame_queue, det_frame_queue;
-
-// int frame_w, frame_h;
-bool video_write_flag;
-
 const int MARKER_OFFSET_X = 50;
 const int MARKER_OFFSET_Y = 75;
 
-// intermediate variable
+bool video_write_flag;
+std::queue<cv::Mat> frame_queue, det_frame_queue;
+std::vector<float> target_loc = {0, 0, 0, 0};
+cv::Mat frame, img_float, img_vis;
+std::vector<torch::jit::IValue> net_input, net_output;
 torch::Tensor img_tensor, fake_B, loc, conf;
-cv::cuda::GpuMat img_gpu; // Fixme: uesless?
+cv::cuda::GpuMat img_gpu; // FIXME: uesless?
 unsigned char loc_index = 0;
 
 cv::Mat tensor2im(torch::Tensor tensor)
@@ -59,19 +60,21 @@ void video_write(int frame_w, int frame_h, std::string save_path)
     // 如果不录制视频, 退出视频录制线程
     if (!video_write_flag)
         return;
+    char EXT[] = "MJPG";
+    int ex1 = EXT[0] | (EXT[1] << 8) | (EXT[2] << 16) | (EXT[3] << 24);
     // raw video
     cv::VideoWriter writer_raw;
     writer_raw.open("./record/" + save_path + "/" + save_path + "_raw.avi", ex1, 20, cv::Size(frame_w, frame_h), true);
     if (!writer_raw.isOpened())
     {
-        print(BOLDRED, "ERROR: Can not open the output video for raw write");
+        print(BOLDRED, "[ERROR] Can not open the raw output video");
     }
     // det video
     cv::VideoWriter writer_det;
-    writer_det.open("./record/" + save_path + "/" + save_path + "_det.avi", ex1, 20, vis_size, true);
+    writer_det.open("./record/" + save_path + "/" + save_path + "_processed.avi", ex1, 20, vis_size, true);
     if (!writer_det.isOpened())
     {
-        print(BOLDRED, "ERROR: Can not open the output video for det write");
+        print(BOLDRED, "[ERROR] Can not open the processed output video");
     }
     print(BOLDCYAN, "[Recorder] start");
     while (video_write_flag)
@@ -95,20 +98,44 @@ void video_write(int frame_w, int frame_h, std::string save_path)
 int main(int argc, char *argv[])
 {
     print(GREEN, "loading, please wait...");
-    bool detect_scallop = true;
-    std::vector<float> target_loc = {0, 0, 0, 0};
-    cv::Mat frame, img_float, img_vis;
-    std::vector<torch::jit::IValue> net_input, net_output;
+    // 读入命令行参数
+    cv::CommandLineParser parser(argc, argv, keys);
+    if (parser.has("help"))
+    {
+        parser.printMessage();
+        return 0;
+    }
+    int FLAGS_K = parser.get<int>("k");
+    int FLAGS_R = parser.get<int>("r");
+    int FLAGS_RUAS = parser.get<int>("ruas");
+    int FLAGS_NETG_DIM = parser.get<int>("netg");
+    int FLAGS_SSD_DIM = parser.get<int>("ssd");
+    // bool FLAGS_TUB = parser.get<bool>("tub");
+    bool FLAGS_TUB = true;
+    int FLAGS_NET_PHASE = parser.get<int>("mode");
+    cv::String FLAGS_STREAM = parser.get<cv::String>("stream");
+    int FLAGS_CAMERA_ID = parser.get<int>("cid");
+    cv::String FLAGS_ADDRESS;
+    if (parser.has("address"))
+    {
+        FLAGS_ADDRESS = parser.get<cv::String>("address");
+    }
+    bool FLAGS_TRACK = parser.get<bool>("track");
+    bool FLAGS_RECORD = parser.get<bool>("record");
+    if (!parser.check())
+    {
+        parser.printErrors();
+        return 0;
+    }
+    // 设置是否录制
+    video_write_flag = FLAGS_RECORD;
+    // make record dir and file
+    // TODO: change to the opencv style
     time_t now_datetime = time(nullptr);
     tm *ltm = localtime(&now_datetime);
     std::string save_path = std::to_string(1900 + ltm->tm_year) + "_" + std::to_string(1 + ltm->tm_mon) + "_" +
                             std::to_string(ltm->tm_mday) + "_" + std::to_string(ltm->tm_hour) + "_" +
                             std::to_string(ltm->tm_min) + "_" + std::to_string(ltm->tm_sec);
-    // 读入命令行参数
-    gflags::ParseCommandLineFlags(&argc, &argv, true);
-    // 设置是否录制
-    video_write_flag = FLAGS_RECORD;
-    // make record dir and file
     if (FLAGS_RECORD)
     {
         if (nullptr == opendir(("./record/" + save_path).c_str()))
@@ -117,7 +144,6 @@ int main(int argc, char *argv[])
     // load models
     torch::NoGradGuard no_grad_guard;
     std::string model_path;
-
     if (FLAGS_NET_PHASE == 1)
         model_path = "./models/netG.pt";
     else if (FLAGS_NET_PHASE == 2)
@@ -155,21 +181,25 @@ int main(int argc, char *argv[])
     {
         try
         {
-            if (FLAGS_MODE == -1)
+            if (FLAGS_STREAM == "file")
             {
-                // TODO: feature: set video as arg
-                capture.open("./test/echinus.mp4");
-                // 设置从视频的哪一帧开始读取
+                capture.open(FLAGS_ADDRESS);
+                // 设置从视频数帧之后开始读, 跳过前戏
                 capture.set(cv::CAP_PROP_POS_FRAMES, 1100);
             }
-            else if (FLAGS_MODE == -2)
-                capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
+            else if (FLAGS_STREAM == "link")
+                // capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
+                capture.open(FLAGS_ADDRESS);
+            else if (FLAGS_STREAM == "camera")
+                capture.open(FLAGS_CAMERA_ID);
             else
-                capture.open(FLAGS_MODE);
+            {
+                print(BOLDRED, "[ERROR] No such video stream type");
+            }
         }
         catch (const char *msg)
         {
-            print(RED, "cannot open video");
+            print(RED, "[WARN] cannot open video");
             continue;
         }
     }
@@ -193,7 +223,7 @@ int main(int argc, char *argv[])
         bool read_ret = capture.read(frame);
         if (!read_ret)
             break;
-        if ((cv::waitKey(1) & 0xFF) == 27)
+        if ((cv::waitKey(1) & 0xFF) == 27) // ESC
             break;
         // pre processing
         cv::resize(frame, frame, cv::Size(FLAGS_NETG_DIM, FLAGS_NETG_DIM));
@@ -207,11 +237,11 @@ int main(int argc, char *argv[])
         }
         cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
         // run net
-        if (FLAGS_NET_PHASE < 3)
+        if (FLAGS_NET_PHASE != 3) // when not using netG as detect only
         {
             cv::normalize(frame, img_float, -1, 1, cv::NORM_MINMAX, CV_32F);
         }
-        else if (FLAGS_NET_PHASE == 3)
+        else
         {
             frame.convertTo(img_float, CV_32F);
             img_float = img_float - 128.0;
