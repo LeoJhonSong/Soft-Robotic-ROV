@@ -55,23 +55,27 @@ cv::Mat tensor2im(torch::Tensor tensor)
     return img;
 }
 
-void video_write(int frame_w, int frame_h, std::string save_path)
+void video_write(std::string save_path)
 {
     // 如果不录制视频, 退出视频录制线程
     if (!video_write_flag)
         return;
     char EXT[] = "MJPG";
     int ex1 = EXT[0] | (EXT[1] << 8) | (EXT[2] << 16) | (EXT[3] << 24);
+    while (frame_queue.empty() || det_frame_queue.empty())
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
     // raw video
     cv::VideoWriter writer_raw;
-    writer_raw.open("./record/" + save_path + "/" + save_path + "_raw.avi", ex1, 20, cv::Size(frame_w, frame_h), true);
+    writer_raw.open("./record/" + save_path + "/" + save_path + "_raw.avi", ex1, 20, frame_queue.front().size(), true);
     if (!writer_raw.isOpened())
     {
         print(BOLDRED, "[ERROR] Can not open the raw output video");
     }
     // det video
     cv::VideoWriter writer_det;
-    writer_det.open("./record/" + save_path + "/" + save_path + "_processed.avi", ex1, 20, vis_size, true);
+    writer_det.open("./record/" + save_path + "/" + save_path + "_processed.avi", ex1, 20, det_frame_queue.front().size(), true);
     if (!writer_det.isOpened())
     {
         print(BOLDRED, "[ERROR] Can not open the processed output video");
@@ -127,20 +131,6 @@ int main(int argc, char *argv[])
         parser.printErrors();
         return 0;
     }
-    // 设置是否录制
-    video_write_flag = FLAGS_RECORD;
-    // make record dir and file
-    // TODO: change to the opencv style
-    time_t now_datetime = time(nullptr);
-    tm *ltm = localtime(&now_datetime);
-    std::string save_path = std::to_string(1900 + ltm->tm_year) + "_" + std::to_string(1 + ltm->tm_mon) + "_" +
-                            std::to_string(ltm->tm_mday) + "_" + std::to_string(ltm->tm_hour) + "_" +
-                            std::to_string(ltm->tm_min) + "_" + std::to_string(ltm->tm_sec);
-    if (FLAGS_RECORD)
-    {
-        if (nullptr == opendir(("./record/" + save_path).c_str()))
-            mkdir(("./record/" + save_path).c_str(), S_IRWXU | S_IRWXG | S_IRWXO);
-    }
     // load models
     torch::NoGradGuard no_grad_guard;
     std::string model_path;
@@ -175,7 +165,6 @@ int main(int argc, char *argv[])
     }
 
     // load video
-    // FIXME
     ParallelCamera capture;
     while (!capture.isOpened())
     {
@@ -203,11 +192,24 @@ int main(int argc, char *argv[])
             continue;
         }
     }
-    int frame_w = (int)capture.get(cv::CAP_PROP_FRAME_WIDTH);
-    int frame_h = (int)capture.get(cv::CAP_PROP_FRAME_HEIGHT);
 
+    // 视频录制进程设置
+    video_write_flag = FLAGS_RECORD;
+    // make record dir and file
+    std::time_t t = std::time(nullptr);
+    std::tm tm = *std::localtime(&t);
+    std::locale locale_sys = std::locale("");
+    std::stringstream save_path_ss;
+    save_path_ss.imbue(locale_sys);
+    save_path_ss << std::put_time(&tm, "%c");
+    std::string save_path = save_path_ss.str();
+    if (FLAGS_RECORD)
+    {
+        if (nullptr == opendir(("./record/" + save_path).c_str()))
+            mkdir(("./record/" + save_path).c_str(), S_IRWXU | S_IRWXG | S_IRWXO);
+    }
+    std::thread video_writer(video_write, save_path);
     // FIXME: need a no thread ver to debug
-    std::thread video_writer(video_write, frame_w, frame_h, save_path);
     capture.receive_start(); // 视频流读取线程
 
     // marker detector
