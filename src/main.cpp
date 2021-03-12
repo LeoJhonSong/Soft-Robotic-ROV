@@ -44,7 +44,6 @@ std::vector<float> target_loc = {0, 0, 0, 0};
 cv::Mat frame, img_float, img_vis;
 std::vector<torch::jit::IValue> net_input, net_output;
 torch::Tensor img_tensor, fake_B, loc, conf;
-cv::cuda::GpuMat img_gpu; // FIXME: uesless?
 unsigned char loc_index = 0;
 
 cv::Mat tensor2im(torch::Tensor tensor)
@@ -209,7 +208,7 @@ int main(int argc, char *argv[])
             mkdir(("./record/" + save_path).c_str(), S_IRWXU | S_IRWXG | S_IRWXO);
     }
     std::thread video_writer(video_write, save_path);
-    // FIXME: need a no thread ver to debug
+    // FIXME: 需要调试一下看看网络摄像头视频流延迟能否减小
     capture.receive_start(); // 视频流读取线程
 
     // marker detector
@@ -325,11 +324,14 @@ int main(int argc, char *argv[])
             visual_info.target_center = cv::Point2f(0, 0);
             visual_info.target_shape = cv::Point2f(0, 0);
         }
+        // print(GREEN, "[Debug] " << visual_info.target_center);
     }
     print(BOLDGREEN, "[Info] holothurian: " << detector.get_class_num(1) << ", echinus: " << detector.get_class_num(2)
                                             << ", scallop: " << detector.get_class_num(3));
+    // end Recorder thread
     video_write_flag = false;
     video_writer.join();
+    // end Receiver thread
     capture.receive_stop();
     print(BOLDYELLOW, "bye!");
     return 0;

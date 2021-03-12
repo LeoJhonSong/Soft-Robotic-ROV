@@ -24,7 +24,8 @@ Detector::Detector(unsigned int num_classes, int top_k, float nms_thresh, bool t
         this->init_tubelets();
         this->hold_len = 5;
     }
-    // the last dimension is: score, left edge, top edge, right edge, bottom edge, id, matched time
+    // the last dimension is: score, left edge, top edge, right edge, bottom edge, id, matched times
+    // 最后一维度的7位分别是: score, 左边界, 右边界, 上边界, 下边界, id, 被识别到的次数
     this->candidates = torch::zeros({this->num_classes, this->top_k, 7}, torch::kFloat);
     this->log_params();
 }
@@ -47,7 +48,7 @@ void Detector::log_params()
 // return number of candidates of the specific class
 int Detector::get_class_num(unsigned char cls)
 {
-    return this->stable_ides_set.at(cls).size();
+    return this->stable_id_set.at(cls).size();
 }
 
 // apply Non-Maximum Suppression
@@ -213,18 +214,19 @@ void Detector::init_tubelets()
     for (unsigned int i = 0; i < num_classes; i++)
     {
         this->tubelets.emplace_back(std::map<int, std::tuple<torch::Tensor, int, int>>{});
-        this->ides.emplace_back(std::vector<std::pair<int, int>>{});
+        this->ids.emplace_back(std::vector<std::pair<int, int>>{});
         this->tubelets.at(i).clear();
-        this->ides.at(i).clear();
-        this->ides_set.emplace_back(std::set<int>{});
-        this->ides_set.at(i).clear();
-        this->stable_ides_set.emplace_back(std::set<int>{});
-        this->stable_ides_set.at(i).clear();
+        this->ids.at(i).clear();
+        this->id_set.emplace_back(std::set<int>{});
+        this->id_set.at(i).clear();
+        this->stable_id_set.emplace_back(std::set<int>{});
+        this->stable_id_set.at(i).clear();
     }
     this->history_max_ides = torch::zeros({num_classes}).fill_(-1);
 }
 
-void Detector::delete_tubelets(unsigned char cl)
+// 删除指定类型目标的轨迹
+void Detector::delete_tubelet(unsigned int cl)
 {
     std::vector<int> delete_list;
     //    std::map<int, std::tuple<torch::Tensor, int, int>> tubs = this->tubelets.at(cl);
@@ -236,15 +238,16 @@ void Detector::delete_tubelets(unsigned char cl)
     }
     for (auto id : delete_list)
         this->tubelets.at(cl).erase(id);
-    this->ides.at(cl).clear();
-    this->ides_set.at(cl).clear();
+    this->ids.at(cl).clear();
+    this->id_set.at(cl).clear();
     for (auto &tube : this->tubelets.at(cl))
     {
-        this->ides.at(cl).emplace_back(std::pair<int, int>{tube.first, std::get<2>(tube.second)});
-        this->ides_set.at(cl).insert(tube.first);
+        this->ids.at(cl).emplace_back(std::pair<int, int>{tube.first, std::get<2>(tube.second)});
+        this->id_set.at(cl).insert(tube.first);
     }
 }
 
+// 删除所有类型目标的轨迹
 void Detector::delete_tubelets()
 {
     std::vector<int> delete_list;
@@ -260,15 +263,15 @@ void Detector::delete_tubelets()
         }
         for (auto id : delete_list)
             this->tubelets.at(cl).erase(id);
-        this->ides.at(cl).clear();
-        this->ides_set.at(cl).clear();
+        this->ids.at(cl).clear();
+        this->id_set.at(cl).clear();
     }
 }
 
 void Detector::replenish_tubelets(unsigned char cl, int count)
 {
     int non_matched_size = 0;
-    for (auto s : this->ides_set.at(cl))
+    for (auto s : this->id_set.at(cl))
     {
         torch::Tensor no_matched_box = std::get<0>(this->tubelets.at(cl)[s])[0];
         if (no_matched_box.lt(0.1 * this->ssd_dim).sum().item<uint8_t>() > 0 ||
@@ -332,7 +335,7 @@ void Detector::update(const torch::Tensor &loc, const torch::Tensor &conf, std::
         if (c_mask.sum().item<int>() == 0)
         {
             this->replenish_tubelets(current_class, 0);
-            this->delete_tubelets(current_class);
+            this->delete_tubelet(current_class);
             continue;
         }
         torch::Tensor scores = conf[current_class].masked_select(c_mask);
@@ -349,7 +352,7 @@ void Detector::update(const torch::Tensor &loc, const torch::Tensor &conf, std::
         if (count == 0)
         {
             this->replenish_tubelets(current_class, 0);
-            this->delete_tubelets(current_class);
+            this->delete_tubelet(current_class);
             continue;
         }
         if (!this->tubelets.at(current_class).empty())
@@ -363,8 +366,8 @@ void Detector::update(const torch::Tensor &loc, const torch::Tensor &conf, std::
             {
                 if (matched_mask[mt].item<int>() > 0)
                 {
-                    identity[mt] = this->ides.at(current_class).at(max_idx[mt].item<int>()).first;
-                    matched_times[mt] = this->ides.at(current_class).at(max_idx[mt].item<int>()).second + 1;
+                    identity[mt] = this->ids.at(current_class).at(max_idx[mt].item<int>()).first;
+                    matched_times[mt] = this->ids.at(current_class).at(max_idx[mt].item<int>()).second + 1;
                 }
             }
         }
@@ -389,7 +392,7 @@ void Detector::update(const torch::Tensor &loc, const torch::Tensor &conf, std::
             }
             else
             {
-                this->ides_set.at(current_class).erase(curr_id);
+                this->id_set.at(current_class).erase(curr_id);
                 int id_matched_times = std::min(std::get<2>(this->tubelets.at(current_class)[curr_id]) + 1, 100);
                 this->tubelets.at(current_class)[curr_id] = std::tuple<torch::Tensor, int, int>{
                     nms_box[tc].unsqueeze(0).mul(this->ssd_dim), this->hold_len + 1, id_matched_times};
@@ -398,12 +401,11 @@ void Detector::update(const torch::Tensor &loc, const torch::Tensor &conf, std::
         this->candidates[current_class].slice(0, 0, count) =
             torch::cat({nms_score.unsqueeze(1), nms_box, identity.unsqueeze(1), matched_times.unsqueeze(1)}, 1);
         this->replenish_tubelets(current_class, count);
-        this->delete_tubelets(current_class);
+        this->delete_tubelet(current_class);
     }
 }
 
 // update candidates and track specific class
-// FIXME: will the target of track_id kept at the first in candidates?
 void Detector::tracking_update(const torch::Tensor &loc, const torch::Tensor &conf, std::vector<float> conf_thresh)
 {
     this->candidates.zero_();
@@ -494,8 +496,7 @@ std::vector<float> Detector::visualization(cv::Mat &img)
             // no candidates, skip
             if (classed_candidates.sum().item<float>() == 0)
                 continue;
-            // FIXME: wired bug: scores become 0.01 without the following line. drop from 0.8/9 to 0.01. caused by
-            // prev_nms?
+            // FIXME: wired bug: scores become 0.01 without the following line. drop from 0.8/9 to 0.01.
             torch::Tensor score_mask = classed_candidates.slice(1, 0, 1).gt(0.01).expand_as(
                 classed_candidates); // useless, candidates already filtered by confidence in update()
             torch::Tensor stable_mask = classed_candidates.slice(1, 6, 7).gt(5.0).expand_as(classed_candidates);
@@ -509,6 +510,7 @@ std::vector<float> Detector::visualization(cv::Mat &img)
             boxes.slice(1, 3, 4) *= img.rows; // bottom
             torch::Tensor scores = classed_candidates.slice(1, 0, 1).squeeze(1);
             torch::Tensor ids = classed_candidates.slice(1, 5, 6).squeeze(1);
+            // 被识别到的次数
             torch::Tensor matched_times = classed_candidates.slice(1, 6, 7).squeeze(1);
             for (unsigned int j = 0; j < boxes.size(0); j++) // for every candidates in tracking class
             {
@@ -522,40 +524,31 @@ std::vector<float> Detector::visualization(cv::Mat &img)
                 if ((top + bottom) / 2.0 > img.rows * 0.9)
                     continue;
                 // set current class as tracking class if confidence of any candidates > 0.7
-                // FIXME: 这个matched_times是什么
-                // FIXME: this confidence thresh seems unreasonable
-                if (this->track && this->tracking_class == 0 && score > 0.7 && matched_times[j].item<int>() > 30)
+                if (this->track && this->tracking_class == 0 && matched_times[j].item<int>() > 30)
                 {
-                    // FIXME: it seems something wrong here, not selecting the one reaches the conf thresh in the first
-                    // class
                     this->tracking_class = i;
                     this->track_id = id;
                 }
+                // 绘制单个candidate的框和标签
                 cv::rectangle(img, cv::Point(left, top), cv::Point(right, bottom), this->color.at(i), 2, 1, 0);
                 stream.str("");
                 stream << std::fixed << std::setprecision(2) << score;
                 cv::putText(img, std::to_string(id) + ", " + stream.str(), cv::Point(left, top - 5), 1, 1,
                             this->color.at(i), 2);
-                this->stable_ides_set.at(i).insert(id); // FIXME: 这是什么
+                // 将当前candidate的id添加到stable_id_set
+                this->stable_id_set.at(i).insert(id);
             }
-            // FIXME: use this?
-            // if (this->track && this->tracking_class == 0)
-            // {
-            //     torch::Tensor scores = this->candidates.slice(1, 0, 1).slice(2, 0, 1);
-            //     this->tracking_class = scores.argmax().item<unsigned char>();  // select class with candidate with
-            //     highest confidence this->track_id = this->candidates[this->tracking_class][0][5].item<int>();
-            // }
         }
     }
     if (this->tub)
     {
-        cv::putText(img, "trepang: " + std::to_string(this->stable_ides_set.at(1).size()), cv::Point(10, 30), 1, 1,
+        cv::putText(img, "trepang: " + std::to_string(this->stable_id_set.at(1).size()), cv::Point(10, 30), 1, 1,
                     this->color.at(1), 2);
-        cv::putText(img, "urchin: " + std::to_string(this->stable_ides_set.at(2).size()), cv::Point(10, 45), 1, 1,
+        cv::putText(img, "urchin: " + std::to_string(this->stable_id_set.at(2).size()), cv::Point(10, 45), 1, 1,
                     this->color.at(2), 2);
-        cv::putText(img, "scallop: " + std::to_string(this->stable_ides_set.at(3).size()), cv::Point(10, 60), 1, 1,
+        cv::putText(img, "scallop: " + std::to_string(this->stable_id_set.at(3).size()), cv::Point(10, 60), 1, 1,
                     this->color.at(3), 2);
-        cv::putText(img, "starfish: " + std::to_string(this->stable_ides_set.at(4).size()), cv::Point(10, 75), 1, 1,
+        cv::putText(img, "starfish: " + std::to_string(this->stable_id_set.at(4).size()), cv::Point(10, 75), 1, 1,
                     this->color.at(4), 2);
     }
     cv::namedWindow("ResDet", cv::WINDOW_GUI_NORMAL);
