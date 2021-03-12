@@ -43,10 +43,11 @@ class Detector
     bool tub;
     int ssd_dim;
     torch::Tensor candidates;
+    // 轨迹
     std::vector<std::map<int, std::tuple<torch::Tensor, int, int>>> tubelets;
-    std::vector<std::vector<std::pair<int, int>>> ides;
-    std::vector<std::set<int>> ides_set;
-    std::vector<std::set<int>> stable_ides_set;
+    std::vector<std::vector<std::pair<int, int>>> ids;
+    std::vector<std::set<int>> id_set;
+    std::vector<std::set<int>> stable_id_set;
     torch::Tensor history_max_ides;
     unsigned int hold_len;
     float large_size_filter;
@@ -66,7 +67,7 @@ class Detector
     std::tuple<torch::Tensor, int> prev_nms(torch::Tensor &, torch::Tensor &, const torch::Tensor &);
     torch::Tensor iou(const torch::Tensor &, unsigned char);
     void init_tubelets();
-    void delete_tubelets(unsigned char);
+    void delete_tubelet(unsigned int);
     void delete_tubelets();
     void replenish_tubelets(unsigned char cl, int count);
     void reset_tracking_state();
