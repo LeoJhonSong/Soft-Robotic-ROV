@@ -23,7 +23,7 @@ const char *keys =
     "{ruas      | 0                     | RUAS algorithm selection. 0: skip; 1: clahe; 2: wiener+clahe}"
     "{netg      | 256                   | netG dimension}"
     "{ssd       | 320                   | SSD dimension}"
-    "{tub       | true                  | }"
+    // "{tub       | true                  | }"
     "{mode      | 2                     | refinedet selection. 0: skip; 1: netG; 2: netG+RefineDet; 3: RefineDet}"
     "{stream    | file                  | source of video stream. file; link; camera}"
     "{cid       | 0                     | camera id if video stream come from camera}"
@@ -37,6 +37,12 @@ bool detect_scallop = true;
 cv::Size vis_size(640, 360);
 const int MARKER_OFFSET_X = 50;
 const int MARKER_OFFSET_Y = 75;
+unsigned int num_classes = 5; // 背景, 海参, 海胆, 扇贝, 海星
+int top_k = 200;
+float nms_thresh = 0.3;
+// 背景, 海参, 海胆, 扇贝, 海星. 顺序由模型决定, 顺序决定了哪个类别优先级更高
+std::vector<float> conf_thresh = {0, 0.6, 0.8, 0.3, 1.5};
+float tub_thresh = 0.3;
 
 bool video_write_flag;
 std::queue<cv::Mat> frame_queue, det_frame_queue;
@@ -44,7 +50,6 @@ std::vector<float> target_loc = {0, 0, 0, 0};
 cv::Mat frame, img_float, img_vis;
 std::vector<torch::jit::IValue> net_input, net_output;
 torch::Tensor img_tensor, fake_B, loc, conf;
-cv::cuda::GpuMat img_gpu; // FIXME: uesless?
 unsigned char loc_index = 0;
 
 cv::Mat tensor2im(torch::Tensor tensor)
@@ -147,12 +152,6 @@ int main(int argc, char *argv[])
     net->to(at::kCUDA);
 
     // load detector
-    unsigned int num_classes = 5; // 背景, 海参, 海胆, 扇贝, 海星
-    int top_k = 200;
-    float nms_thresh = 0.3;
-    // 背景, 海参, 海胆, 扇贝, 海星. 顺序由模型决定, 顺序决定了哪个类别优先级更高
-    std::vector<float> conf_thresh = {0, 0.6, 0.8, 0.3, 1.5};
-    float tub_thresh = 0.3;
     bool reset_id = false;
     detector::Detector detector(num_classes, top_k, nms_thresh, FLAGS_TUB, FLAGS_SSD_DIM, FLAGS_TRACK);
     detector::Visual_info visual_info;
@@ -209,7 +208,7 @@ int main(int argc, char *argv[])
             mkdir(("./record/" + save_path).c_str(), S_IRWXU | S_IRWXG | S_IRWXO);
     }
     std::thread video_writer(video_write, save_path);
-    // FIXME: need a no thread ver to debug
+    // FIXME: 需要调试一下看看网络摄像头视频流延迟能否减小
     capture.receive_start(); // 视频流读取线程
 
     // marker detector
@@ -325,11 +324,14 @@ int main(int argc, char *argv[])
             visual_info.target_center = cv::Point2f(0, 0);
             visual_info.target_shape = cv::Point2f(0, 0);
         }
+        // print(GREEN, "[Debug] " << visual_info.target_center);
     }
     print(BOLDGREEN, "[Info] holothurian: " << detector.get_class_num(1) << ", echinus: " << detector.get_class_num(2)
                                             << ", scallop: " << detector.get_class_num(3));
+    // end Recorder thread
     video_write_flag = false;
     video_writer.join();
+    // end Receiver thread
     capture.receive_stop();
     print(BOLDYELLOW, "bye!");
     return 0;
