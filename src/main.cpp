@@ -16,6 +16,7 @@
 #include "marker_detector.h"
 #include "parallel_camera.h"
 #include "ruas.h"
+#include "visual_server.h"
 
 const char *keys =
     "{k         | 100                   | turbulence intensity. The greater, the intensive}"
@@ -44,13 +45,11 @@ float nms_thresh = 0.3;
 std::vector<float> conf_thresh = {0, 0.6, 0.8, 0.3, 1.5};
 float tub_thresh = 0.3;
 
-bool video_write_flag;
+// 在多个线程共享的全局变量
 std::queue<cv::Mat> frame_queue, det_frame_queue;
-std::vector<float> target_loc = {0, 0, 0, 0};
-cv::Mat frame, img_float, img_vis;
-std::vector<torch::jit::IValue> net_input, net_output;
-torch::Tensor img_tensor, fake_B, loc, conf;
-unsigned char loc_index = 0;
+detector::Visual_info visual_info;
+bool threads_quit_flag;
+
 
 cv::Mat tensor2im(torch::Tensor tensor)
 {
@@ -60,10 +59,10 @@ cv::Mat tensor2im(torch::Tensor tensor)
     return img;
 }
 
-void video_write(std::string save_path)
+void video_write(bool video_record_flag, std::string save_path)
 {
     // 如果不录制视频, 退出视频录制线程
-    if (!video_write_flag)
+    if (!video_record_flag)
         return;
     char EXT[] = "MJPG";
     int ex1 = EXT[0] | (EXT[1] << 8) | (EXT[2] << 16) | (EXT[3] << 24);
@@ -80,13 +79,14 @@ void video_write(std::string save_path)
     }
     // det video
     cv::VideoWriter writer_det;
-    writer_det.open("./record/" + save_path + "/" + save_path + "_processed.avi", ex1, 20, det_frame_queue.front().size(), true);
+    writer_det.open("./record/" + save_path + "/" + save_path + "_processed.avi", ex1, 20,
+                    det_frame_queue.front().size(), true);
     if (!writer_det.isOpened())
     {
         print(BOLDRED, "[ERROR] Can not open the processed output video");
     }
     print(BOLDCYAN, "[Recorder] start");
-    while (video_write_flag)
+    while (!threads_quit_flag)
     {
         if (!frame_queue.empty())
         {
@@ -154,7 +154,6 @@ int main(int argc, char *argv[])
     // load detector
     bool reset_id = false;
     detector::Detector detector(num_classes, top_k, nms_thresh, FLAGS_TUB, FLAGS_SSD_DIM, FLAGS_TRACK);
-    detector::Visual_info visual_info;
 
     // load filter
     CFilt filter(FLAGS_SSD_DIM, FLAGS_SSD_DIM, 3);
@@ -193,7 +192,7 @@ int main(int argc, char *argv[])
     }
 
     // 视频录制进程设置
-    video_write_flag = FLAGS_RECORD;
+    bool video_record_flag = FLAGS_RECORD;
     // make record dir and file
     std::time_t t = std::time(nullptr);
     std::tm tm = *std::localtime(&t);
@@ -207,9 +206,21 @@ int main(int argc, char *argv[])
         if (nullptr == opendir(("./record/" + save_path).c_str()))
             mkdir(("./record/" + save_path).c_str(), S_IRWXU | S_IRWXG | S_IRWXO);
     }
-    std::thread video_writer(video_write, save_path);
+    threads_quit_flag = false;
+    // Start video recorder thread
+    std::thread video_recorder(video_write, video_record_flag, save_path);
     // FIXME: 需要调试一下看看网络摄像头视频流延迟能否减小
-    capture.receive_start(); // 视频流读取线程
+    // start video receiver thread
+    capture.receive_start();
+    // Start visual info server thread
+    std::thread visual_info_server(server::server_start);
+
+    // 一些中间变量
+    std::vector<float> target_loc = {0, 0, 0, 0};
+    cv::Mat frame, img_float, img_vis;
+    std::vector<torch::jit::IValue> net_input, net_output;
+    torch::Tensor img_tensor, fake_B, loc, conf;
+    unsigned char loc_index = 0;
 
     // marker detector
     // 初始化的size要对应上后面输入图片的size,看到时候用哪个图片(原始的frame, net_G输出的fake_B,
@@ -222,9 +233,9 @@ int main(int argc, char *argv[])
     {
         // 获取视频流中最新帧
         bool read_ret = capture.read(frame);
-        if (!read_ret)
-            break;
         if ((cv::waitKey(1) & 0xFF) == 27) // ESC
+            threads_quit_flag = true;
+        if (!read_ret || threads_quit_flag)
             break;
         // pre processing
         cv::resize(frame, frame, cv::Size(FLAGS_NETG_DIM, FLAGS_NETG_DIM));
@@ -305,7 +316,7 @@ int main(int argc, char *argv[])
 
         target_loc = detector.detect_and_visualize(loc, conf, conf_thresh, tub_thresh, reset_id, detect_scallop,
                                                    img_vis); // cx, cy, width, height
-        if (video_write_flag)
+        if (video_record_flag && !threads_quit_flag)
             det_frame_queue.push(img_vis);
         // update visual_info.target*
         if (detector.track_id > -1)
@@ -328,11 +339,13 @@ int main(int argc, char *argv[])
     }
     print(BOLDGREEN, "[Info] holothurian: " << detector.get_class_num(1) << ", echinus: " << detector.get_class_num(2)
                                             << ", scallop: " << detector.get_class_num(3));
-    // end Recorder thread
-    video_write_flag = false;
-    video_writer.join();
-    // end Receiver thread
+    // wait for child threads to quit
+    threads_quit_flag = true;
+    video_recorder.join();
     capture.receive_stop();
+    visual_info_server.detach();
+    print(BOLDBLUE, "[Server] quit");
+
     print(BOLDYELLOW, "bye!");
     return 0;
 }
