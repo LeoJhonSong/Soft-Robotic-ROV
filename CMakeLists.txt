@@ -4,13 +4,14 @@ cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
 project(Soft-Robotics-ROV)
 
 set(CMAKE_PREFIX_PATH "~/local/libtorch")
+set(OpenCV_LIBS ${OpenCV_LIBS})
 find_package(Torch REQUIRED)
 find_package( OpenCV 3 REQUIRED)
-#搜索ArUco依赖库
 find_package(aruco REQUIRED)
-set(OpenCV_LIBS ${OpenCV_LIBS})
-include_directories( ${OpenCV_INCLUDE_DIRS} include)
-include_directories( ${aruco_INCLUDE_DIRS})
+
+include_directories(include)
+include_directories(${OpenCV_INCLUDE_DIRS})
+include_directories(${aruco_INCLUDE_DIRS})
 
 file(GLOB SOURCES "src/*.cpp")
 add_executable(${PROJECT_NAME} ${SOURCES})

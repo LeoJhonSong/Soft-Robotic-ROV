@@ -8,8 +8,7 @@
             "name": "g++ - Build and debug active file",
             "type": "cppdbg",
             "request": "launch",
-            // "program": "${command:cmake.launchTargetPath}",
-            "program": "${workspaceFolder}/build/Soft-Robotics-ROV",
+            "program": "${command:cmake.launchTargetPath}",
             "args": [
                 "--stream=camera",
             ],
