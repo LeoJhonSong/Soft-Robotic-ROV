@@ -16,14 +16,20 @@ void server::recvMsg(int newFD)
     char receive[10];
     memset(receive, 0, sizeof(receive));
     recv(newFD, receive, 10, 0);
-    std::string arm_is_working{receive};
-    if (arm_is_working == "false")
+    int code = atoi(receive);
+    // threads_quit_flag: 2; arm_is_working: 1
+    if (code > 1)
     {
-        visual_info.arm_is_working = false;
+        threads_quit_flag = true;
+        code = code - 2;
     }
-    else if (arm_is_working == "true")
+    if (code == 1)
     {
         visual_info.arm_is_working = true;
+    }
+    else if (code == 0)
+    {
+        visual_info.arm_is_working = false;
     }
 }
 
@@ -33,8 +39,8 @@ void server::communicate(int newFD)
     // send YAML
     std::stringstream ss;
     ss << "target:" << std::endl;
-    ss << "  has_target: " << std::boolalpha << visual_info.has_target << std::endl;
-    ss << "  class: " << visual_info.target_class << std::endl;
+    ss << "  has_target: " << visual_info.has_target << std::endl;
+    ss << "  target_class: " << visual_info.target_class << std::endl;
     ss << "  id: " << visual_info.target_id << std::endl;
     ss << "  center:" << std::endl;
     ss << "    x: " << visual_info.target_center.x << std::endl;
@@ -43,8 +49,8 @@ void server::communicate(int newFD)
     ss << "    width: " << visual_info.target_shape.x << std::endl;
     ss << "    height: " << visual_info.target_shape.y << std::endl;
     ss << "arm:" << std::endl;
-    ss << "  arm_is_working: " << std::boolalpha << visual_info.arm_is_working << std::endl;
-    ss << "  has_marker: " << std::boolalpha << visual_info.has_marker << std::endl;
+    ss << "  arm_is_working: " << visual_info.arm_is_working << std::endl;
+    ss << "  has_marker: " << visual_info.has_marker << std::endl;
     ss << "  position:" << std::endl;
     ss << "    x: " << visual_info.marker_position.x << std::endl;
     ss << "    y: " << visual_info.marker_position.y << std::endl;
@@ -79,6 +85,7 @@ void server::server_start()
     // finally start listening for connections on our socket
     int listenR = listen(sockFD, BACKLOG);
     print(BOLDBLUE, "[Server] start");
+    // TODO: change to cpp-httplib
     while (!threads_quit_flag)
     {
         newFD = accept(sockFD, (struct sockaddr *)&client_addr, &client_addr_size);

@@ -340,11 +340,9 @@ int main(int argc, char *argv[])
     print(BOLDGREEN, "[Info] holothurian: " << detector.get_class_num(1) << ", echinus: " << detector.get_class_num(2)
                                             << ", scallop: " << detector.get_class_num(3));
     // wait for child threads to quit
-    threads_quit_flag = true;
     video_recorder.join();
     capture.receive_stop();
-    visual_info_server.detach();
-    print(BOLDBLUE, "[Server] quit");
+    visual_info_server.join();
 
     print(BOLDYELLOW, "bye!");
     return 0;

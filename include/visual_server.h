@@ -3,7 +3,7 @@
 
 namespace server
 {
-#define LOCAL_PORT 9090 // local port to listen by server
+#define LOCAL_PORT 8080 // local port to listen by server
 #define BACKLOG 8       // number of connections allowed on the incoming queue
 
 void recvMsg(int newFD);
