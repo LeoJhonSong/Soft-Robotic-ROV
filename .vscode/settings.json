@@ -1,8 +1,10 @@
 {
     "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+    "C_Cpp.autoAddFileAssociations": false,
     "cmake.configureArgs": [
         "-Wno-dev"
     ],
+    "python.analysis.extraPaths": ["./client"],
     "cSpell.words": [
         "RUAS",
         "aruco",
@@ -11,6 +13,4 @@
         "glog",
         "opencv"
     ],
-    "cmake.configureOnEdit": false,
-    "C_Cpp.autoAddFileAssociations": false,
 }

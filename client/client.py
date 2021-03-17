@@ -1,13 +1,14 @@
 #! /usr/bin/env python3
 
-'''
-Visual info client
+'''Visual info client module
+when run as main, start visual info client, ROV server
 '''
 
 import socket
 import yaml
+import rovClient
 
-SERVER_PORT = 8080
+VISUAL_SERVER_PORT = 8080
 
 
 class Target(object):
@@ -44,13 +45,15 @@ if __name__ == '__main__':
     arm = Arm()
     quit_flag = False
     switch = False
-    while True:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            s.connect(('127.0.0.1', SERVER_PORT))
-        except ConnectionRefusedError:
-            print('[Client] lost connection')
-        else:
+    with rovClient.Rov() as rov:
+        while True:
+            # 更新target, arm数据
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                s.connect(('127.0.0.1', VISUAL_SERVER_PORT))
+            except ConnectionRefusedError:
+                print('[Client] lost connection')
+                continue
             # threads_quit_flag: 2; arm_is_working: 1
             if time.time() - t > 30:
                 quit_flag = True
@@ -66,3 +69,7 @@ if __name__ == '__main__':
                     break
                 else:
                     switch = True
+            # TODO: update rov status
+            pass
+            # switch case
+            rov.switch()
