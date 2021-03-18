@@ -6,7 +6,7 @@ when run as main, start visual info client, ROV server
 
 import socket
 import yaml
-import rovClient
+import rov
 
 VISUAL_SERVER_PORT = 8080
 
@@ -45,7 +45,7 @@ if __name__ == '__main__':
     arm = Arm()
     quit_flag = False
     switch = False
-    with rovClient.Rov() as rov:
+    with rov.Rov() as rov:
         while True:
             # 更新target, arm数据
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
