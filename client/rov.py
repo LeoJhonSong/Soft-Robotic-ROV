@@ -45,11 +45,18 @@ class Rov(object):
         current automation workflow state of ROV
     depth : float
         in meters
+    info_word : bytes
+        on/off word in form of: [6bytes] is_loop [7bytes] LED2 LED1
+    joystick : bytes[4]
+        Vx, Vy, direction, Vz
     """
 
     def __init__(self, state: str = 'initial'):
         self.state = state
         self.depth = 0
+        self.info_word = bytes([0, 3])
+        self.led_brightness = bytes([0, 0])
+        self.joystick = bytes([0] * 4)
         self.gyro = Gyro()
         self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_sock.bind(('127.0.0.1', ROV_SERVER_PORT))
@@ -63,15 +70,80 @@ class Rov(object):
         self.client_sock.close()
         self.server_sock.close()
 
-    def send_command(self, command: bytes):
+    def send_command(self):
         """send command to ROV
+
+        """
+        temp = b'\xFE\xFE' + \
+            self.info_word + \
+            self.led_brightness + \
+            bytes([0] * 12) + \
+            self.joystick
+        checksum = 0
+        for i in temp:
+            checksum ^= i
+        self.client_sock.send(temp + bytes([checksum]) + b'\xFD\xFD')
+
+    def set_control_mode(self, is_loop: bool):
+        """set rov motor speed control to close loop PID control or open loop control
 
         Parameters
         ----------
-        command : bytes
-            should be 27 bytes
+        is_loop : bool
+            True for close loop control, False for open loop
         """
-        self.client_sock.send(command)
+        self.info_word = bytes([is_loop * 2, 3])
+
+    def set_led(self, value: int):
+        """set brightness of all four LEDs
+
+        Parameters
+        ----------
+        value : int
+            min is 0, max is 950
+        """
+        self.led_brightness = bytes.fromhex(f'{value:04x}')
+        self.send_command()
+
+    def set_Vx(self, value: float):
+        """set Vx and clear others
+
+        Parameters
+        ----------
+        value : float
+            in range [-1, 1]
+        """
+        self.velocity = bytes([int(127 + 127 * value), 0, 0, 0])
+
+    def set_Vy(self, value: float):
+        """set Vy and clear others
+
+        Parameters
+        ----------
+        value : float
+            in range [-1, 1]
+        """
+        self.velocity = bytes([0, int(127 + 127 * value), 0, 0])
+
+    def set_Vz(self, value: float):
+        """set Vz and clear others
+
+        Parameters
+        ----------
+        value : float
+            in range [-1, 1]
+        """
+        self.velocity = bytes([0, 0, 0, int(127 + 127 * value)])
+
+    def set_direction(self, value: float):
+        """set direction and clear others
+
+        Parameters
+        ----------
+        value : float
+            in range [-1, 1]
+        """
+        self.velocity = bytes([0, 0, int(127 + 127 * value), 0])
 
     def get(self):
         """receive the latest data from ROV
