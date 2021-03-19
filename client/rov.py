@@ -1,4 +1,5 @@
 import socket
+import visual_info
 
 # >>>>>> commands definition
 
@@ -54,10 +55,13 @@ class Rov(object):
     def __init__(self, state: str = 'initial'):
         self.state = state
         self.depth = 0
+        self.is_landed = False
         self.info_word = bytes([0, 3])
         self.led_brightness = bytes([0, 0])
         self.joystick = bytes([0] * 4)
         self.gyro = Gyro()
+        self.target = visual_info.Target()
+        self.arm = visual_info.Arm()
         self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_sock.bind(('127.0.0.1', ROV_SERVER_PORT))
         self.server_sock.listen(8)
@@ -157,23 +161,49 @@ class Rov(object):
         gyro_list = [(-1 if int(i[0]) else 1) * (int(i[1:4]) + int(i[4:]) / 100) for i in gyro_list]
         self.gyro.update(gyro_list)
 
-    def print1(self):
-        print('111')
+    def land(self):
+        """坐底
+        """
+        self.set_Vz(-1)
+        # TODO: detect if is landed
+        if self.is_landed:
+            return 'grasp'
+        else:
+            return 'land'
 
-    def print2(self):
-        print('222')
+    def grasp(self):
+        """抓取
+        """
+        # if has target
+        return 'grasp'
+        # else
+        return 'cruise'
 
-    def printdefault(self):
-        print('default')
+    def cruise(self):
+        """巡航
+        """
+        # if time period
+        return 'land'
+        # else if detected
+        return 'aim'
+
+    def aim(self):
+        """移动至目标处
+        """
+        # if target lost
+        return 'land'
+        # else if landed
+        return 'grasp'
 
     def switch(self):
         # TODO: update to key: str and each func has return state
         cases = {
-            0: self.print1,
-            1: self.print2,
-            'default': self.printdefault
+            'aim': self.aim,
+            'cruise': self.cruise,
+            'grasp': self.grasp,
+            'land': self.land,
         }
-        self.state = cases[self.state if (self.state in range(len(cases) - 1)) else 'default']()
+        self.state = cases[self.state]()
 
 
 if __name__ == '__main__':
