@@ -64,6 +64,8 @@ class Rov(object):
         self.server_sock.bind(('127.0.0.1', ROV_SERVER_PORT))
         self.server_sock.listen(8)
         self.client_sock, _ = self.server_sock.accept()
+        print('[ROV] connected')
+        self.set_led(950)
 
     def __enter__(self):
         return self
@@ -106,6 +108,7 @@ class Rov(object):
         """
         self.led_brightness = bytes.fromhex(f'{value:04x}')
         self.send_command()
+        print(f'[ROV] led brightness set to {int(value / 9.5)}%')
 
     def set_Vx(self, value: float):
         """set Vx and clear others
@@ -117,6 +120,10 @@ class Rov(object):
         """
         self.velocity = bytes([int(127 + 127 * value), 0, 0, 0])
         self.send_command()
+        if value:
+            print(f'[ROV] going {"forward" if value > 0 else "backward"} with {int(abs(value) * 100)}% speed')
+        else:
+            print('[ROV] stopped')
 
     def set_Vy(self, value: float):
         """set Vy and clear others
@@ -128,6 +135,10 @@ class Rov(object):
         """
         self.velocity = bytes([0, int(127 + 127 * value), 0, 0])
         self.send_command()
+        if value:
+            print(f'[ROV] going {"left" if value > 0 else "right"} with {int(abs(value) * 100)}% speed')
+        else:
+            print('[ROV] stopped')
 
     def set_Vz(self, value: float):
         """set Vz and clear others
@@ -139,6 +150,10 @@ class Rov(object):
         """
         self.velocity = bytes([0, 0, 0, int(127 + 127 * value)])
         self.send_command()
+        if value:
+            print(f'[ROV] going {"up" if value > 0 else "down"} with {int(abs(value) * 100)}% speed')
+        else:
+            print('[ROV] stopped')
 
     def set_direction(self, value: float):
         """set direction and clear others
@@ -150,6 +165,10 @@ class Rov(object):
         """
         self.velocity = bytes([0, 0, int(127 + 127 * value), 0])
         self.send_command()
+        if value:
+            print(f'[ROV] turning {"left" if value > 0 else "right"} with {int(abs(value) * 100)}% speed')
+        else:
+            print('[ROV] stopped')
 
     def get(self):
         """receive the latest data from ROV

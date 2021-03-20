@@ -29,26 +29,25 @@ if __name__ == '__main__':
         uart = None
     with rov.Rov() as rov:
         while True:
-            # 更新target, arm数据
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            try:
-                s.connect(('127.0.0.1', VISUAL_SERVER_PORT))
-            except ConnectionRefusedError:
-                print('[Visual Info Client] lost connection')
-                continue
             # TODO: interface needed, for at least quit
             if time.time() - t > 30:
                 quit_flag = True
             else:
                 quit_flag = False
-            # send flags to ROV
-            # threads_quit_flag: 2; arm_is_working: 1
-            s.send(bytes(str(quit_flag * 2 + arm.arm_is_working).encode()))
-            # receive data from ROV then update target and arm
-            visual_info_dict = yaml.load(s.recv(1024), Loader=yaml.Loader)
-            target.update(visual_info_dict["target"])
-            arm.update(visual_info_dict["arm"])
-            s.close()
+            # 更新target, arm数据
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                try:
+                    s.connect(('127.0.0.1', VISUAL_SERVER_PORT))
+                except ConnectionRefusedError:
+                    print('[Visual Info Client] lost connection')
+                    continue
+                # send flags to ROV
+                # threads_quit_flag: 2; arm_is_working: 1
+                s.send(bytes(str(quit_flag * 2 + arm.arm_is_working).encode()))
+                # receive data from ROV then update target and arm
+                visual_info_dict = yaml.load(s.recv(1024), Loader=yaml.Loader)
+                target.update(visual_info_dict["target"])
+                arm.update(visual_info_dict["arm"])
             if quit_flag:
                 if switch:
                     break
