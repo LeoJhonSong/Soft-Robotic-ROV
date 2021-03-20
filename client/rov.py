@@ -1,9 +1,6 @@
 import socket
+
 import visual_info
-
-# >>>>>> commands definition
-
-# <<<<<< end commands definition
 
 ROV_SERVER_PORT = 9090
 RECV_DATA_SIZE = 28
@@ -62,6 +59,7 @@ class Rov(object):
         self.gyro = Gyro()
         self.target = visual_info.Target()
         self.arm = visual_info.Arm()
+        self.grasp_state = 'idle'
         self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_sock.bind(('127.0.0.1', ROV_SERVER_PORT))
         self.server_sock.listen(8)
@@ -175,8 +173,15 @@ class Rov(object):
         """抓取
         """
         # if has target
+        if self.arm.arm_is_working:
+            self.grasp_state = 'ready'
+        else:
+            self.grasp_state = 'started'
         return 'grasp'
+        # if time up & chance up
+        # return 'cruise'
         # else
+        self.grasp_state = 'idle'
         return 'cruise'
 
     def cruise(self):
@@ -195,8 +200,7 @@ class Rov(object):
         # else if landed
         return 'grasp'
 
-    def switch(self):
-        # TODO: update to key: str and each func has return state
+    def state_machine(self) -> str:
         cases = {
             'aim': self.aim,
             'cruise': self.cruise,
@@ -204,6 +208,7 @@ class Rov(object):
             'land': self.land,
         }
         self.state = cases[self.state]()
+        return self.grasp_state
 
 
 if __name__ == '__main__':
