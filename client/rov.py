@@ -116,6 +116,7 @@ class Rov(object):
             in range [-1, 1]
         """
         self.velocity = bytes([int(127 + 127 * value), 0, 0, 0])
+        self.send_command()
 
     def set_Vy(self, value: float):
         """set Vy and clear others
@@ -126,6 +127,7 @@ class Rov(object):
             in range [-1, 1]
         """
         self.velocity = bytes([0, int(127 + 127 * value), 0, 0])
+        self.send_command()
 
     def set_Vz(self, value: float):
         """set Vz and clear others
@@ -136,6 +138,7 @@ class Rov(object):
             in range [-1, 1]
         """
         self.velocity = bytes([0, 0, 0, int(127 + 127 * value)])
+        self.send_command()
 
     def set_direction(self, value: float):
         """set direction and clear others
@@ -146,6 +149,7 @@ class Rov(object):
             in range [-1, 1]
         """
         self.velocity = bytes([0, 0, int(127 + 127 * value), 0])
+        self.send_command()
 
     def get(self):
         """receive the latest data from ROV
