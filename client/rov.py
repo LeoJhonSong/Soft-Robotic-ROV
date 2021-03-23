@@ -30,6 +30,16 @@ class Gyro(object):
         self.z = gyro_list[2]
 
 
+class Depth_sensor(object):
+    def __init__(self):
+        self.depth = 0.0
+        self.count = 0
+
+    def is_landed(self) -> bool:
+        # TODO
+        return False
+
+
 class Rov(object):
     """ROV master (run as a server)
 
@@ -51,7 +61,7 @@ class Rov(object):
 
     def __init__(self, state: str = 'initial'):
         self.state = state
-        self.depth = 0
+        self.depth_sensor = Depth_sensor()
         self.is_landed = False
         self.info_word = bytes([0, 3])
         self.led_brightness = bytes([0, 0])
@@ -177,7 +187,7 @@ class Rov(object):
         and ends with 1 byte XOR checksum and 0xFD OxFD
         """
         received = self.client_sock.recv(1024)[-RECV_DATA_SIZE:]
-        self.depth = int.from_bytes(received, 'big') / 100
+        self.depth_sensor.depth = int.from_bytes(received, 'big') / 100
         gyro_list = [received[19:22].hex(), received[16:19].hex(), received[22:25].hex()]  # roll, pitch, yaw
         gyro_list = [(-1 if int(i[0]) else 1) * (int(i[1:4]) + int(i[4:]) / 100) for i in gyro_list]
         self.gyro.update(gyro_list)
