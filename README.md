@@ -168,6 +168,7 @@
 # Manjaro下 (会自动安装gcc7)
 yay -S cuda-10.0
 sudo ln -s /opt/cuda-10.0 /usr/local/cuda
+sudo ln -s /usr/lib/libstdc++.so /opt/cuda-10.0/lib64/libstdc++.so
 # 测试. 应当会输出一串状态信息
 cd /usr/local/cuda/samples/1_Utilities/deviceQuery
 sudo make
@@ -186,6 +187,8 @@ sudo chmod a+r /usr/local/cuda/lib64/libcudnn*
 
 #### OpenCV安装
 
+[OpenCV编译参数官方说明](https://docs.opencv.org/master/db/d05/tutorial_config_reference.html)
+
 这里假设OpenCV版本为3.4.11, 如果不同, 更换下面代码中版本号
 
 ```shell
@@ -193,20 +196,34 @@ sudo chmod a+r /usr/local/cuda/lib64/libcudnn*
 # 进入opencv-3.4.11, 创建一个build文件夹
 mkdir build
 # cmake配置. 仔细查看输出信息没有报错了. 还需要一些依赖没写, 跟着报错安就好👍 (期间会下载一些东西, 如果下不动需要在终端翻墙)
-cmake ../ \
--D CMAKE_BUILD_TYPE=Releasee \
+cmake \
+-D CMAKE_BUILD_TYPE=Release \
 -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib-3.4.11/modules \
--D BUILD_opencv_python2=OFF \
--D CUDA_HOST_COMPILER=/usr/bin/gcc-7 \
+-D BUILD_opencv_python=OFF \
+-D BUILD_opencv_python_bindings_generator=OFF \
+-D PYTHON2_EXECUTABLE:FILEPATH= \
+-D PYTHON3_EXECUTABLE:FILEPATH= \
 -D WITH_CUDA=ON \
 -D CUDA_NVCC_FLAGS="-D FORCE_INLINES" \
--D WITH_GTK=ON ..
+-D OPENCV_DNN_CUDA=ON \
+-D ENABLE_FAST_MATH=ON \
+-D CUDA_FAST_MATH=ON \
+-D WITH_LIBV4L=ON \
+-D BUILD_TESTS=OFF \
+-D BUILD_PERF_TESTS=OFF \
+-D BUILD_EXAMPLES=OFF \
+-D BUILD_opencv_apps=OFF \
+-D WITH_PROTOBUF=OFF \
+-D WITH_GTK=ON \..
+
+
+-D CUDA_HOST_COMPILER=/opt/cuda-10.0/bin/g++ \
 # 编译并安装
 make -j
 sudo make install
 ```
 
-❗️ 如果不是GTK的OpenCV而是Qt的OpenCV的话似乎是无法区分按键大小写的, 其他按键似乎也会有些问题. python安装的OpenCV是Qt的. `utils/key_test.py`可以测试所按按键被OpenCV识别为什么了.
+❗️ 如果不是GTK -D CMAKE_CXX_COMPILER=/opt/cuda-10.0/bin/g++的OpenCV而是Qt的OpenCV的话似乎是无法区分按键大小写的, 其他按键似乎也会有些问题. python安装的OpenCV是Qt的. `utils/key_test.py`可以测试所按按键被OpenCV识别为什么了.
 
 
 ### 识别模型
