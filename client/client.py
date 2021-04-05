@@ -5,6 +5,7 @@ when run as main, start visual info client, ROV server
 '''
 
 import socket
+import time
 
 import serial
 import yaml
@@ -25,7 +26,7 @@ if __name__ == '__main__':
     try:
         uart = serial.Serial('/dev/ttyUSB0', baudrate=9600)
         print('[Uart] connected')
-    except FileNotFoundError:
+    except (FileNotFoundError, serial.SerialException):
         uart = None
     with rov.Rov() as rov:
         while True:
@@ -62,7 +63,8 @@ if __name__ == '__main__':
                 if uart is not None:
                     uart.write('!!')
                     arm.arm_is_working = True
-            elif grasp_state == 'started':
+                    arm.start_time = time.time()
+            elif grasp_state == 'activated':
                 if uart is not None:
                     # FIXME: check the message format
                     uart.write(f'#{str((target.center[0] - arm.marker_position[0]) * 100)},\
