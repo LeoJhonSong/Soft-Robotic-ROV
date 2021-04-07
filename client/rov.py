@@ -88,6 +88,18 @@ class Rov(object):
         self.target = visual_info.Target()
         self.arm = visual_info.Arm()
         self.grasp_state = 'idle'
+        self.cruise_periods = 2
+        self.cruise_time = 0.0
+        # the period is 7s, keys are the last time of that move [key_n-1, key_n)
+        self.cruise_path = {
+            1: [0, 0, -0.5, -0.99],
+            2: [0.7, 0, 0, 0.3],
+            3: [0, 0, 0.5, -0.99],
+            4: [0.7, 0, 0, 0.3],
+            5: [0, 0, 0.5, -0.99],
+            6: [0.7, 0, 0, 0.3],
+            7: [0, 0, -0.5, -0.99],
+        }
         self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_sock.bind(('127.0.0.1', ROV_SERVER_PORT))
         self.server_sock.listen(8)
@@ -145,9 +157,9 @@ class Rov(object):
         Parameters
         ----------
         value : float
-            in range [-1, 1]
+            in range (backward)[-1, 1](forward)
         """
-        self.velocity = bytes([int(127 + 127 * value), 0, 0, 0])
+        self.joystick = bytes([int(127 + 127 * value), 0, 0, 0])
         self.send_command()
         if value:
             print(f'[ROV] going {"forward" if value > 0 else "backward"} with {int(abs(value) * 100)}% speed')
@@ -160,9 +172,9 @@ class Rov(object):
         Parameters
         ----------
         value : float
-            in range [-1, 1]
+            in range (right)[-1, 1](left)
         """
-        self.velocity = bytes([0, int(127 + 127 * value), 0, 0])
+        self.joystick = bytes([0, int(127 + 127 * value), 0, 0])
         self.send_command()
         if value:
             print(f'[ROV] going {"left" if value > 0 else "right"} with {int(abs(value) * 100)}% speed')
@@ -175,9 +187,9 @@ class Rov(object):
         Parameters
         ----------
         value : float
-            in range [-1, 1]
+            in range (down)[-1, 1](up)
         """
-        self.velocity = bytes([0, 0, 0, int(127 + 127 * value)])
+        self.joystick = bytes([0, 0, 0, int(127 + 127 * value)])
         self.send_command()
         if value:
             print(f'[ROV] going {"up" if value > 0 else "down"} with {int(abs(value) * 100)}% speed')
@@ -190,14 +202,25 @@ class Rov(object):
         Parameters
         ----------
         value : float
-            in range [-1, 1]
+            in range (right)[-1, 1](left)
         """
-        self.velocity = bytes([0, 0, int(127 + 127 * value), 0])
+        self.joystick = bytes([0, 0, int(127 + 127 * value), 0])
         self.send_command()
         if value:
             print(f'[ROV] turning {"left" if value > 0 else "right"} with {int(abs(value) * 100)}% speed')
         else:
             print('[ROV] stopped')
+
+    def set_move(self, velocity: list):
+        """set multi-direction values
+
+        Parameters
+        ----------
+        velocity : list
+            a list of [Vx, Vy, direction, Vz] in range [-1, 1]
+        """
+        self.joystick = bytes([int(127 + 127 * item) for item in velocity])
+        self.send_command()
 
     def get(self):
         """receive the latest data from ROV
@@ -236,23 +259,60 @@ class Rov(object):
         # has no target / target lost / no more chances
         self.grasp_state = 'idle'
         self.arm.chances[0] = self.arm.chances[1]  # reset chances
+        # 往前荡一下, 确保目标进袋
+        self.set_Vx(1)
+        time.sleep(1)
+        # float up to cruise hight
+        self.set_Vz(1)
+        time.sleep(0.5)
         return 'cruise'
 
     def cruise(self):
         """巡航
         """
-        # if time period
-        return 'land'
-        # else if detected
-        return 'aim'
+        if self.target.has_target:
+            self.cruise_time = 0
+            # 发现目标后一个后撤步!
+            self.set_move([-0.7, 0, 0, -0.99])
+            time.sleep(1)  # 1s
+            return 'aim'
+        # if reach time limit
+        elif time.time() - self.cruise_time > list(self.cruise_path.keys())[-1] * self.cruise_periods:
+            self.cruise_time = 0
+            return 'land'
+        else:
+            key = list(self.cruise_path.keys())[0]
+            if self.cruise_time == 0:
+                self.cruise_time = time.time()
+            else:
+                time_count = time.time() - self.cruise_time
+                for t in self.cruise_path:
+                    if time_count < t:
+                        key = t
+                        break
+            self.set_move(self.cruise_path[key])
+            return 'cruise'
 
     def aim(self):
         """瞄准, 移动至目标处
         """
+        offset_x = 0.5
+        offset_y = 0.7
         # if target lost
-        return 'land'
-        # else if landed
-        return 'grasp'
+        if not self.target.has_target:
+            return 'land'
+        else:
+            # 已坐底
+            if self.depth_sensor.is_landed:
+                return 'grasp'
+            else:
+                # 最多4次机会
+                for i in range(4):
+                    while True:
+                        # FIXME: a sleep may needed to limit the fps (or not)
+                        pass
+                # 放弃瞄准, 转坐底
+                return 'land'
 
     def state_machine(self) -> str:
         cases = {
