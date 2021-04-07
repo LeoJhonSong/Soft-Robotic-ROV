@@ -1,4 +1,5 @@
 import socket
+import time
 
 import visual_info
 
@@ -30,6 +31,34 @@ class Gyro(object):
         self.z = gyro_list[2]
 
 
+class Depth_sensor(object):
+    """depth sensor for ROV
+
+    Attributes
+    ----------
+    depth : float
+        in meters
+    """
+
+    def __init__(self):
+        self.depth = 0.0
+        self.old_depth = 0.0
+        self.count = 0
+        self.count_thresh = 10
+        self.diff_thresh = 0.03  # 3cm
+
+    def is_landed(self) -> bool:
+        if abs(self.old_depth - self.depth) < self.diff_thresh:
+            self.count += 1
+            if self.count > self.count_thresh:
+                print('[ROV] landed!')
+                return True
+        else:  # 当深度变化幅度超过阈值, 判定未坐底并归零稳定计次
+            self.count = 0
+            return False
+        return False
+
+
 class Rov(object):
     """ROV master (run as a server)
 
@@ -41,8 +70,6 @@ class Rov(object):
     ----------
     state : int
         current automation workflow state of ROV
-    depth : float
-        in meters
     info_word : bytes
         on/off word in form of: [6bytes] is_loop [7bytes] LED2 LED1
     joystick : bytes[4]
@@ -51,8 +78,7 @@ class Rov(object):
 
     def __init__(self, state: str = 'initial'):
         self.state = state
-        self.depth = 0
-        self.is_landed = False
+        self.depth_sensor = Depth_sensor()
         self.info_word = bytes([0, 3])
         self.led_brightness = bytes([0, 0])
         self.joystick = bytes([0] * 4)
@@ -63,7 +89,10 @@ class Rov(object):
         self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_sock.bind(('127.0.0.1', ROV_SERVER_PORT))
         self.server_sock.listen(8)
+        print('[ROV] connecting ROV...')
         self.client_sock, _ = self.server_sock.accept()
+        print('[ROV] connected')
+        self.set_led(950)
 
     def __enter__(self):
         return self
@@ -106,6 +135,7 @@ class Rov(object):
         """
         self.led_brightness = bytes.fromhex(f'{value:04x}')
         self.send_command()
+        print(f'[ROV] led brightness set to {int(value / 9.5)}%')
 
     def set_Vx(self, value: float):
         """set Vx and clear others
@@ -117,6 +147,10 @@ class Rov(object):
         """
         self.velocity = bytes([int(127 + 127 * value), 0, 0, 0])
         self.send_command()
+        if value:
+            print(f'[ROV] going {"forward" if value > 0 else "backward"} with {int(abs(value) * 100)}% speed')
+        else:
+            print('[ROV] stopped')
 
     def set_Vy(self, value: float):
         """set Vy and clear others
@@ -128,6 +162,10 @@ class Rov(object):
         """
         self.velocity = bytes([0, int(127 + 127 * value), 0, 0])
         self.send_command()
+        if value:
+            print(f'[ROV] going {"left" if value > 0 else "right"} with {int(abs(value) * 100)}% speed')
+        else:
+            print('[ROV] stopped')
 
     def set_Vz(self, value: float):
         """set Vz and clear others
@@ -139,6 +177,10 @@ class Rov(object):
         """
         self.velocity = bytes([0, 0, 0, int(127 + 127 * value)])
         self.send_command()
+        if value:
+            print(f'[ROV] going {"up" if value > 0 else "down"} with {int(abs(value) * 100)}% speed')
+        else:
+            print('[ROV] stopped')
 
     def set_direction(self, value: float):
         """set direction and clear others
@@ -150,6 +192,10 @@ class Rov(object):
         """
         self.velocity = bytes([0, 0, int(127 + 127 * value), 0])
         self.send_command()
+        if value:
+            print(f'[ROV] turning {"left" if value > 0 else "right"} with {int(abs(value) * 100)}% speed')
+        else:
+            print('[ROV] stopped')
 
     def get(self):
         """receive the latest data from ROV
@@ -158,7 +204,7 @@ class Rov(object):
         and ends with 1 byte XOR checksum and 0xFD OxFD
         """
         received = self.client_sock.recv(1024)[-RECV_DATA_SIZE:]
-        self.depth = int.from_bytes(received, 'big') / 100
+        self.depth_sensor.depth = int.from_bytes(received, 'big') / 100  # in meters
         gyro_list = [received[19:22].hex(), received[16:19].hex(), received[22:25].hex()]  # roll, pitch, yaw
         gyro_list = [(-1 if int(i[0]) else 1) * (int(i[1:4]) + int(i[4:]) / 100) for i in gyro_list]
         self.gyro.update(gyro_list)
@@ -167,8 +213,7 @@ class Rov(object):
         """坐底
         """
         self.set_Vz(-1)
-        # TODO: detect if is landed
-        if self.is_landed:
+        if self.depth_sensor.is_landed():
             return 'grasp'
         else:
             return 'land'
@@ -176,16 +221,19 @@ class Rov(object):
     def grasp(self):
         """抓取
         """
-        # if has target
-        if self.arm.arm_is_working:
-            self.grasp_state = 'ready'
-        else:
-            self.grasp_state = 'started'
-        return 'grasp'
-        # if time up & chance up
-        # return 'cruise'
-        # else
+        if self.target.has_target:
+            if not self.arm.arm_is_working:
+                self.grasp_state = 'ready'
+                return 'grasp'
+            else:
+                if self.arm.chances:
+                    if time.time() - self.arm.start_time > self.arm.time_limit:
+                        self.arm.chances[0] -= 1
+                    self.grasp_state = 'activated'
+                    return 'grasp'
+        # has no target / target lost / no more chances
         self.grasp_state = 'idle'
+        self.arm.chances[0] = self.arm.chances[1]  # reset chances
         return 'cruise'
 
     def cruise(self):
@@ -197,7 +245,7 @@ class Rov(object):
         return 'aim'
 
     def aim(self):
-        """移动至目标处
+        """瞄准, 移动至目标处
         """
         # if target lost
         return 'land'
