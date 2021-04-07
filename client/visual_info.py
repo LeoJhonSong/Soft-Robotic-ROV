@@ -24,5 +24,6 @@ class Arm(object):
         self.chances = [2, 2]  # use the the second to store the total chances
 
     def update(self, arm_dict):
+        self.arm_is_working = arm_dict["arm_is_working"]
         self.has_marker = arm_dict["has_marker"]
         self.marker_position = [arm_dict["position"]["x"], arm_dict["position"]["y"]]

@@ -19,8 +19,6 @@ VISUAL_SERVER_PORT = 8080
 if __name__ == '__main__':
     import time
     t = time.time()
-    target = visual_info.Target()
-    arm = visual_info.Arm()
     quit_flag = False
     switch = False
     try:
@@ -29,7 +27,9 @@ if __name__ == '__main__':
     except (FileNotFoundError, serial.SerialException):
         uart = None
     with rov.Rov() as rov:
+        # ROV主循环
         while True:
+            # FIXME: a sleep may needed to limit the fps (or not)
             # TODO: interface needed, for at least quit
             if time.time() - t > 30:
                 quit_flag = True
@@ -44,32 +44,32 @@ if __name__ == '__main__':
                     continue
                 # send flags to ROV
                 # threads_quit_flag: 2; arm_is_working: 1
-                s.send(bytes(str(quit_flag * 2 + arm.arm_is_working).encode()))
+                s.send(bytes(str(quit_flag * 2 + rov.arm.arm_is_working).encode()))
                 # receive data from ROV then update target and arm
                 visual_info_dict = yaml.load(s.recv(1024), Loader=yaml.Loader)
-                target.update(visual_info_dict["target"])
-                arm.update(visual_info_dict["arm"])
             if quit_flag:
                 if switch:
                     break
                 else:
                     switch = True
             # update ROV data
-            rov.target = target
-            rov.arm = arm
+            rov.target.update(visual_info_dict["target"])
+            rov.arm.update(visual_info_dict["arm"])
+            rov.get()  # 主要是获得深度
+            rov.depth_sensor.land_check()
             # switch case
             grasp_state = rov.state_machine()
             if grasp_state == 'ready':
                 if uart is not None:
                     uart.write('!!')
-                    arm.arm_is_working = True
-                    arm.start_time = time.time()
+                    rov.arm.arm_is_working = True
+                    rov.arm.start_time = time.time()
             elif grasp_state == 'activated':
                 if uart is not None:
                     # FIXME: check the message format
-                    uart.write(f'#{str((target.center[0] - arm.marker_position[0]) * 100)},\
-                    {str((target.center[1] - arm.marker_position[1]) * 100)}')
+                    uart.write(f'#{str((rov.target.center[0] - rov.arm.marker_position[0]) * 100)},\
+                    {str((rov.target.center[1] - rov.arm.marker_position[1]) * 100)}')
             elif grasp_state == 'idle':
-                arm.arm_is_working = False
+                rov.arm.arm_is_working = False
     if uart is not None:
         uart.close()
