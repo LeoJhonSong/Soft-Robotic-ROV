@@ -29,7 +29,6 @@ if __name__ == '__main__':
     with rov.Rov() as rov:
         # ROV主循环
         while True:
-            # FIXME: a sleep may needed to limit the fps (or not)
             # TODO: interface needed, for at least quit
             if time.time() - t > 30:
                 quit_flag = True
