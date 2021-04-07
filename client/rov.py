@@ -46,17 +46,19 @@ class Depth_sensor(object):
         self.count = 0
         self.count_thresh = 10
         self.diff_thresh = 0.03  # 3cm
+        self.is_landed = False
 
-    def is_landed(self) -> bool:
+    def land_check(self) -> None:
         if abs(self.old_depth - self.depth) < self.diff_thresh:
             self.count += 1
             if self.count > self.count_thresh:
                 print('[ROV] landed!')
-                return True
+                self.is_landed = True
+            else:
+                self.is_landed = False
         else:  # 当深度变化幅度超过阈值, 判定未坐底并归零稳定计次
             self.count = 0
-            return False
-        return False
+            self.is_landed = False
 
 
 class Rov(object):
@@ -213,7 +215,7 @@ class Rov(object):
         """坐底
         """
         self.set_Vz(-1)
-        if self.depth_sensor.is_landed():
+        if self.depth_sensor.is_landed:
             return 'grasp'
         else:
             return 'land'
