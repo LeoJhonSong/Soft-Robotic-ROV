@@ -21,7 +21,7 @@ class Arm(object):
         self.marker_position = [0, 0]
         self.start_time = 0.0
         self.time_limit = 70  # 70s
-        self.chances = [2, 2]  # use the the second to store the total chances
+        self.chances = [2] * 2  # use the the second to store the total chances
 
     def update(self, arm_dict):
         self.arm_is_working = arm_dict["arm_is_working"]
