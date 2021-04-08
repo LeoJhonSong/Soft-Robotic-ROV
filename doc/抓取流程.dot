@@ -10,7 +10,7 @@ digraph G {
   l -> l [label="未触底"]
   l -> g [label="触底"]
   g -> g [label="抓取中"]
-  g -> c [label="抓获目标/丢失目标/\n到达时限&机会用尽"]
+  g -> c [label="抓获目标/阈值框内不再有目标/\n到达时限&机会用尽"]
   c -> l [label="到达时限"]
   c -> a [label="检测到目标"]
   a -> l [label="未触底但\n目标丢失"]

@@ -1,5 +1,6 @@
 import socket
 import time
+import math
 
 import visual_info
 
@@ -100,9 +101,10 @@ class Rov(object):
             6: [0.7, 0, 0, 0.3],
             7: [0, 0, -0.5, -0.99],
         }
+        self.aim_chances = [4] * 2
         self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_sock.bind(('127.0.0.1', ROV_SERVER_PORT))
-        self.server_sock.listen(8)
+        self.server_sock.listen()
         print('[ROV] connecting ROV...')
         self.client_sock, _ = self.server_sock.accept()
         print('[ROV] connected')
@@ -239,6 +241,7 @@ class Rov(object):
         """
         self.set_Vz(-1)
         if self.depth_sensor.is_landed:
+            print('[ROV] landed, start grasping')
             return 'grasp'
         else:
             return 'land'
@@ -246,7 +249,7 @@ class Rov(object):
     def grasp(self):
         """抓取
         """
-        if self.target.has_target:
+        if self.target.roi_check():
             if not self.arm.arm_is_working:
                 self.grasp_state = 'ready'
                 return 'grasp'
@@ -256,7 +259,7 @@ class Rov(object):
                         self.arm.chances[0] -= 1
                     self.grasp_state = 'activated'
                     return 'grasp'
-        # has no target / target lost / no more chances
+        # has no more target in thresh range / no more chances
         self.grasp_state = 'idle'
         self.arm.chances[0] = self.arm.chances[1]  # reset chances
         # 往前荡一下, 确保目标进袋
@@ -265,6 +268,7 @@ class Rov(object):
         # float up to cruise hight
         self.set_Vz(1)
         time.sleep(0.5)
+        print('[ROV] grasp done, start cruise')
         return 'cruise'
 
     def cruise(self):
@@ -275,10 +279,12 @@ class Rov(object):
             # 发现目标后一个后撤步!
             self.set_move([-0.7, 0, 0, -0.99])
             time.sleep(1)  # 1s
+            print('[ROV] target found, start aiming')
             return 'aim'
         # if reach time limit
         elif time.time() - self.cruise_time > list(self.cruise_path.keys())[-1] * self.cruise_periods:
             self.cruise_time = 0
+            print('[ROV] time out, start landing')
             return 'land'
         else:
             key = list(self.cruise_path.keys())[0]
@@ -296,22 +302,68 @@ class Rov(object):
     def aim(self):
         """瞄准, 移动至目标处
         """
-        offset_x = 0.5
-        offset_y = 0.7
+        grasp_thresh_x = self.target.roi_thresh[0]
+        grasp_thresh_y = self.target.roi_thresh[1]
+        Vy = 0
+        omega = 0
         # if target lost
         if not self.target.has_target:
+            # TODO: reset vars
+            print('[ROV] target lost, start landing')
             return 'land'
         else:
-            # 已坐底
-            if self.depth_sensor.is_landed:
-                return 'grasp'
+            # 最多4次机会
+            if self.aim_chances[0]:
+                offset_y = self.target.roi_offset[1]
+                dx = 0.5 - self.target.center[0]
+                dy = offset_y - self.target.center[1]  # 线之上为正
+                # 以底部中间处为原点, y多减0.01保证分母不为零
+                theta = math.atan((self.target.center[0] - 0.5) / (self.target.center[1] - 1 - 0.01))
+                omega = theta / (math.pi / 2) * 0.99
+                if not self.depth_sensor.is_landed:
+                    # 级联阈值，粗调+细调，保证目标一直在视野范围内
+                    # FIXME: a sleep may needed to limit the fps (or not)
+                    if abs(dx) > 0.35:
+                        omega = omega * 1.3  # 限制大小
+                    elif 0.4 <= dy < offset_y:
+                        Vy = dy * 1.1
+                    elif 0.3 <= dy < 0.4:  # 离得近一些速度放小
+                        Vy = dy * 0.9
+                    elif abs(dx) > 0.25:
+                        omega = omega * 0.8
+                    else:  # 第二阈值框
+                        if abs(dy) > grasp_thresh_y:
+                            Vy = dy * 0.8
+                        elif abs(dx) > grasp_thresh_x:
+                            omega = omega * 1.2
+                    print(f'[ROV] {}')
+                    self.set_move([0, max(min(Vy, 1), -1), 0, max(min(omega, 1), -1)])
+                    return 'aim'
+                else:  # 坐底后考虑是否起跳调整位置
+                    if self.target.roi_check():  # 检查位置阈值
+                        self.aim_chances[0] = self.aim_chances[1]
+                        print('[ROV] ready for grasping, start grasping!')
+                        return 'grasp'
+                    else:
+                        if abs(dx) > 0.35:
+                            omega = omega * 1
+                        elif abs(dy) > grasp_thresh_y:
+                            if abs(dy) > 0.3:
+                                Vy = dy * 1.8
+                            else:
+                                Vy = dy * 1.4
+                        elif abs(dx) > grasp_thresh_x:
+                            omega = omega * 0.8
+                        # 上浮
+                        print(f'[ROV] {}')
+                        self.aim_chances[0] -= 1
+                        self.set_move([0, max(min(Vy, 1), -1), 0, max(min(omega, 1), -1)])
+                        time.sleep(0.5)  # 上浮0.5s
+                        return 'aim'
             else:
-                # 最多4次机会
-                for i in range(4):
-                    while True:
-                        # FIXME: a sleep may needed to limit the fps (or not)
-                        pass
-                # 放弃瞄准, 转坐底
+                # 放弃瞄准, 转坐底, 会转抓取, 然后转巡航
+                self.aim_chances[0] = self.aim_chances[1]
+                print('[ROV] give up aiming, start landing')
                 return 'land'
 
     def state_machine(self) -> str:

@@ -523,7 +523,6 @@ std::vector<float> Detector::visualization(cv::Mat &img)
                 // TODO: (optional) filter candidates with position (more accurate)
                 if ((top + bottom) / 2.0 > img.rows * 0.9)
                     continue;
-                // set current class as tracking class if confidence of any candidates > 0.7
                 if (this->track && this->tracking_class == 0 && matched_times[j].item<int>() > 30)
                 {
                     this->tracking_class = i;
