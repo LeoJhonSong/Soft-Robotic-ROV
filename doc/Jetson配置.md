@@ -49,6 +49,21 @@ sudo apt install vlc-utils v4lucp
 ### OpenCV3.4 (cuda10.0)编译
 
 ```shell
+### Install dependencies based on the Jetson Installing OpenCV Guide
+sudo apt-get install build-essential make cmake cmake-curses-gui \
+                       g++ libavformat-dev libavutil-dev \
+                       libswscale-dev libv4l-dev libeigen3-dev \
+                       libglew-dev libgtk2.0-dev
+### Install dependencies for gstreamer stuffs
+sudo apt-get install libdc1394-22-dev libxine2-dev \
+                       libgstreamer1.0-dev \
+                       libgstreamer-plugins-base1.0-dev
+### Install additional dependencies according to the pyimageresearch
+### article
+sudo apt-get install libjpeg-dev libjpeg-turbo8-dev libtiff-dev libavcodec-dev
+sudo apt-get install libxvidcore-dev libx264-dev libgtk-3-dev \
+                       libatlas-base-dev gfortran
+sudo apt-get install libopenblas-dev liblapack-dev liblapacke-dev
 # 缺失cublas device库的糊弄办法
 # 问题原因: https://forums.developer.nvidia.com/t/cuda-blas-libraries-not-installed/107908
 sudo ln -s /usr/local/cuda-10.0/lib64/libcublas.so /usr/local/cuda-10.0/lib64/libcublas_device.so
@@ -74,6 +89,14 @@ cmake \
 -D BUILD_EXAMPLES=OFF \
 -D WITH_PROTOBUF=OFF \
 -D WITH_GTK=ON \..
+```
+
+然后不知为何make的过程中没有自动将`libopencv_features2d.so.3.4`更新给ld, 需要手动操作一下
+
+```shell
+sudo touch /etc/ld.so.conf.d/opencv.conf
+sudo echo "/usr/local/lib" > /etc/ld.so.conf.d/opencv.conf
+sudo ldconfig -v
 ```
 
 ### libtorch
