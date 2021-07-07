@@ -166,6 +166,19 @@ sudo jetson_clocks
 sudo nvpmodel -m 0
 ```
 
+### 设置静态IP
+
+新建`/etc/network/interfaces.d/eth0`:
+```shell
+auto eth0
+iface eth0 inet static
+address 10.42.0.106
+netmask 255.255.255.0
+gateway 10.42.0.1
+```
+
+重启后生效, 网线直连时Jetson的IP为`10.42.0.106`
+
 ### TensorRT加速Torch模型
 
 https://zhuanlan.zhihu.com/p/88318324
