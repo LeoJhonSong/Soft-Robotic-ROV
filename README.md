@@ -181,9 +181,10 @@ sudo chmod a+r /usr/local/cuda/lib64/libcudnn*
 这里假设OpenCV版本为3.4.11, 如果不同, 更换下面代码中版本号
 
 ```shell
+yay -S atlas-lapack eigen
 # 将下载下来的opencv-3.4.11和opencv_contrib-3.4.11解压到同一文件夹下
-# 进入opencv-3.4.11, 创建一个build文件夹
-mkdir build
+# 进入opencv-3.4.11, 创建一个build文件夹并进入
+mkdir build && cd build
 # cmake配置. 仔细查看输出信息没有报错了. 还需要一些依赖没写, 跟着报错安就好👍 (期间会下载一些东西, 如果下不动需要在终端翻墙)
 cmake \
 -D CMAKE_BUILD_TYPE=Release \
@@ -208,7 +209,7 @@ cmake \
 
 -D CUDA_HOST_COMPILER=/opt/cuda-10.0/bin/g++ \
 # 编译并安装
-make -j
+make -j 18
 sudo make install
 ```
 
