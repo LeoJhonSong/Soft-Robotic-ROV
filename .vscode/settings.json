@@ -12,6 +12,7 @@
         "gflags",
         "glog",
         "opencv",
+        "pyserial",
         "smbus"
     ],
 }

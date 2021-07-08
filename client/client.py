@@ -10,14 +10,17 @@ import time
 import serial
 import yaml
 
+from asciimatics.screen import Screen
+
 import rov
-import visual_info
+import controller
 
 VISUAL_SERVER_PORT = 8080
 
 
-if __name__ == '__main__':
-    t = time.time()
+def screen_main(screen: Screen):
+    """the function to call once the screen has been created
+    """
     quit_flag = False
     switch = False
     try:
@@ -26,13 +29,12 @@ if __name__ == '__main__':
     except (FileNotFoundError, serial.SerialException):
         uart = None
     with rov.Rov() as robot:
+        ctrl = controller.Controller(robot, screen)
         # ROV主循环
         while True:
-            # TODO: interface needed, for at least quit
-            if time.time() - t > 30:
-                quit_flag = True
-            else:
-                quit_flag = False
+            # 根据键盘事件控制ROV, 并刷新屏幕内容
+            quit_flag = ctrl.key_check()
+            ctrl.printScreen()
             # 更新target, arm数据
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as visual_socket:
                 try:
@@ -45,7 +47,7 @@ if __name__ == '__main__':
                 visual_socket.send(bytes(str(quit_flag * 2 + robot.arm.arm_is_working).encode()))
                 # receive data from ROV then update target and arm
                 visual_info_dict = yaml.load(visual_socket.recv(1024), Loader=yaml.Loader)
-            # quit in next loop when quit_flag shows up
+            # quit_flag置1后待运行到下一循环, 将quit_flag发送给visual_server后再break
             if quit_flag:
                 if switch:
                     break
@@ -56,10 +58,12 @@ if __name__ == '__main__':
             robot.arm.update(visual_info_dict["arm"])
             robot.get()  # 主要是获得深度
             robot.depth_sensor.land_check()
-            # switch case
+            # 状态机状态跳转并给出抓取判断
             grasp_state = robot.state_machine()
+            # 软体臂控制
             if grasp_state == 'ready':
                 if uart is not None:
+                    # TODO: 接入软体臂算法
                     uart.write('!!')
                     robot.arm.arm_is_working = True
                     robot.arm.start_time = time.time()
@@ -72,3 +76,7 @@ if __name__ == '__main__':
                 robot.arm.arm_is_working = False
     if uart is not None:
         uart.close()
+
+
+if __name__ == '__main__':
+    Screen.wrapper(screen_main)
