@@ -336,7 +336,7 @@ class Rov(object):
                             Vy = dy * 0.8
                         elif abs(dx) > grasp_thresh_x:
                             omega = omega * 1.2
-                    print(f'[ROV] {}')
+                    # print(f'[ROV] {}')  # FIXME: what is this
                     self.set_move([0, max(min(Vy, 1), -1), 0, max(min(omega, 1), -1)])
                     return 'aim'
                 else:  # 坐底后考虑是否起跳调整位置
@@ -355,7 +355,7 @@ class Rov(object):
                         elif abs(dx) > grasp_thresh_x:
                             omega = omega * 0.8
                         # 上浮
-                        print(f'[ROV] {}')
+                        # print(f'[ROV] {}')  # FIXME: what is this
                         self.aim_chances[0] -= 1
                         self.set_move([0, max(min(Vy, 1), -1), 0, max(min(omega, 1), -1)])
                         time.sleep(0.5)  # 上浮0.5s
