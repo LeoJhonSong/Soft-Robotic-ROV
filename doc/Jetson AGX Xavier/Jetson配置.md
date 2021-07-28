@@ -32,7 +32,7 @@
 sudo apt-get install python3-smbus  # I2C库
 
 sudo groupadd -f -r gpio
-sudo usermod -a -G gpio buaa  #
+sudo usermod -a -G gpio $USER  # 将当前用户加入gpio组
 sudo pip3 install --upgrade Jetson.GPIO
 sudo cp /usr/local/lib/python3.6/dist-packages/Jetson/GPIO/99-gpio.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules && sudo udevadm trigger
@@ -84,17 +84,16 @@ sudo apt install vlc-utils v4lucp
 #### OpenCV3.4 (cuda10.0)编译
 
 ```shell
-### Install dependencies based on the Jetson Installing OpenCV Guide
+# Install dependencies based on the Jetson Installing OpenCV Guide
 sudo apt-get install build-essential make cmake cmake-curses-gui \
                        g++ libavformat-dev libavutil-dev \
                        libswscale-dev libv4l-dev libeigen3-dev \
                        libglew-dev libgtk2.0-dev
-### Install dependencies for gstreamer stuffs
+# Install dependencies for gstreamer stuffs
 sudo apt-get install libdc1394-22-dev libxine2-dev \
                        libgstreamer1.0-dev \
                        libgstreamer-plugins-base1.0-dev
-### Install additional dependencies according to the pyimageresearch
-### article
+# Install additional dependencies
 sudo apt-get install libjpeg-dev libjpeg-turbo8-dev libtiff-dev libavcodec-dev
 sudo apt-get install libxvidcore-dev libx264-dev libgtk-3-dev \
                        libatlas-base-dev gfortran
@@ -172,12 +171,12 @@ sudo nvpmodel -m 0
 ```shell
 auto eth0
 iface eth0 inet static
-address 10.42.0.106
+address 192.168.1.112
 netmask 255.255.255.0
-gateway 10.42.0.1
+gateway 192.168.1.1
 ```
 
-重启后生效, 网线直连时Jetson的IP为`10.42.0.106`
+重启后生效, 网线直连时Jetson的IP为`192.168.1.112`. 注意网线直连时上位机ip也需要在`192.168.1.x`段.
 
 ### TensorRT加速Torch模型
 
