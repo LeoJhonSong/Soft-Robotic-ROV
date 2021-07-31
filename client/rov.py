@@ -378,5 +378,9 @@ class Rov(object):
 
 
 if __name__ == '__main__':
-    with Rov() as rov:
-        rov.get()
+    # for simple test
+    with Rov() as robot:
+        # robot.get()  # FIXME: not needed?
+        while True:
+            command, value = input('Vx [-1, 1], Vy [-1, 1], Vz [-1, 1], led [0, 950], direction [-1, 1]').split(',')
+            eval(f'robot.set_{command}({value})')

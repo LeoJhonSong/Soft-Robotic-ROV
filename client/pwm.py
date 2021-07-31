@@ -94,7 +94,7 @@ class PCA9685:
 if __name__ == "__main__":
     pwm = PCA9685()
     pwm.setPWMFreq()
-    pwm.setValue(0, 0.5)
-    pwm.setValue(1, 0.25)
+    pwm.setValue(0, 0.02)
+    pwm.setValue(1, 0.05)
     while True:
         time.sleep(1)
