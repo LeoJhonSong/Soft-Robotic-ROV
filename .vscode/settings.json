@@ -6,11 +6,18 @@
     ],
     "python.analysis.extraPaths": ["./client"],
     "cSpell.words": [
+        "INET",
+        "Marquardt",
+        "OBSS",
         "RUAS",
+        "SUBADR",
+        "Vout",
         "aruco",
         "cuda",
+        "fsolve",
         "gflags",
         "glog",
+        "interp",
         "opencv",
         "pyserial",
         "smbus"
