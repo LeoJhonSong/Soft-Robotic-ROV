@@ -1,2 +1,4 @@
 pyserial
 asciimatics
+numpy
+scipy
