@@ -4,10 +4,12 @@
 provide pressure calculation functions with given end effector position
 '''
 
-from math import atan, cos, pi, sin
+from numpy import pi, sin, cos, arctan, exp, sign
+from numpy.random import rand
 import numpy as np
 from scipy.optimize import root
-# from pwm import PCA9685
+from scipy.signal import cont2discrete
+from pwm import PCA9685
 
 
 class Manipulator():
@@ -22,9 +24,23 @@ class Manipulator():
         # - hand
         self.pressures = [0.0] * 10
         self.water_pressure = 0.0
+        # RLKMIC奖惩值表
+        self.RA = np.array([
+            [0, -1, -1, -1, -1, -1, -1],
+            [0, 0, -1, -1, -1, -1, -1],
+            [1, 1, 1, 0, 0, 0, 0],
+            [10, 10, 10, 10, 10, 10, 10],
+            [0, 0, 0, 0, 1, 1, 1],
+            [-1, -1, -1, -1, -1, 0, 0],
+            [-1, -1, -1, -1, -1, 0, 0]
+        ])
+        self.alpha = 1  # 学习因子
+        self.gama = 0.8  # 折扣因子
+        # 7 Q matrices
+        self.Q_Ms = np.zeros([7, 7, 7])
         # create 10 channel pwm module instance
-        # self.pwm = PCA9685()
-        # self.pwm.setPWMFreq()
+        self.pwm = PCA9685()
+        self.pwm.setPWMFreq()
 
     def inverse_kinematics(self, x: float, y: float, z: float) -> bool:
         """do inverse kinematics for the soft manipulator under the OBSS model
@@ -46,16 +62,16 @@ class Manipulator():
         -------
         is_in_workspace: give bool value of whetcher the end point is in workspace
         """
-        initBendLen = 109.0
+        initBendLen = 107.0
         initElgLen = 102.0
         maxBendLen = 170.0
         maxElgLen = 200.0
         initZ = -325.0
         # determine phi based on x, y
         if x < 0:
-            phi = -atan(y / x) + pi
+            phi = -arctan(y / x) + pi
         elif x > 0:
-            phi = -atan(y / x)
+            phi = -arctan(y / x)
         else:
             if y > 0:
                 phi = -pi / 2
@@ -159,6 +175,103 @@ class Manipulator():
         self.pressures[6:9] = [0.51789321 * self.segElgLen - 54.4050672] * 3
         # FIXME: hand pressure not set
         self.set_pwm()
+
+    def kalman(self, A, B, C, D, Q, P, R, x_now, u, y_now, pp):
+        Ad, Bd, Cd, Dd, _ = cont2discrete([A, B, C, D], 0.01)
+        P = Ad * P * Ad.T + Bd * Q * Bd.T
+        Mn = P * Cd.T / (Cd * P * Cd.T + R)
+        P = (np.eye(2) - Mn * Cd) * P
+        x_now = Ad * x_now + Bd * u
+        x_next = x_now + Mn * (y_now - Cd * x_now - Dd)
+        y_next = Cd * x_next + Dd
+        p1 = D - y_now
+        p2 = D - y_next
+        p3 = np.ceil(max(pp, abs(p1)))
+        if (
+            p1 < -0.001 and 0 < p2 < 2 * p3
+        ) or (
+            p1 > 0.001 and -2 * p3 < p2 < 0
+        ) or (
+            np.sign(p1) == np.sign(p2) and abs(p1 - p2) > p3
+        ):
+            y_next = Cd * x_next + Dd - np.ceil(p1)
+            sz = -D + y_next
+        else:
+            sz = Cd * P * Cd.T
+        return x_next, y_next, sz, P, pp
+
+    def GRLKPID(self, e, kp, R, Q, state, action, Q_m: np.ndarray):
+        # 贪婪算法动作选择策略
+        # FIXME?
+        # if rand() >
+        next_action = 0  # TODO: remove
+        next_state = 0  # TODO:remove
+        action_ranges = [-np.inf, -50, -1, -0.0001, 0.0001, 1, 50, np.inf]
+        if True:
+            for i in range(len(action_ranges) - 1):
+                if action_ranges[i] <= e < action_ranges[i + 1]:
+                    if i == 0:
+                        next_action = 0
+                    elif i == 6:
+                        next_action = 6
+                    elif i == 3:
+                        next_action = np.argmax(Q_m[3, 2:5])
+                    else:
+                        next_action = np.argmax(Q_m[i, i - 1:i + 1])
+                    next_state = i
+
+        # 更新Q值表
+        Q_m[state, action] = Q_m[state, action] + self.alpha * \
+            (self.RA[next_state, next_action] + self.gama * Q_m[next_state, next_action] - Q_m[state, action])
+        # 动作集
+        action_dict = {
+            0: (
+                kp + (0.2 * exp(1 - 50 / abs(e)) + 0.02),
+                R + (0.1 * exp(1 - 50 / abs(e)) + 0.01),
+                Q - 0.1 * exp(1 - 50 / abs(e)) - 0.01
+            ),
+            1: (
+                kp + (0.02 / exp(1 - 1 / 50) * exp(1 - 1 / abs(e)) + 0.002 * exp(0)),
+                R + (0.01 / exp(1 - 1 / 50) * exp(1 - 1 / abs(e)) + 0.001),
+                Q - (0.01 / exp(1 - 1 / 50) * exp(1 - 1 / abs(e)) + 0.001)
+            ),
+            2: (
+                kp + (0.002 / exp(1 - 0.001) * exp(1 - 0.0001 / abs(e)) + 0.0002),
+                R + (0.001 / exp(1 - 0.0001) * exp(1 - 0.0001 / abs(e)) + 0.0001),
+                Q - (0.001 / exp(1 - 0.0001) * exp(1 - 0.0001 / abs(e)) + 0.0001)
+            ),
+            3: (
+                kp - (0.0002 * exp(1 - 0.0001 / abs(e))) * sign(e),
+                R - (0.0001 * exp(1 - 0.0001 / abs(e))) * sign(e),
+                Q + (0.0001 * exp(1 - 0.0001 / abs(e))) * sign(e)
+            ),
+            4: (
+                kp - (0.002 / exp(1 - 0.0001) * exp(1 - 0.0001 / abs(e)) + 0.0002),
+                R - (0.001 / exp(1 - 0.0001) * exp(1 - 0.0001 / abs(e)) + 0.0001),
+                Q + (0.001 / exp(1 - 0.0001) * exp(1 - 0.0001 / abs(e)) + 0.0001)
+            ),
+            5: (
+                kp - (0.02 / exp(1 - 1 / 50) * exp(1 - 1 / abs(e)) + 0.0002),
+                R - (0.01 / exp(1 - 1 / 50) + exp(1 - 1 / abs(e)) + 0.001),
+                Q + (0.01 / exp(1 - 1 / 50) * exp(1 - 1 / abs(e)) + 0.001)
+            ),
+            6: (
+                kp - 0.2 * exp(1 - 50 / abs(e)) - 0.02,
+                R - 0.1 * exp(1 - 50 / abs(e)) - 0.01,
+                Q + 0.1 * exp(1 - 50 / abs(e)) + 0.01
+            )
+        }
+        kp, R, Q = action_dict[np.clip(next_action, 0, 6)]
+        kp = np.clip(kp, 0.00001, np.inf)
+        return kp, R, Q, next_state, next_action, action, Q_m
+
+    def RLKMIC2(self):
+        pass
+
+    def RLKMIC(self):
+        """RLK: reinforce learning kalman
+        """
+        pass
 
 
 if __name__ == "__main__":
