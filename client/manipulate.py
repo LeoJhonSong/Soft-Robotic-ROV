@@ -189,7 +189,7 @@ class Chamber():
 
 class Manipulator():
     def __init__(self) -> None:
-        self.d = 48.0  # FIXME: diameter of ?
+        self.d = 48.0  # unit: mm
         self.segBendLen = [0.0] * 3
         self.segElgLen = 0.0
         # the 10 channels are:
@@ -213,9 +213,9 @@ class Manipulator():
         Parameters
         ----------
         x : float
-            x of end effector  # FIXME: in what unit?
+            x of end effector, unit: mm
         y : float
-            y of end effector
+            y of end effector, unit: mm
         z : float
             z of end effector, upward is the positive direction. initial z is -325
 

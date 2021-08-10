@@ -6,9 +6,11 @@
     ],
     "python.analysis.extraPaths": ["./client"],
     "cSpell.words": [
+        "GRLKPID",
         "INET",
         "Marquardt",
         "OBSS",
+        "RLKMIC",
         "RUAS",
         "SUBADR",
         "Vout",
@@ -18,6 +20,8 @@
         "gflags",
         "glog",
         "interp",
+        "isnan",
+        "lamda",
         "opencv",
         "pyserial",
         "smbus"
