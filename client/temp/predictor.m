@@ -138,9 +138,16 @@ function [y, or1, or2, dmse] = predictor(x, dmodel)
 
     end % of several sites
 
-    % >>>>>>>>>>>>>>>>   Auxiliary function  ====================
+end
 
-    function s = colsum(x)
-        % Columnwise sum of elements in  x
-        if size(x, 1) == 1, s = x;
-            else, s = sum(x); end
+% >>>>>>>>>>>>>>>>   Auxiliary function  ====================
+
+function s = colsum(x)
+    % Columnwise sum of elements in  x
+    if size(x, 1) == 1
+        s = x;
+    else
+        s = sum(x);
+    end
+
+end

@@ -13,7 +13,14 @@ from pwm import PCA9685
 
 
 class Chamber():
-    def __init__(self) -> None:
+    def __init__(self, dmodel) -> None:
+        """a single chamber in a segment of the soft manipulator
+
+        Parameters
+        ----------
+        dmodel :
+            Loaded model from file. Struct with DACE model, see DACEFIT
+        """
         # RLKMIC奖惩值表
         self.RA = np.array([
             [0, -1, -1, -1, -1, -1, -1],
@@ -27,6 +34,34 @@ class Chamber():
         self.alpha = 1  # 学习因子
         self.gama = 0.8  # 折扣因子
         self.Q_table = np.zeros([7, 7])  # Q值表
+        self.dmodel = dmodel
+
+    def predictor(self, x):
+        response = None
+        return response
+
+    def kringpredict(self, len_list):
+        """Preprocessing func for predictor
+
+        Parameters
+        ----------
+        len_list : numpy array of four array of length
+
+        Returns
+        -------
+        float
+            predicted responce at len_list
+        """
+        diff10 = len_list[1] - len_list[0]
+        diff21 = len_list[2] - len_list[1]
+        diff32 = len_list[3] - len_list[2]
+        x = np.vstack((
+            len_list[1],
+            len_list[2],
+            diff21,
+            (diff10 == diff21) & (diff21 == diff32)
+        )).T
+        return self.predictor(x)
 
     def kalman(self, A, B, C, D, Q, P, R, x_now, u, y_now, pp):
         Ad, Bd, Cd, Dd, _ = cont2discrete([A, B, C, D], 0.01)

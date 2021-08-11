@@ -74,6 +74,7 @@ function EveBytesAvailableFcn(handles) % % % % % % % % % % % % % % % % % % % % %
     for j = 1:4
         z = z_pr * 2/3 * ones(1, ts / h_s); X = x_pr / 2 * ones(1, ts / h_s); Y = y_pr / 2 * ones(1, ts / h_s); Z = z / 2; r = 24; ZZ = -z_pr * ones(1, ts / h_s);
         theta1 = atan(Y ./ X);
+        % X, Y, Z, theta1 都是列表
 
         for i = 1:length(z)
 
@@ -95,16 +96,16 @@ function EveBytesAvailableFcn(handles) % % % % % % % % % % % % % % % % % % % % %
 
         end
 
-        %向心角
+        %向心角 list
         fi1 = pi - 2 .* asin(Z ./ (X.^2 + Y.^2 + Z.^2).^(1/2));
         %曲率半径
         r1 = ((X.^2 + Y.^2 + Z.^2) ./ (2 * (1 - cos(fi1)))).^(1/2);
-        %第一段充气腔长度变化
+        %第一段充气腔长度变化 list
         l11 = fi1 .* (r1 - r .* cos(theta1));
         l12 = fi1 .* (r1 - r .* cos(2 * pi / 3 - theta1));
         l13 = fi1 .* (r1 - r .* cos(4 * pi / 3 - theta1));
         %针对第二段手臂弯曲关节求取向心角、偏转角及曲率半径
-        %偏转角
+        %偏转角 list
         theta2 = theta1 + pi;
         %向心角
         fi2 = fi1;

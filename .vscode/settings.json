@@ -21,6 +21,7 @@
         "glog",
         "interp",
         "isnan",
+        "kringpredict",
         "lamda",
         "opencv",
         "pyserial",
