@@ -4,7 +4,7 @@
 provide pressure calculation functions with given end effector position
 '''
 
-from numpy import pi, sin, cos, arctan, exp, sign, sqrt
+from numpy import pi, sin, cos, arcsin, arctan, exp, sign, sqrt
 from numpy.random import rand
 import numpy as np
 from scipy.optimize import root
@@ -225,7 +225,12 @@ class Chamber():
 class Manipulator():
     def __init__(self) -> None:
         self.d = 48.0  # unit: mm
-        self.segBendLen = [0.0] * 3
+        self.initBendLen = 107.0
+        self.initElgLen = 102.0
+        self.maxBendLen = 200.0
+        self.maxElgLen = 170.0
+        self.segBendUpLen = [0.0] * 3
+        self.segBendLowLen = [0.0] * 3
         self.segElgLen = 0.0
         # the 10 channels are:
         # - upper bending segment chamber 1, 2, 3,
@@ -238,9 +243,9 @@ class Manipulator():
         self.pwm = PCA9685()
         self.pwm.setPWMFreq()
 
-    def inverse_kinematics(self, x: float, y: float, z: float) -> bool:
-        """do inverse kinematics for the soft manipulator under the OBSS model
-        with given position of end effector.
+    def inverse_kinematics_simplified(self, x: float, y: float, z: float) -> bool:
+        """(Simplified algorithm for manual control) do inverse kinematics for the soft manipulator
+        under the OBSS model with given position of end effector.
 
         If end point in the workspace, set length of each chamber of two bending
         segments and one elongation segment; if not, do nothing
@@ -258,10 +263,6 @@ class Manipulator():
         -------
         is_in_workspace: give bool value of whetcher the end point is in workspace
         """
-        initBendLen = 107.0
-        initElgLen = 102.0
-        maxBendLen = 170.0
-        maxElgLen = 200.0
         initZ = -325.0
         # determine phi based on x, y
         if x < 0:
@@ -276,8 +277,8 @@ class Manipulator():
             else:
                 # when x, y are 0, lengths could be calculated easily
                 if z >= 0:
-                    self.segBendLen = [initBendLen] * 3
-                    self.segElgLen = initElgLen + z
+                    self.segBendLowLen = [self.initBendLen] * 3
+                    self.segElgLen = self.initElgLen + z
                     return True
                 else:
                     return False
@@ -320,7 +321,7 @@ class Manipulator():
                 (x[0] - d * sin(phiF)) * x[1] - len,
                 x[0] * cos(phiP) * (1 - cos(x[1])) - c
             ],
-            [150, 0], args=(phiF, phiP, c, self.d, initBendLen), method='lm'
+            [150, 0], args=(phiF, phiP, c, self.d, self.initBendLen), method='lm'
         )
         r, theta = solution.x
         segBendLen = [
@@ -331,9 +332,12 @@ class Manipulator():
         segElgLen = -r * sin(theta) * 2 - (z + initZ)
         # print(f'bend: {segBendLen}, elg: {segElgLen}')  # DEBUG
         # check if end point in workspace, if so, set the lengths
-        if all(initBendLen < len < maxBendLen for len in segBendLen) and initElgLen < segElgLen < maxElgLen:
-            # length of chamber 1, 2, 3 of two bending segments
-            self.segBendLen = segBendLen
+        if (
+            all(self.initBendLen < length < self.maxBendLen for length in segBendLen)
+            and self.initElgLen < segElgLen < self.maxElgLen
+        ):
+            # length of chamber 1, 2, 3 of lower bending segments
+            self.segBendLowLen = segBendLen
             # length of all three chambers of the elongation segment
             self.segElgLen = segElgLen
             return True
@@ -363,7 +367,7 @@ class Manipulator():
                 (a * l + ((a * l - b)**2 + c) ** 0.5 - b)**(1 / 3) +
                 - d / (a * l + ((a * l - b)**2 + c)**0.5 - b)**(1 / 3) - e
             ),
-            self.segBendLen + [self.segElgLen]
+            self.segBendLowLen
         )
         # upper bending segment
         self.pressures[0:3] = map(lambda p: 0.98 * p - 0.6413, self.pressures[3:6])
@@ -371,6 +375,50 @@ class Manipulator():
         self.pressures[6:9] = [0.51789321 * self.segElgLen - 54.4050672] * 3
         # FIXME: hand pressure not set
         self.set_pwm()
+
+    def _inverse_kinematics(self, x, y, z):
+        z_segBend = 100  # FIXME: # minimum elongation in z direction caused by two bending segments
+        z = -z  # FIXME: z +-?
+        while True:
+            # 弯曲段1 (Upper) 的偏转角theta1
+            if x == 0:
+                theta1 = sign(y) * pi / 2
+            elif x > 0 and y >= 0:
+                theta1 = arctan(y / x)
+            elif x > 0 and y < 0:
+                theta1 = arctan(y / x) + 2 * pi
+            else:  # x < 0
+                theta1 = arctan(y / x) + pi
+            # 弯曲段2 (Lower) 的偏转角theta2
+            theta2 = theta1 + pi
+            # 弯曲段1, 2向心角phi
+            phi = pi - 2 * arcsin(z_segBend / (x**2 + y**2 + z_segBend**2)**0.5)
+            # 弯曲段1, 2曲率半径r
+            r = ((x**2 + y**2 + z_segBend**2) / (8 * (1 - cos(phi))))**0.5
+            segBendUpLen = [
+                phi * (r - self.d / 2 * cos(theta1)),
+                phi * (r - self.d / 2 * cos(2 / 3 * pi - theta1)),
+                phi * (r - self.d / 2 * cos(4 / 3 * pi - theta1))
+            ]
+            segBendLowLen = [
+                abs(phi) * (r - self.d / 2 * cos(theta1)),
+                abs(phi) * (r - self.d / 2 * cos(2 / 3 * pi - theta1)),
+                abs(phi) * (r - self.d / 2 * cos(4 / 3 * pi - theta1))
+            ]
+            segElgLen = abs(z) - z_segBend
+            # check if solution in workspace
+            if (
+                all(self.initBendLen < length < self.maxBendLen for length in segBendUpLen + segBendLowLen)
+                and self.initElgLen < segElgLen < self.maxElgLen
+            ):
+                self.segBendUpLen, self.segBendLowLen, self.segElgLen = segBendUpLen, segBendLowLen, segElgLen
+                return True
+            # it means the end point is out of workspace
+            elif segElgLen < self.initElgLen:
+                return False
+            # increase elongation amount in z direction caused by bending segments to try again
+            else:
+                z_segBend += 10
 
     def RLKMIC(self):
         """RLK: reinforce learning kalman

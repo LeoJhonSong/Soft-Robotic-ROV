@@ -152,6 +152,7 @@ function EveBytesAvailableFcn(handles) % % % % % % % % % % % % % % % % % % % % %
     end
 
     L1 = L11; L2 = L21; L3 = L31; L4 = L41; L5 = L51; L6 = L61; L7 = L71;
+    % 这些没用
     Pre1 = kringpredict(dmodel, L10, L11, L12, L13);
     Pre2 = kringpredict(dmodel, L20, L21, L22, L23);
     Pre3 = kringpredict(dmodel, L30, L31, L32, L33);
@@ -161,111 +162,6 @@ function EveBytesAvailableFcn(handles) % % % % % % % % % % % % % % % % % % % % %
     Pre7 = kringpredict(dmodel, L70, L71, L72, L73);
     axes(handles.axes1)
     plot3(X_P, Y_P, Z_P, 'o')
-
-    %
-    %pause(0.02)
-    %pause(0.2)
-    %{
-    if length(recBuff) ~= 7
-        return;
-    end
-
-    i = 1;
-
-    while i < 8
-
-        if recBuff(i) == 191
-            break;
-        end
-
-        i = i + 1;
-    end
-
-    recBuff = circshift(recBuff, -(i - 1));
-
-    if recBuff(1) ~= 191
-        return;
-    end
-
-    DouCaX = 0; DouCaY = 0; DouCaZ = 0;
-    OnHandX = 0; OnHandY = 0;
-
-    % code e.g. BF 41 50 0F 18 39 80
-    if (recBuff(1) == 191) && (recBuff(7) == 128) % start 0x1011 1111, end 0x1000 0000
-
-    if isequal(bitget(recBuff(4), [8 7 6 5]), [0 0 0 0]) % X
-        DouCaX = bitand(7, recBuff(4));
-
-        if bitget(recBuff(4), 4) == 1
-            DouCaX = -DouCaX;
-        end
-
-        set(handles.text_DouCaX, 'string', DouCaX);
-    else
-        DouCaX = 'error';
-        set(handles.text_DouCaX, 'string', DouCaX);
-    end
-
-    if isequal(bitget(recBuff(5), [8 7 6 5]), [0 0 0 1]) % Y
-        DouCaY = bitand(7, recBuff(5));
-
-        if bitget(recBuff(5), 4) == 1
-            DouCaY = -DouCaY;
-        end
-
-        set(handles.text_DouCaY, 'string', DouCaY);
-    else
-        DouCaY = 'error';
-        set(handles.text_DouCaY, 'string', DouCaY);
-    end
-
-    if isequal(bitget(recBuff(6), [8 7 6 5]), [0 0 1 1]) % Z
-        DouCaZ = bitand(7, recBuff(6));
-
-        if bitget(recBuff(6), 4) == 1
-            DouCaZ = -DouCaZ;
-        end
-
-        set(handles.text_DouCaZ, 'string', DouCaZ);
-    else
-        DouCaZ = 'error';
-        set(handles.text_DouCaZ, 'string', DouCaZ);
-    end
-
-    if isequal(bitget(recBuff(2), [8 7 6 5]), [0 1 0 0]) % X
-        OnHandX = bitand(7, recBuff(2));
-
-        if bitget(recBuff(2), 4) == 1
-            OnHandX = -OnHandX;
-        end
-
-        set(handles.text_OnHandX, 'string', OnHandX);
-    elseif isequal(bitget(recBuff(2), [8 7 6 5]), [1 1 1 1])
-        OnHandX = 'Null';
-        set(handles.text_OnHandX, 'string', OnHandX);
-    else
-        OnHandX = 'error';
-        set(handles.text_OnHandX, 'string', OnHandX);
-    end
-
-    if isequal(bitget(recBuff(3), [8 7 6 5]), [0 1 0 1]) % Y
-        OnHandY = bitand(7, recBuff(3));
-
-        if bitget(recBuff(3), 4) == 1
-            OnHandY = -OnHandY;
-        end
-
-        set(handles.text_OnHandY, 'string', OnHandY);
-    elseif isequal(bitget(recBuff(3), [8 7 6 5]), [1 1 1 1])
-        OnHandY = 'Null';
-        set(handles.text_OnHandY, 'string', OnHandY);
-    else
-        OnHandY = 'error';
-        set(handles.text_OnHandY, 'string', OnHandY);
-    end
-
-    %}
-    % process redundance data
 end
 
 [VisionX, VisionY, VisionZ] = getCoordinate(DouCaX, DouCaY, DouCaZ); % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
@@ -284,9 +180,3 @@ if strcmp(get(handles.pushbutton_VisionAble, 'string'), 'Disable')
 end
 
 fclose(sCOM1);
-% if strcmp( get(handleSoftArmCtrl.pushbutton_VisionAble, 'string'), 'Disable')
-%     set(handleSoftArmCtrl.text_VisionX, 'string', x);
-%     set(handleSoftArmCtrl.text_VisionY, 'string', y);
-%     set(handleSoftArmCtrl.text_VisionZ, 'string', z);
-%     feval(@(hObject,eventdata)SerialCOM('pushbutton_ExecuteVision_Callback',0,0,handleSoftArmCtrl));
-% end
