@@ -13,13 +13,8 @@ from pwm import PCA9685
 
 
 class Chamber():
-    def __init__(self, dmodel) -> None:
+    def __init__(self) -> None:
         """a single chamber in a segment of the soft manipulator
-
-        Parameters
-        ----------
-        dmodel :
-            Loaded model from file. Struct with DACE model, see DACEFIT
         """
         # RLKMIC奖惩值表
         self.RA = np.array([
@@ -34,7 +29,6 @@ class Chamber():
         self.alpha = 1  # 学习因子
         self.gama = 0.8  # 折扣因子
         self.Q_table = np.zeros([7, 7])  # Q值表
-        self.dmodel = dmodel
 
     def predictor(self, x):
         response = None
@@ -376,9 +370,28 @@ class Manipulator():
         # FIXME: hand pressure not set
         self.set_pwm()
 
-    def _inverse_kinematics(self, x, y, z):
-        z_segBend = 100  # FIXME: # minimum elongation in z direction caused by two bending segments
-        z = -z  # FIXME: z +-?
+    def _inverse_kinematics(self, x: float, y: float, z: float) -> bool:
+        """(Alternate algorithm for auto grasping) Do inverse kinematics for the
+        soft manipulator under the OBSS model with given position of end
+        effector.
+
+        If end point in the workspace, set length of each chamber of two bending
+        segments and one elongation segment; if not, do nothing
+
+        Parameters
+        ----------
+        x : float
+            x of end effector, unit: mm
+        y : float
+            y of end effector, unit: mm
+        z : float
+            z of end effector, upward is the positive direction.
+
+        Returns
+        -------
+        is_in_workspace: give bool value of whetcher the end point is in workspace
+        """
+        z_segBend = 100  # FIXME: # minimum elongation in z direction caused by two bending segments?
         while True:
             # 弯曲段1 (Upper) 的偏转角theta1
             if x == 0:
@@ -419,6 +432,20 @@ class Manipulator():
             # increase elongation amount in z direction caused by bending segments to try again
             else:
                 z_segBend += 10
+
+    def route_gen(self, x: float, y: float):
+        """Generate route (actually only one step) for reaching point on seabed
+        at x, y. Therefore is actually to set segBendUpLen, segBendLowLen and
+        segElgLen
+        """
+        # TODO: this is EveBytesAvailableFcn
+        # 因为坐标系的问题也可能要x, y互换
+        x = 2 * x
+        y = 0.7 * y
+        z = 400.0  # FIXME: 软体臂顶端距海床距离?
+        h_s = 0.01
+        ts = 0.3
+        self._inverse_kinematics(x, y, -z)
 
     def RLKMIC(self):
         """RLK: reinforce learning kalman

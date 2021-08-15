@@ -25,6 +25,7 @@
         "lamda",
         "opencv",
         "pyserial",
-        "smbus"
+        "smbus",
+        "vstack"
     ],
 }
