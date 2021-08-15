@@ -29,48 +29,16 @@
 💡上图中`J30`右上有箭头的引脚为pin1
 
 ```shell
-sudo apt-get install python3-smbus  # I2C库
+sudo apt-get install -y python3-smbus  # I2C库
 
 sudo groupadd -f -r gpio
 sudo usermod -a -G gpio $USER  # 将当前用户加入gpio组
-sudo pip3 install --upgrade Jetson.GPIO
+sudo -H pip install --upgrade Jetson.GPIO
 sudo cp /usr/local/lib/python3.6/dist-packages/Jetson/GPIO/99-gpio.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
 ## 软件配置
-
-### 安装NVIDIA SDK Manager
-
-#### 安装Docker
-
-```shell
-yay -S docker
-sudo systemctl start docker
-sudo systemctl enable docker
-sudo usermod -aG docker $USER
-sudo vim /etc/docker/daemon.json
-```
-
-`/etc/docker/daemon.json`:
-
-```shell
-{
-    "registry-mirrors": [
-        "https://registry.docker-cn.com"
-    ]
-}
-```
-
-#### 创建Docker容器
-
-下载[atinfinity/sdk_manager_docker](https://github.com/atinfinity/sdk_manager_docker/archive/refs/heads/master.zip), 解压后进入文件夹
-
-```shell
-docker build -t jetpack .
-docker build --build-arg SDK_MANAGER_VERSION=1.4.0-7363 -t jetpack .
-./launch_container.sh
-```
 
 ### 项目环境配置
 
