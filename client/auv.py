@@ -242,6 +242,12 @@ if __name__ == '__main__':
                 # 根据键盘事件控制AUV, 并刷新屏幕内容
                 quit_flag = ctrl.key_check()
                 ctrl.printScreen()
+                if quit_flag:
+                    screen.refresh()
+                    if switch:
+                        break
+                    else:
+                        switch = True
                 # 更新target, arm数据
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as visual_socket:
                     try:
@@ -256,11 +262,6 @@ if __name__ == '__main__':
                     # receive data from ROV then update target and arm
                     visual_info_dict = yaml.load(visual_socket.recv(1024), Loader=yaml.Loader)
                 # quit_flag置1后待运行到下一循环, 将quit_flag发送给visual_server后再break
-                if quit_flag:
-                    if switch:
-                        break
-                    else:
-                        switch = True
                 # update AUV data
                 auv.target.update(visual_info_dict["target"])
                 auv.arm.update(visual_info_dict["arm"])
