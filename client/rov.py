@@ -1,11 +1,5 @@
-import socket
-import time
-import math
-
-import visual_info
-
-ROV_SERVER_PORT = 9090
-RECV_DATA_SIZE = 28
+import os
+import can
 
 
 class Gyro(object):
@@ -49,109 +43,135 @@ class Depth_sensor(object):
         self.diff_thresh = 0.03  # 3cm
         self.is_landed = False
 
-    def land_check(self) -> None:
-        if abs(self.old_depth - self.depth) < self.diff_thresh:
+    def update(self, depth: float) -> None:
+        # check if landed onto the sea bed
+        if abs(self.old_depth - depth) < self.diff_thresh:
             self.count += 1
             if self.count > self.count_thresh:
-                print('[ROV] landed!')
+                if not self.is_landed:
+                    print('[Depth Sensor] landed!')
                 self.is_landed = True
-            else:
-                self.is_landed = False
         else:  # 当深度变化幅度超过阈值, 判定未坐底并归零稳定计次
+            if self.is_landed:
+                print('[Depth Sensor] leaving seabed')
             self.count = 0
             self.is_landed = False
+        self.old_depth = self.depth
+        self.depth = depth
+
+
+# set can config for Jetson
+can_config = {
+    'bustype': 'socketcan',
+    'channel': 'can0',
+    'bitrate': 1000000  # 1000k bits/s
+}
+# 设置远程帧及返回的数据帧的仲裁id
+depth = 0x42  # 深度
+pitch = 0x18  # Pitch角
+roll = 0x19  # Roll角
+yaw = 0x1a  # Yaw角
+pry = 0x1b  # 获得上述三个角  # FIXME: does it work?
+# 设置数据帧的仲裁id
+speed = 0x11  # 设置各方向速度 (设置电机速度)
+led1 = 0x21  # 设置传感器1板照明PWM
+led2 = 0x31  # 设置传感器2板照明PWM
+depthPID = 0x51  # 设置深度PID
+fbPID = 0x52  # 设置前后PID (forward/backward)
+swPID = 0x53  # 设置侧移PID (swing)
+flashSig = 0x54  # 设置写flash信号
+hovPID = 0x55  # 设置悬停PID (hover)
+# set param of sensors
+led_pwm_max = 950
 
 
 class Rov(object):
-    """ROV master (run as a server)
-
-    should be created with:
-      >>> with Rov() as rov:
-      >>>    pass
-
-    Attributes
-    ----------
-    state : int
-        current automation workflow state of ROV
-    info_word : bytes
-        on/off word in form of: [6bytes] is_loop [7bytes] LED2 LED1
-    joystick : bytes[4]
-        Vx, Vy, direction, Vz
+    """BUAA ROV (Remotely Operated Vehicle) driving class running in a Jetson
+    AGX Xavier (as VCU) on CAN bus
     """
 
-    def __init__(self, state: str = 'initial'):
-        self.state = state
+    def __init__(self):
+        # set motors speed controlled by closed-loop (PID) or open-loop
+        self.is_closed_loop = 0  # TODO: adjst PID?
+        # UI测试模式/手柄遥控模式: 0/1
+        self.control_mode = 1
+        # initial sensors
         self.depth_sensor = Depth_sensor()
-        self.info_word = bytes([0, 3])
-        self.led_brightness = bytes([0, 0])
-        self.joystick = bytes([0] * 4)
         self.gyro = Gyro()
-        self.target = visual_info.Target()
-        self.arm = visual_info.Arm()
-        self.grasp_state = 'idle'
-        self.cruise_periods = 2
-        self.cruise_time = 0.0
-        # the period is 7s, keys are the last time of that move [key_n-1, key_n)
-        self.cruise_path = {
-            1: [0, 0, -0.5, -0.99],
-            2: [0.7, 0, 0, 0.3],
-            3: [0, 0, 0.5, -0.99],
-            4: [0.7, 0, 0, 0.3],
-            5: [0, 0, 0.5, -0.99],
-            6: [0.7, 0, 0, 0.3],
-            7: [0, 0, -0.5, -0.99],
-        }
-        self.aim_chances = [4] * 2
-        self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_sock.bind(('127.0.0.1', ROV_SERVER_PORT))
-        self.server_sock.listen()
-        print('[ROV] connecting ROV...')
-        self.client_sock, _ = self.server_sock.accept()
-        print('[ROV] connected')
-        self.set_led(950)
+        # turn lights on  # FIXME: value?
+        self.start()
+        self.set_led(1)
+        print('[ROV] started')
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self.client_sock.close()
-        self.server_sock.close()
+        self.kill()
 
-    def send_command(self):
-        """send command to ROV
+    def start(self):
+        # set Jetson AGX Xavier's corresponding register values to configure CAN
+        # I/O pins as CAN functionalities. see:
+        # https://forums.developer.nvidia.com/t/enable-can-on-xavier/65869/2
+        os.system('''
+        # for can0
+        sudo busybox devmem 0xc303000 32 0x0000c400
+        sudo busybox devmem 0xc303008 32 0x0000c458
+        # for can1
+        sudo busybox devmem 0xc303010 32 0x0000c400
+        sudo busybox devmem 0xc303018 32 0x0000c458
+        # insert required kernel modules
+        sudo modprobe can
+        sudo modprobe can-raw
+        sudo modprobe mttcan
+        ''')
+        # create socketcan in system
+        os.system('sudo ip link set ' + can_config['channel'] + ' type can bitrate ' + str(can_config['bitrate']))
+        os.system('sudo ifconfig ' + can_config['channel'] + ' up')
+        # initial can bus instance
+        self.bus = can.interface.Bus(bustype=can_config['bustype'], channel=can_config['channel'], bitrate=can_config['bitrate'])
 
-        """
-        temp = b'\xFE\xFE' + \
-            self.info_word + \
-            self.led_brightness + \
-            bytes([0] * 12) + \
-            self.joystick
-        checksum = 0
-        for i in temp:
-            checksum ^= i
-        self.client_sock.send(temp + bytes([checksum]) + b'\xFD\xFD')
+    def kill(self):
+        self.bus.shutdown()
+        # turn down socketcan
+        os.system('sudo ifconfig ' + can_config['channel'] + ' down')
 
-    def set_control_mode(self, is_loop: bool):
-        """set rov motor speed control to close loop PID control or open loop control
-
-        Parameters
-        ----------
-        is_loop : bool
-            True for close loop control, False for open loop
-        """
-        self.info_word = bytes([is_loop * 2, 3])
-
-    def set_led(self, value: int):
-        """set brightness of all four LEDs
+    def int2u8list(self, value: int, n: int):
+        """convert int to a list of int in range of 0~255
 
         Parameters
         ----------
         value : int
-            min is 0, max is 950
+        n : int
+            the length of the list should be
         """
-        self.led_brightness = bytes.fromhex(f'{value:04x}')
-        self.send_command()
-        print(f'[ROV] led brightness set to {int(value / 9.5)}%')
+        return list((value).to_bytes(n, 'big'))
+
+    def write(self, id: int, data: list):
+        msg = can.Message(arbitration_id=id, data=data, is_extended_id=False)
+        self.bus.send(msg)
+
+    def read(self, id: int, request_needed: bool) -> list:
+        if request_needed:
+            remote_msg = can.Message(arbitration_id=id, is_extended_id=False, is_remote_frame=True)
+            self.bus.send(remote_msg)
+        # continuously read message from bus
+        for msg in self.bus:
+            if msg.arbitration_id == id and msg.is_remote_frame is False:
+                # if remote frame sent, this msg is the data frame we requested from source node
+                return msg.data
+        return []  # actually will not be reached, just not to break the type hint
+
+    def set_led(self, value: float):
+        """set brightness of all four LEDs
+
+        Parameters
+        ----------
+        value : float
+            in range [0, 1]
+        """
+        self.write(led2, self.int2u8list(int(value * led_pwm_max), 2))
+        print(f'[ROV] led brightness set to {value * 100:.02f}%')
 
     def set_Vx(self, value: float):
         """set Vx and clear others
@@ -161,10 +181,9 @@ class Rov(object):
         value : float
             in range (backward)[-1, 1](forward)
         """
-        self.joystick = bytes([int(127 + 127 * value), 0, 0, 0])
-        self.send_command()
+        self.write(speed, [int(127 + 127 * value), 0, 0, 0, self.control_mode, self.is_closed_loop])
         if value:
-            print(f'[ROV] going {"forward" if value > 0 else "backward"} with {int(abs(value) * 100)}% speed')
+            print(f'[ROV] going {"forward" if value > 0 else "backward"} with {int(abs(value) * 100):.02f}% speed')
         else:
             print('[ROV] stopped')
 
@@ -176,10 +195,9 @@ class Rov(object):
         value : float
             in range (right)[-1, 1](left)
         """
-        self.joystick = bytes([0, int(127 + 127 * value), 0, 0])
-        self.send_command()
+        self.write(speed, [0, int(127 + 127 * value), 0, 0, self.control_mode, self.is_closed_loop])
         if value:
-            print(f'[ROV] going {"left" if value > 0 else "right"} with {int(abs(value) * 100)}% speed')
+            print(f'[ROV] going {"left" if value > 0 else "right"} with {int(abs(value) * 100):.02f}% speed')
         else:
             print('[ROV] stopped')
 
@@ -191,10 +209,9 @@ class Rov(object):
         value : float
             in range (down)[-1, 1](up)
         """
-        self.joystick = bytes([0, 0, 0, int(127 + 127 * value)])
-        self.send_command()
+        self.write(speed, [0, 0, 0, int(127 + 127 * value), self.control_mode, self.is_closed_loop])
         if value:
-            print(f'[ROV] going {"up" if value > 0 else "down"} with {int(abs(value) * 100)}% speed')
+            print(f'[ROV] going {"up" if value > 0 else "down"} with {int(abs(value) * 100):.02f}% speed')
         else:
             print('[ROV] stopped')
 
@@ -206,10 +223,9 @@ class Rov(object):
         value : float
             in range (right)[-1, 1](left)
         """
-        self.joystick = bytes([0, 0, int(127 + 127 * value), 0])
-        self.send_command()
+        self.write(speed, [0, 0, int(127 + 127 * value), 0, self.control_mode, self.is_closed_loop])
         if value:
-            print(f'[ROV] turning {"left" if value > 0 else "right"} with {int(abs(value) * 100)}% speed')
+            print(f'[ROV] turning {"left" if value > 0 else "right"} with {int(abs(value) * 100):.02f}% speed')
         else:
             print('[ROV] stopped')
 
@@ -221,160 +237,18 @@ class Rov(object):
         velocity : list
             a list of [Vx, Vy, direction, Vz] in range [-1, 1]
         """
-        self.joystick = bytes([int(127 + 127 * item) for item in velocity])
-        self.send_command()
+        self.write(speed, [int(127 + 127 * v) for v in velocity] + [self.control_mode, self.is_closed_loop])
 
-    def get(self):
-        """receive the latest data from ROV
-
-        a data package from ROV should be `bytes` of size 28, starts with 0xFE 0xFE,
-        and ends with 1 byte XOR checksum and 0xFD OxFD
+    def get_sensors_data(self):
+        """get the latest data from sensors
         """
-        received = self.client_sock.recv(1024)[-RECV_DATA_SIZE:]
-        self.depth_sensor.depth = int.from_bytes(received, 'big') / 100  # in meters
-        gyro_list = [received[19:22].hex(), received[16:19].hex(), received[22:25].hex()]  # roll, pitch, yaw
-        gyro_list = [(-1 if int(i[0]) else 1) * (int(i[1:4]) + int(i[4:]) / 100) for i in gyro_list]
-        self.gyro.update(gyro_list)
-
-    def land(self):
-        """坐底
-        """
-        self.set_Vz(-1)
-        if self.depth_sensor.is_landed:
-            print('[ROV] landed, start grasping')
-            return 'grasp'
-        else:
-            return 'land'
-
-    def grasp(self):
-        """抓取
-        """
-        if self.target.roi_check():
-            if not self.arm.arm_is_working:
-                self.grasp_state = 'ready'
-                return 'grasp'
-            else:
-                if self.arm.chances:
-                    if time.time() - self.arm.start_time > self.arm.time_limit:
-                        self.arm.chances[0] -= 1
-                    self.grasp_state = 'activated'
-                    return 'grasp'
-        # has no more target in thresh range / no more chances
-        self.grasp_state = 'idle'
-        self.arm.chances[0] = self.arm.chances[1]  # reset chances
-        # 往前荡一下, 确保目标进袋
-        self.set_Vx(1)
-        time.sleep(1)
-        # float up to cruise hight
-        self.set_Vz(1)
-        time.sleep(0.5)
-        print('[ROV] grasp done, start cruise')
-        return 'cruise'
-
-    def cruise(self):
-        """巡航
-        """
-        if self.target.has_target:
-            self.cruise_time = 0
-            # 发现目标后一个后撤步!
-            self.set_move([-0.7, 0, 0, -0.99])
-            time.sleep(1)  # 1s
-            print('[ROV] target found, start aiming')
-            return 'aim'
-        # if reach time limit
-        elif time.time() - self.cruise_time > list(self.cruise_path.keys())[-1] * self.cruise_periods:
-            self.cruise_time = 0
-            print('[ROV] time out, start landing')
-            return 'land'
-        else:
-            key = list(self.cruise_path.keys())[0]
-            if self.cruise_time == 0:
-                self.cruise_time = time.time()
-            else:
-                time_count = time.time() - self.cruise_time
-                for t in self.cruise_path:
-                    if time_count < t:
-                        key = t
-                        break
-            self.set_move(self.cruise_path[key])
-            return 'cruise'
-
-    def aim(self):
-        """瞄准, 移动至目标处
-        """
-        grasp_thresh_x = self.target.roi_thresh[0]
-        grasp_thresh_y = self.target.roi_thresh[1]
-        Vy = 0
-        omega = 0
-        # if target lost
-        if not self.target.has_target:
-            # TODO: reset vars
-            print('[ROV] target lost, start landing')
-            return 'land'
-        else:
-            # 最多4次机会
-            if self.aim_chances[0]:
-                offset_y = self.target.roi_offset[1]
-                dx = 0.5 - self.target.center[0]
-                dy = offset_y - self.target.center[1]  # 线之上为正
-                # 以底部中间处为原点, y多减0.01保证分母不为零
-                theta = math.atan((self.target.center[0] - 0.5) / (self.target.center[1] - 1 - 0.01))
-                omega = theta / (math.pi / 2) * 0.99
-                if not self.depth_sensor.is_landed:
-                    # 级联阈值，粗调+细调，保证目标一直在视野范围内
-                    # FIXME: a sleep may needed to limit the fps (or not)
-                    if abs(dx) > 0.35:
-                        omega = omega * 1.3  # 限制大小
-                    elif 0.4 <= dy < offset_y:
-                        Vy = dy * 1.1
-                    elif 0.3 <= dy < 0.4:  # 离得近一些速度放小
-                        Vy = dy * 0.9
-                    elif abs(dx) > 0.25:
-                        omega = omega * 0.8
-                    else:  # 第二阈值框
-                        if abs(dy) > grasp_thresh_y:
-                            Vy = dy * 0.8
-                        elif abs(dx) > grasp_thresh_x:
-                            omega = omega * 1.2
-                    # print(f'[ROV] {}')  # FIXME: what is this
-                    self.set_move([0, max(min(Vy, 1), -1), 0, max(min(omega, 1), -1)])
-                    return 'aim'
-                else:  # 坐底后考虑是否起跳调整位置
-                    if self.target.roi_check():  # 检查位置阈值
-                        self.aim_chances[0] = self.aim_chances[1]
-                        print('[ROV] ready for grasping, start grasping!')
-                        return 'grasp'
-                    else:
-                        if abs(dx) > 0.35:
-                            omega = omega * 1
-                        elif abs(dy) > grasp_thresh_y:
-                            if abs(dy) > 0.3:
-                                Vy = dy * 1.8
-                            else:
-                                Vy = dy * 1.4
-                        elif abs(dx) > grasp_thresh_x:
-                            omega = omega * 0.8
-                        # 上浮
-                        # print(f'[ROV] {}')  # FIXME: what is this
-                        self.aim_chances[0] -= 1
-                        self.set_move([0, max(min(Vy, 1), -1), 0, max(min(omega, 1), -1)])
-                        time.sleep(0.5)  # 上浮0.5s
-                        return 'aim'
-            else:
-                # 放弃瞄准, 转坐底, 会转抓取, 然后转巡航
-                self.aim_chances[0] = self.aim_chances[1]
-                print('[ROV] give up aiming, start landing')
-                return 'land'
-
-    def state_machine(self) -> str:
-        cases = {
-            'aim': self.aim,
-            'cruise': self.cruise,
-            'grasp': self.grasp,
-            'land': self.land,
-        }
-        self.state = cases[self.state]()
-        return self.grasp_state
+        self.depth_sensor.update(int.from_bytes(b''.join(self.read(depth, False)), 'big'))
+        # TODO: this need checking
+        # gyro_list = self.read(pry, True)
+        # gyro_list = [gyro_list[3:6], gyro_list[0:3], gyro_list[6:9]]  # roll, pitch, yaw
+        # gyro_list = [f"{int.from_bytes(b''.join(i), 'big'):06x}" for i in gyro_list]  # convert data into 'SXXXYY' format strings
+        # gyro_list = [(-1 if int(i[0]) else 1) * (int(i[1:4]) + int(i[4:]) / 100) for i in gyro_list]  # calculated to float
+        # self.gyro.update(gyro_list)
 
 
 if __name__ == '__main__':
@@ -382,5 +256,5 @@ if __name__ == '__main__':
     with Rov() as robot:
         # robot.get()  # FIXME: not needed?
         while True:
-            command, value = input('Vx [-1, 1], Vy [-1, 1], Vz [-1, 1], led [0, 950], direction [-1, 1]').split(',')
+            command, value = input('Vx [-1, 1], Vy [-1, 1], Vz [-1, 1], led [0, 1], direction [-1, 1]').split(',')
             eval(f'robot.set_{command}({value})')
