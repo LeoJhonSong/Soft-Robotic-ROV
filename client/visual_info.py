@@ -1,4 +1,6 @@
-class Target(object):
+class Target():
+    """info of target detected by visual_info server
+    """
     def __init__(self):
         self.has_target = False
         self.target_class = 0
@@ -31,7 +33,9 @@ class Target(object):
             return False
 
 
-class Arm(object):
+class Arm():
+    """info of arm detected by visual_info server
+    """
     def __init__(self):
         self.arm_is_working = True
         self.has_marker = False

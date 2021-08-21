@@ -126,7 +126,7 @@ df -h
 du -sh * | sort -rh
 # 安装jtop
 sudo apt install python3-dev python3-pip
-sudo pip3 install jetson-stats
+sudo -H pip3 install jetson-stats
 # 开最大性能, 将CPU, GPU, EMC频率拉满
 sudo jetson_clocks
 # 开最大频率模式 (看起来这个功率低频率高的是性能最高的)
