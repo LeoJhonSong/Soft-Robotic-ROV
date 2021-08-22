@@ -4,13 +4,14 @@
 when run as main, Vout on channel0 set to about 1.66, Vout on channel1 set to
 about 0.83
 """
+import platform
 import math
 import time
-from typing import Text
 import smbus
+import gpiozero
 
 
-class PCA9685:
+class PCA9685():
     # Registers/etc.
     __SUBADR1 = 0x02
     __SUBADR2 = 0x03
@@ -34,6 +35,7 @@ class PCA9685:
         if (self.debug):
             print("Reseting PCA9685")
         self.write(self.__MODE1, 0x00)
+        self.setPWMFreq()
 
     def write(self, reg, value):
         "Writes an 8-bit value to the specified register/address"
@@ -91,9 +93,38 @@ class PCA9685:
         self.setPWM(channel, 0, int(4096 * percentage))
 
 
+class PiGPIO():
+    def __init__(self):
+        self.pwm_pins = [gpiozero.PWMOutputDevice(pin) for pin in [5, 6, 13, 19, 26]]  # GPIO numbering
+
+    def setValue(self, channel, percentage):
+        """set percentage of pwm duty cycle
+
+        Parameters
+        ----------
+        channel : int
+            channel 0-15
+        percentage : float
+            0-1
+        """
+        self.pwm_pins[channel].value = percentage
+
+
+class PWM(PCA9685, PiGPIO):
+    def __init__(self, address=0x40, bus=8, debug=False):
+        if platform.machine() == 'aarch64':
+            self.module = PCA9685
+            PCA9685.__init__(self, address=address, bus=bus, debug=debug)
+        elif platform.machine() == 'armv7l':
+            self.module = PiGPIO
+            PiGPIO.__init__(self)
+
+    def setValue(self, channel, percentage):
+        return self.module.setValue(self, channel, percentage)
+
+
 if __name__ == "__main__":
-    pwm = PCA9685()
-    pwm.setPWMFreq()
+    pwm = PWM()
     pwm.setValue(0, 0.02)
     pwm.setValue(1, 0.05)
     while True:

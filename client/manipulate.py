@@ -9,7 +9,7 @@ from numpy.random import rand
 import numpy as np
 from scipy.optimize import root
 from scipy.signal import cont2discrete
-from pwm import PCA9685
+from pwm import PWM
 
 
 class Chamber():
@@ -234,7 +234,7 @@ class Manipulator():
         self.pressures = [0.0] * 10
         self.water_pressure = 0.0
         # create 10 channel pwm module instance
-        self.pwm = PCA9685()
+        self.pwm = PWM()
         self.pwm.setPWMFreq()
 
     def inverse_kinematics_simplified(self, x: float, y: float, z: float) -> bool:

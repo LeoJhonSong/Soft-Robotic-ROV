@@ -1,4 +1,3 @@
-pyserial
 asciimatics
 numpy
 scipy
