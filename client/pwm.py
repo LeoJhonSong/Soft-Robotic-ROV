@@ -4,14 +4,15 @@
 when run as main, Vout on channel0 set to about 1.66, Vout on channel1 set to
 about 0.83
 """
-import platform
 import math
+import platform
+import sys
 import time
-import smbus
-import gpiozero
 
 
 class PCA9685():
+    """PWM module driver for Jetson AGX Xavier
+    """
     # Registers/etc.
     __SUBADR1 = 0x02
     __SUBADR2 = 0x03
@@ -29,8 +30,10 @@ class PCA9685():
     __ALLLED_OFF_H = 0xFD
 
     def __init__(self, address=0x40, bus=8, debug=False):
+        import smbus
         self.bus = smbus.SMBus(bus)
         self.address = address
+        self.channels_number = 16  # number of channels under control
         self.debug = debug
         if (self.debug):
             print("Reseting PCA9685")
@@ -95,7 +98,9 @@ class PCA9685():
 
 class PiGPIO():
     def __init__(self):
+        import gpiozero
         self.pwm_pins = [gpiozero.PWMOutputDevice(pin) for pin in [5, 6, 13, 19, 26]]  # GPIO numbering
+        self.channels_number = len(self.pwm_pins)  # number of channels under control
 
     def setValue(self, channel, percentage):
         """set percentage of pwm duty cycle
@@ -123,9 +128,25 @@ class PWM(PCA9685, PiGPIO):
         return self.module.setValue(self, channel, percentage)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__" and sys.argv[1] == 'reset':
+    """reset pwm duty cycle of all channels to zero. run with:
+      >>> python pwm.py reset
+    """
     pwm = PWM()
-    pwm.setValue(0, 0.02)
-    pwm.setValue(1, 0.05)
+    for c in range(pwm.channels_number):
+        pwm.setValue(c, 0.00)
+    print('All channels reset 👍')
+
+if __name__ == '__main__' and sys.argv[1] == 'manual':
+    """set duty cycle of specific pwm channel manually. run with:
+      >>> python pwm.py manual
+    """
+    pwm = PWM()
+    print('- input format: [channel],[duty]\n- input q to quit')
     while True:
-        time.sleep(1)
+        command = input('input: ')
+        if command == 'q':
+            break
+        elif command == '':
+            continue
+        eval(f'pwm.setValue({command})')
