@@ -52,6 +52,7 @@ sudo apt install vlc-utils v4lucp
 #### OpenCV3.4 (cuda10.0)编译
 
 ```shell
+
 # Install dependencies based on the Jetson Installing OpenCV Guide
 sudo apt-get install build-essential make cmake cmake-curses-gui \
                        g++ libavformat-dev libavutil-dev \

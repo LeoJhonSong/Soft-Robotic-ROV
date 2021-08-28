@@ -11,8 +11,6 @@ import numpy as np
 from numpy import arcsin, arctan, ceil, cos, dot, exp, pi, sign, sin, sqrt
 from scipy.optimize import root
 from scipy.signal import cont2discrete
-if sys.argv[2] == 'withpwm':
-    from pwm import PWM
 
 
 class Chamber():
@@ -272,7 +270,8 @@ class Manipulator():
         self.arm_position_resize = [2, 0.7]  # x, y  # TODO: 需要调参: 位置系数
         self.chambers = [Chamber() for i in range(7)]  # Upper1, 2, 3, Lower1, 2, 3, Elongation
         # create 10 channel pwm module instance
-        if sys.argv[2] == 'withpwm':
+        if (__name__ == '__main__' and sys.argv[2] == 'with_pwm') or __name__ != '__main__':
+            from pwm import PWM
             self.pwm = PWM()
 
     def inverse_kinematics_simplified(self, x: float, y: float, z: float) -> bool:
@@ -295,7 +294,7 @@ class Manipulator():
         -------
         is_in_workspace: give bool value of whetcher the end point is in workspace
         """
-        initZ = -325.0
+        initZ = -325.0  # TODO: 需要调参: 初始长度
         # determine phi based on x, y
         if x < 0:
             phi = -arctan(y / x) + pi
@@ -364,6 +363,7 @@ class Manipulator():
         segElgLen = -r * sin(theta) * 2 - (z + initZ)
         # print(f'bend: {segBendLen}, elg: {segElgLen}')  # DEBUG
         # check if end point in workspace, if so, set the lengths
+        # TODO: change to limit pressure
         if (
             all(self.initBendLen < length < self.maxBendLen for length in segBendLen)
             and self.initElgLen < segElgLen < self.maxElgLen
@@ -383,7 +383,7 @@ class Manipulator():
         p_list = self.pressures[0:3] + self.pressures[8:]
         for channel, p in enumerate(p_list):
             # 0-1 pwm duty cycle -> 0-5 V analog voltage -> 0-500 KPa pressure
-            self.pwm.setValue(channel, np.interp(p, [0, 500], [0, 1]) + 0.011)
+            self.pwm.setValue(channel, np.interp(p, [0, 500], [0, 1]))
 
     def set_Pressures(self, lamdas=None, pressures_dict=None):
         """set pressures of chambers `in the arm` (hand pressure not set here)
@@ -418,7 +418,6 @@ class Manipulator():
         # elongation segment
         self.pressures[6:9] = [0.51789321 * self.segElgLen - 64.06856906] * 3
         pressures_to_send = self.pressures.copy()
-        # TODO: 需要调参: 气压系数
         if lamdas is not None:
             for i in range(0, 3):
                 pressures_to_send[i] = 1.5 * pressures_to_send[i] + 1 * lamdas[i]
@@ -433,12 +432,11 @@ class Manipulator():
         pressures_to_send[0:6] = np.clip(pressures_to_send[0:6], 0, 130)
         pressures_to_send[6:9] = np.clip(pressures_to_send[6:9], 0, 30)
         pressures_to_send[-1] = np.clip(pressures_to_send[-1], 0, 60)
-        if sys.argv[2] == 'withpwm':
+        print(f'[Arm] 💨 pressures: {pressures_to_send}')
+        if (__name__ == '__main__' and sys.argv[2] == 'with_pwm') or __name__ != '__main__':
             self.set_pwm()
-        elif sys.argv[2] == 'withoutpwm':
-            print(f'pressures: {pressures_to_send}')
 
-    def inverse_kinematics(self, x: float, y: float, z: float, segElgLen=170) -> Union[tuple[list, list, float], None]:
+    def inverse_kinematics(self, x: float, y: float, z: float, segElgLen=170) -> Union[list, None]:
         """(Alternate algorithm for auto grasping) Do inverse kinematics for the
         soft manipulator under the OBSS model with given position of end
         effector.
@@ -502,6 +500,8 @@ class Manipulator():
         """Generate route (actually only one step) for reaching point on seabed
         at x, y. Therefore is actually to set segBendUpLen, segBendLowLen and
         segElgLen
+
+        如果俯视手臂, 向后为x正方向, 向右为y正方向
         """
         # 因为坐标系的问题也可能要x, y互换
         x = self.arm_position_resize[0] * x
@@ -509,7 +509,7 @@ class Manipulator():
         z = 400.0  # TODO: 需要调参: 软体臂顶端距海床大致距离
         lens = self.inverse_kinematics(x, y, -z, segElgLen=z * 1 / 3)  # FIXME: is this specific segElgLen needed?
         if lens is not None:
-            self.segBendUpLen, self.segBendLowLen, self.segElgLen = lens
+            self.segBendUpLen, self.segBendLowLen, self.segElgLen = lens[0:3], lens[3:6], lens[-1]
         else:
             print('target out of workspace')
 
@@ -532,11 +532,11 @@ class Manipulator():
             else:
                 pressures = {6: 0, 7: 0, 8: 0}
                 self.set_Pressures(lamdas=lamdas_list, pressures_dict=pressures)
-            if sys.argv[2] == 'withpwm':
+            if (__name__ == '__main__' and sys.argv[2] == 'with_pwm') or __name__ != '__main__':
                 sleep(1)  # wait for 1s to apply the pressures
             # TODO: 接收目标, 手爪位置更新
-            x_hand, y_hand = (item + (np.random.rand() - 0.5) * 0.05 * (steps - step) for item in [x_target, y_target])
-            x_hand, y_hand, z_hand = 0.001, 0.001, 400
+            x_hand, y_hand = input().strip().split(',')
+            x_hand, y_hand, z_hand = float(x_hand), float(y_hand), 400
             print(f'    x: {x_hand}, y: {y_hand}, z: {z_hand}')
             # do inverse kinematics on arm position in realtime
             lens_real = self.inverse_kinematics(self.arm_position_resize[0] * x_hand, self.arm_position_resize[1] * y_hand, -z_hand)
@@ -556,8 +556,8 @@ class Manipulator():
 
 if __name__ == "__main__" and sys.argv[1] == 'auto':
     """run one of following command
-      >>> python ./manipulate.py auto withoutpwm
-      >>> python ./manipulate.py auto withpwm
+      >>> python ./manipulate.py auto
+      >>> python ./manipulate.py auto with_pwm
     """
     arm = Manipulator()
     arm.route_gen(20, 20)
@@ -565,13 +565,18 @@ if __name__ == "__main__" and sys.argv[1] == 'auto':
 
 if __name__ == '__main__' and sys.argv[1] == 'manual':
     """run one of following command
-      >>> python ./manipulate.py manual withoutpwm
-      >>> python ./manipulate.py manual withpwm
+      >>> python ./manipulate.py manual
+      >>> python ./manipulate.py manual with_pwm
     """
     arm = Manipulator()
+    print('- input format: [x],[y],[z]\n- input q to quit')
     while True:
-        x, y, z = input().strip().split(',')
-        if eval(f'arm.inverse_kinematics({x},{y},{z})'):
+        command = input('input: ')
+        if command == 'q':
+            break
+        elif command == '':
+            continue
+        if eval(f'arm.inverse_kinematics({command})'):
             arm.set_Pressures()
         else:
             print('not in workspace')
