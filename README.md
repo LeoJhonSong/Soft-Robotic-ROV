@@ -146,6 +146,8 @@
 
 ❗️ 环境配置需要按下面这个顺序来
 
+❗Jetson AGX Xavier上环境配置见[Jetson配置-软件配置](doc/Jetson_AGX_Xavier/Jetson配置.md#软件配置)
+
 #### libtorch安装
 
 将下载下来的压缩包解压出的**libtorch**文件夹放到到`~/local`下
@@ -213,7 +215,7 @@ make -j 18
 sudo make install
 ```
 
-❗️ 如果不是GTK -D CMAKE_CXX_COMPILER=/opt/cuda-10.0/bin/g++的OpenCV而是Qt的OpenCV的话似乎是无法区分按键大小写的, 其他按键似乎也会有些问题. python安装的OpenCV是Qt的. `utils/key_test.py`可以测试所按按键被OpenCV识别为什么了.
+❗️ 如果不是GTK的OpenCV而是Qt的OpenCV的话似乎是无法区分按键大小写的, 其他按键似乎也会有些问题. python安装的OpenCV是Qt的. `utils/key_test.py`可以测试所按按键被OpenCV识别为什么了.
 
 
 ### 识别模型
@@ -248,6 +250,7 @@ sudo make install
 |mode|神经网络模式选择|2|**0**: 跳过; **1**: 仅netG图像恢复; **2**: netG图像恢复+目标检测/**3**: 仅目标检测|
 |stream|视频流来源|file|**file**: 从本地文件读取; **link**: 从网址读取; **camera**: 从摄像头读取|
 |cid|当从摄像头读取视频时相机id|0|(当不从摄像头读取视频流时该值被忽略)|
+|bi|摄像头是否是双目摄像头且只对左路进行识别|false|**true**; **false**|
 |address|当从本地文件/网址读取视频时视频地址|./test/test.mp4||
 |track|选定单目标跟踪/始终显示所有侯选项|true|**true**; **false**|
 |record|是否进行原视频, 已处理视频录制|false|**true**; **false**|
@@ -261,9 +264,19 @@ netG x SSD维度可选组合
 | 深度学习进行水下图像恢复, 不检测目标 (2的幂) | 0       | 2       | *        | *       |
 | 无水下图像恢复/RUAS恢复, 目标检测 (两维度大小要一样) | 0/2     | 3       | 320/512        | 320/512 |
 
+使用示例
+```shell
+# 以项目根目录下test/test.mp4作为视频源进行图像恢复及目标识别 (会跳过片头数帧)
+./build/Soft-Robotic-ROV
+# 以下标为0的双目摄像头左路作为视频源进行图像恢复及目标识别并录像
+./build/Soft-Robotic-ROV --stream=camera --bi=true --record=true
+# 以网络摄像头为视频源...
+./build/Soft-Robotic-ROV --stream=link --address="rtsp://admin:zhifan518@192.168.1.88/11"
+```
+
 #### 测试
 
-可以用`printf "true" | nc 127.0.0.1 9090`或`printf "false" | nc 127.0.0.1 9090"`模拟客户端的一次连接.
+可以用`echo -e "0\n" | nc 127.0.0.1 8080`或`echo -e "1\n" | nc 127.0.0.1 8080"`模拟客户端的一次连接并获得一个json数据.
 
 
 ### 程序状态-键盘按键-手柄按键对照表

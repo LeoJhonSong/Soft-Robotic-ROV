@@ -28,6 +28,7 @@ const char *keys =
     "{mode      | 2                     | refinedet selection. 0: skip; 1: netG; 2: netG+RefineDet; 3: RefineDet}"
     "{stream    | file                  | source of video stream. file; link; camera}"
     "{cid       | 0                     | camera id if video stream come from camera}"
+    "{bi        | false                 | whether the video source is a binocular camera and use left view only}"
     "{address   | ./test/test.mp4       | address of video stream if not come from camera}"
     "{track     | true                  | track single target}"
     "{record    | false                 | record raw and processed video}"
@@ -48,6 +49,7 @@ float tub_thresh = 0.3;
 // 在多个线程共享的全局变量
 std::queue<cv::Mat> frame_queue, det_frame_queue;
 detector::Visual_info visual_info;
+bool FLAGS_BINOCULAR = false;
 bool threads_quit_flag;
 
 
@@ -124,6 +126,7 @@ int main(int argc, char *argv[])
     int FLAGS_NET_PHASE = parser.get<int>("mode");
     cv::String FLAGS_STREAM = parser.get<cv::String>("stream");
     int FLAGS_CAMERA_ID = parser.get<int>("cid");
+    FLAGS_BINOCULAR = parser.get<bool>("bi");
     cv::String FLAGS_ADDRESS;
     if (parser.has("address"))
     {
@@ -175,7 +178,6 @@ int main(int argc, char *argv[])
                 capture.set(cv::CAP_PROP_POS_FRAMES, 1100);
             }
             else if (FLAGS_STREAM == "link")
-                // capture.open("rtsp://admin:zhifan518@192.168.1.88/11");
                 capture.open(FLAGS_ADDRESS);
             else if (FLAGS_STREAM == "camera")
                 capture.open(FLAGS_CAMERA_ID);

@@ -4,6 +4,7 @@
 #include <unistd.h>
 
 extern std::queue<cv::Mat> frame_queue;
+extern bool FLAGS_BINICULAR;
 const int CAPTURE_TYPE_CAMERA = 1;
 const int CAPTURE_TYPE_VIDEO = 2;
 
@@ -31,7 +32,15 @@ void ParallelCamera::receive()
 // copy image read by ParallelCamera::receive()
 bool ParallelCamera::read(cv::Mat &image)
 {
-    image = this->current_frame.clone();  // able to have 竞争冒险 if not copy
+    if (FLAGS_BINOCULAR)
+    {
+        cv::Rect rect(0, 0, int(this->current_frame.cols / 2), this->current_frame.rows); // x, y of top left + width, height
+        image = this->current_frame(rect);
+    }
+    else
+    {
+        image = this->current_frame.clone();  // able to have 竞争冒险 if not copy
+    }
     return current_read_ret;
 }
 
