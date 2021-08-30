@@ -234,7 +234,6 @@ sudo make install
 
 ### Cpp Visual Server程序参数
 
-TODO: 目标选定机制. 没有阈值框
 目标候选项条件为置信度大于阈值`conf_thresh`, 然后每个种类选择置信度最高的一个, 然后按照海参, 海胆, 扇贝的顺序选择. (按比赛中目标得分排序的)
 
 ❗即是说在Cpp Visual Server处没有对位置的筛选.

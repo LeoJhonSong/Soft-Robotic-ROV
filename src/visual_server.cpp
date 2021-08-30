@@ -85,7 +85,6 @@ void server::server_start()
     // finally start listening for connections on our socket
     int listenR = listen(sockFD, BACKLOG);
     print(BOLDBLUE, "[Server] start");
-    // TODO: change to cpp-httplib
     while (!threads_quit_flag)
     {
         newFD = accept(sockFD, (struct sockaddr *)&client_addr, &client_addr_size);

@@ -455,7 +455,6 @@ void Detector::tracking_update(const torch::Tensor &loc, const torch::Tensor &co
 
 std::vector<float> Detector::visualization(cv::Mat &img)
 {
-    // TODO: eliminate args
     std::stringstream stream;
     std::vector<float> loc;
     // when a target selected to be grasped, rectangle it
@@ -496,7 +495,7 @@ std::vector<float> Detector::visualization(cv::Mat &img)
             // no candidates, skip
             if (classed_candidates.sum().item<float>() == 0)
                 continue;
-            // FIXME: wired bug: scores become 0.01 without the following line. drop from 0.8/9 to 0.01.
+            // wired bug: scores become 0.01 without the following line. drop from 0.8/9 to 0.01.
             torch::Tensor score_mask = classed_candidates.slice(1, 0, 1).gt(0.01).expand_as(
                 classed_candidates); // useless, candidates already filtered by confidence in update()
             torch::Tensor stable_mask = classed_candidates.slice(1, 6, 7).gt(5.0).expand_as(classed_candidates);
@@ -520,7 +519,6 @@ std::vector<float> Detector::visualization(cv::Mat &img)
                 int top = boxes[j][1].item<int>();
                 int right = boxes[j][2].item<int>();
                 int bottom = boxes[j][3].item<int>();
-                // TODO: (optional) filter candidates with position (more accurate)
                 if ((top + bottom) / 2.0 > img.rows * 0.9)
                     continue;
                 if (this->track && this->tracking_class == 0 && matched_times[j].item<int>() > 30)
@@ -559,7 +557,6 @@ std::vector<float> Detector::visualization(cv::Mat &img)
 std::vector<float> Detector::detect_and_visualize(const torch::Tensor &loc, const torch::Tensor &conf,
                                                   const std::vector<float> &conf_thresh, float tub_thresh, bool &reset,
                                                   bool detect_scallop, cv::Mat &img)
-// TODO: eliminate args
 {
     // update detection
     if (this->tub)

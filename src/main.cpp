@@ -209,7 +209,6 @@ int main(int argc, char *argv[])
     threads_quit_flag = false;
     // Start video recorder thread
     std::thread video_recorder(video_write, video_record_flag, save_path);
-    // FIXME: 需要调试一下看看网络摄像头视频流延迟能否减小
     // start video receiver thread
     capture.receive_start();
     // Start visual info server thread
@@ -291,7 +290,6 @@ int main(int argc, char *argv[])
         cv::resize(img_vis, img_vis, vis_size);
 
         // detect marker
-        // TODO: if (visual_info.arm_is_working)
         marker_info_current =
             marker_detector.detect_single_marker(img_vis, true, marker::VER_OPENCV, marker::MODE_DETECT);
         marker_info = marker_info_current;
