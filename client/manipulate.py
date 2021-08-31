@@ -5,12 +5,10 @@ provide pressure calculation functions with given end effector position
 '''
 
 import sys
-from typing import Tuple
-from time import sleep
+from typing import Tuple, Generator
+import time
 import numpy as np
-from numpy import arcsin, arctan, ceil, cos, dot, exp, pi, sign, sin, sqrt
 from scipy.optimize import root
-from scipy.signal import cont2discrete
 
 
 class Manipulator():
@@ -32,6 +30,7 @@ class Manipulator():
         self.bendPressureThresh = [0, 130]
         self.elgPressureThresh = [0, 30]
         self.handPressureThresh = [0, 60]
+        self.controller = self.PID()
         # create 10 channel pwm module instance
         if (__name__ == '__main__' and len(sys.argv) == 3 and sys.argv[2] == 'with_pwm') or __name__ != '__main__':
             from pwm import PWM
@@ -75,48 +74,48 @@ class Manipulator():
         """
         # determine phi based on x, y
         if x < 0:
-            phi = -arctan(y / x) + pi
+            phi = -np.arctan(y / x) + np.pi
         elif x > 0:
-            phi = -arctan(y / x)
+            phi = -np.arctan(y / x)
         else:
             if y > 0:
-                phi = -pi / 2
+                phi = -np.pi / 2
             elif y < 0:
-                phi = pi / 2
+                phi = np.pi / 2
             else:
                 # when x, y are 0, lengths could be calculated easily
                 self.segBendLowLen = (self.initBendLen, self.initBendLen, self.initBendLen)
                 self.segElgLen = self.initElgLen + z - self.initZ
                 return self.segBendLowLen, self.segElgLen
         # do phase shift and determine c to fit the function later
-        if phi == -pi / 2 or phi == 1.5 * pi:
+        if phi == -np.pi / 2 or phi == 1.5 * np.pi:
             # f(1) = (r - d * cos(phi + pi/6)) * theta - initLength;
             # f(2) = - r*(1-cos(theta))*sin(phi) - y;
-            phiF = -phi + pi / 3
-            phiP = phi + pi / 2
+            phiF = -phi + np.pi / 3
+            phiP = phi + np.pi / 2
             c = y / 2
-        elif -pi / 2 < phi < pi / 6:
+        elif -np.pi / 2 < phi < np.pi / 6:
             # f(1) = (r - d * cos(phi + pi/6)) * theta - initLength;
             # f(2) = r * cos(phi) * (1-cos(theta)) - x;
-            phiF = -phi + pi / 3
+            phiF = -phi + np.pi / 3
             phiP = phi
             c = x / 2
-        elif pi / 6 <= phi < pi * 5 / 6 and phi != pi / 2:
+        elif np.pi / 6 <= phi < np.pi * 5 / 6 and phi != np.pi / 2:
             # f(1) = (r - d * sin(phi)) * theta - initLength;
             # f(2) = r * cos(phi) * (1-cos(theta)) - x;
             phiF = phi
             phiP = phi
             c = x / 2
-        elif phi == pi / 2:
+        elif phi == np.pi / 2:
             # f(1) = (r - d * sin(phi)) * theta - initLength;
             # f(2) = - r*(1-cos(theta))*sin(phi) - y;
             phiF = phi
-            phiP = phi + pi / 2
+            phiP = phi + np.pi / 2
             c = y / 2
         else:  # pi * 5 / 6 <= phi < pi * 3 / 2
             # f(1) = (r + d * cos(phi - pi/6)) * theta - initLength;
             # f(2) = r * cos(phi) * (1-cos(theta)) - x;
-            phiF = phi - pi * 2 / 3
+            phiF = phi - np.pi * 2 / 3
             phiP = phi
             c = x / 2
         # use Levenberg-Marquardt algorithm as Matlab's fsolve
@@ -124,18 +123,18 @@ class Manipulator():
         # https://stackoverflow.com/questions/21885093/comparing-fsolve-results-in-python-and-matlab
         solution = root(
             lambda x, phiF, phiP, c, d, len: [
-                (x[0] - d * sin(phiF)) * x[1] - len,
-                x[0] * cos(phiP) * (1 - cos(x[1])) - c
+                (x[0] - d * np.sin(phiF)) * x[1] - len,
+                x[0] * np.cos(phiP) * (1 - np.cos(x[1])) - c
             ],
             [150, 0], args=(phiF, phiP, c, self.d, self.initBendLen), method='lm'
         )
         r, theta = solution.x
         segBendLen = (
-            (r - self.d * sin(phi)) * theta,
-            (r + self.d * cos(phi - pi / 6)) * theta,
-            (r - self.d * cos(phi + pi / 6)) * theta
+            (r - self.d * np.sin(phi)) * theta,
+            (r + self.d * np.cos(phi - np.pi / 6)) * theta,
+            (r - self.d * np.cos(phi + np.pi / 6)) * theta
         )
-        segElgLen = -r * sin(theta) * 2 + z
+        segElgLen = -r * np.sin(theta) * 2 + z
         return segBendLen, segElgLen
 
     def set_pwm(self):
@@ -207,8 +206,10 @@ class Manipulator():
             self.set_pwm()
         return True
 
-    def closed_loop_move(self, target_pos: Tuple[float, float, float], arm_pos: Tuple[float, float, float]):
+    def PID(self) -> Generator[None, Tuple[Tuple[float, float, float], Tuple[float, float, float]], None]:
         """simple closed loop feedback on error of arm position and target position
+
+        For instruction on calibrate PID, see: https://zh.wikipedia.org/wiki/齐格勒－尼科尔斯方法
 
         Parameters
         ----------
@@ -222,11 +223,25 @@ class Manipulator():
         bool
             if False, feedback exceed system limit
         """
-        # TODO: change to PID
-        kp = 1  # TODO: 需要调参: 比例系数
-        x_corrected, y_corrected, z_corrected = tuple(map(lambda a, t: t - kp * (a - t), arm_pos, target_pos))
-        x_corrected, y_corrected, z_corrected = self.transform(x_corrected, y_corrected, z_corrected)
-        return self.set_Pressures(self.inverse_kinematics(x_corrected, y_corrected, z_corrected))
+        # TODO: 需要调参: PID系数
+        Kp = np.array([1, 1, 1])  # x, y, z
+        Ki = np.array([0, 0, 0])  # x, y, z
+        Kd = np.array([0, 0, 0])  # x, y, z
+        e_prev = np.zeros(3)
+        t_prev = time.time()
+        integral = np.zeros(3)
+        while True:
+            target_pos, arm_pos = yield
+            t = time.time()
+            e = np.array(target_pos) - np.array(arm_pos)
+            proportional = np.multiply(Kp, e)
+            integral = integral + np.multiply(Ki, e) * (t - t_prev)
+            derivative = np.multiply(Kd, e - e_prev) / (t - t_prev)
+            x_corrected, y_corrected, z_corrected = tuple(proportional + integral + derivative)
+            print(x_corrected, y_corrected, z_corrected)
+            self.set_Pressures(self.inverse_kinematics(x_corrected, y_corrected, z_corrected))
+            # TODO: 需要调参: 采样时间
+            time.sleep(1)  # sleep for 1s
 
 
 if __name__ == "__main__" and sys.argv[1] == 'auto':
@@ -235,10 +250,12 @@ if __name__ == "__main__" and sys.argv[1] == 'auto':
       >>> python ./manipulate.py auto with_pwm
     """
     arm = Manipulator()
-    target_pos = (0, 0, 345)
-    while True:
-        arm_pos = (-1, -1, 345)
-        arm.closed_loop_move(target_pos, arm_pos)
+    target_pos = (0, 0, 355)
+    # start the PID controller
+    next(arm.controller)
+    for i in range(10):
+        arm_pos = (-1, -1, 355)
+        arm.controller.send((target_pos, arm_pos))
 
 if __name__ == '__main__' and sys.argv[1] == 'manual':
     """run one of following command
