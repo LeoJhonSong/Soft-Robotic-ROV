@@ -4,7 +4,7 @@
 #include <unistd.h>
 
 extern std::queue<cv::Mat> frame_queue;
-extern bool FLAGS_BINICULAR;
+extern bool FLAGS_BINOCULAR;
 const int CAPTURE_TYPE_CAMERA = 1;
 const int CAPTURE_TYPE_VIDEO = 2;
 
