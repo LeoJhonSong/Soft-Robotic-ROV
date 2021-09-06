@@ -1,0 +1,5 @@
+asciimatics
+numpy
+scipy
+flask
+opencv-contrib-python

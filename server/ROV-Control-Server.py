@@ -1,12 +1,9 @@
-# import the necessary packages
-from imutils.video import VideoStream
-from flask import Response
-from flask import Flask
-from flask import render_template
-from flask import request
-import threading
 import argparse
+import threading
+
 import cv2
+from flask import Flask, Response, render_template, request
+
 from CppPythonSocket import Server
 
 # initialize the output frame and a lock used to ensure thread-safe
@@ -16,9 +13,6 @@ outputFrame = None
 lock = threading.Lock()
 # initialize a flask object
 app = Flask(__name__, static_folder='static', template_folder='templates')
-# initialize the video stream and allow the camera sensor to
-# warmup
-# vs = VideoStream(src=0).start()
 
 
 def video_stream():
@@ -26,9 +20,7 @@ def video_stream():
     global vs, outputFrame, lock
     server = Server("127.0.0.1", 8000)
     while True:
-        # frame = vs.read()
         frame = server.receive_image()
-        # frame = imutils.resize(frame, width=400)
         # acquire the lock, set the output frame, and release the lock
         with lock:
             outputFrame = frame.copy()
@@ -43,8 +35,7 @@ def generate():
     while True:
         # wait until the lock is acquired
         with lock:
-            # check if the output frame is available, otherwise skip
-            # the iteration of the loop
+            # check if the output frame is available, otherwise skip the iteration of the loop
             if outputFrame is None:
                 continue
             # encode the frame in JPEG format
@@ -95,6 +86,3 @@ if __name__ == '__main__':
     t.start()
     # start the flask app
     app.run(host=args["ip"], port=args["port"], debug=True, threaded=True, use_reloader=False)
-
-# release the video stream pointer
-# vs.stop()

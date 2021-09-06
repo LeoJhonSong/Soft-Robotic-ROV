@@ -1,3 +1,0 @@
-asciimatics
-numpy
-scipy
