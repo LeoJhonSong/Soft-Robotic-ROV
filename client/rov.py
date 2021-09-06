@@ -92,9 +92,9 @@ class Rov(object):
 
     def __init__(self):
         # set motors speed controlled by closed-loop (PID) or open-loop
-        self.is_closed_loop = 0  # TODO: adjst PID?
+        self.is_closed_loop = 0x55  # TODO: adjst PID?
         # UI测试模式/手柄遥控模式: 0/1
-        self.control_mode = 1
+        self.control_mode = 0xaa  # 手柄遥控模式为0xaa, UI测试模式为0x55
         # initial sensors
         self.depth_sensor = Depth_sensor()
         self.gyro = Gyro()
@@ -181,7 +181,7 @@ class Rov(object):
         value : float
             in range (backward)[-1, 1](forward)
         """
-        self.write(speed, [int(127 + 127 * value), 0, 0, 0, self.control_mode, self.is_closed_loop])
+        self.write(speed, [int(127 + 127 * value), 127, 127, 127, self.control_mode, self.is_closed_loop])
         if value:
             print(f'[ROV] going {"forward" if value > 0 else "backward"} with {int(abs(value) * 100):.02f}% speed')
         else:
@@ -195,7 +195,7 @@ class Rov(object):
         value : float
             in range (right)[-1, 1](left)
         """
-        self.write(speed, [0, int(127 + 127 * value), 0, 0, self.control_mode, self.is_closed_loop])
+        self.write(speed, [127, int(127 + 127 * value), 127, 127, self.control_mode, self.is_closed_loop])
         if value:
             print(f'[ROV] going {"left" if value > 0 else "right"} with {int(abs(value) * 100):.02f}% speed')
         else:
@@ -209,7 +209,7 @@ class Rov(object):
         value : float
             in range (down)[-1, 1](up)
         """
-        self.write(speed, [0, 0, 0, int(127 + 127 * value), self.control_mode, self.is_closed_loop])
+        self.write(speed, [127, 127, 127, int(127 + 127 * value), self.control_mode, self.is_closed_loop])
         if value:
             print(f'[ROV] going {"up" if value > 0 else "down"} with {int(abs(value) * 100):.02f}% speed')
         else:
@@ -223,7 +223,7 @@ class Rov(object):
         value : float
             in range (right)[-1, 1](left)
         """
-        self.write(speed, [0, 0, int(127 + 127 * value), 0, self.control_mode, self.is_closed_loop])
+        self.write(speed, [127, 127, int(127 + 127 * value), 127, self.control_mode, self.is_closed_loop])
         if value:
             print(f'[ROV] turning {"left" if value > 0 else "right"} with {int(abs(value) * 100):.02f}% speed')
         else:
@@ -242,7 +242,7 @@ class Rov(object):
     def get_sensors_data(self):
         """get the latest data from sensors
         """
-        self.depth_sensor.update(int.from_bytes(b''.join(self.read(depth, False)), 'big'))
+        self.depth_sensor.update(int.from_bytes(self.read(depth, False), 'big'))
         # TODO: this need checking
         # gyro_list = self.read(pry, True)
         # gyro_list = [gyro_list[3:6], gyro_list[0:3], gyro_list[6:9]]  # roll, pitch, yaw
@@ -258,3 +258,5 @@ if __name__ == '__main__':
         while True:
             command, value = input('Vx [-1, 1], Vy [-1, 1], Vz [-1, 1], led [0, 1], direction [-1, 1]').split(',')
             eval(f'robot.set_{command}({value})')
+            # robot.get_sensors_data()
+            # print(robot.depth_sensor.depth)
