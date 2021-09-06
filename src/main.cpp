@@ -17,6 +17,7 @@
 #include "parallel_camera.h"
 #include "ruas.h"
 #include "visual_server.h"
+#include "client.hpp"
 
 const char *keys =
     "{k         | 100                   | turbulence intensity. The greater, the intensive}"
@@ -215,6 +216,8 @@ int main(int argc, char *argv[])
     capture.receive_start();
     // Start visual info server thread
     std::thread visual_info_server(server::server_start);
+    // 创建Cpp-Python通信socket
+    socket_communication::Client client("127.0.0.1", 8080);
 
     // 一些中间变量
     std::vector<float> target_loc = {0, 0, 0, 0};
@@ -316,6 +319,10 @@ int main(int argc, char *argv[])
 
         target_loc = detector.detect_and_visualize(loc, conf, conf_thresh, tub_thresh, reset_id, detect_scallop,
                                                    img_vis); // cx, cy, width, height
+        // cv::namedWindow("ResDet", cv::WINDOW_GUI_NORMAL);
+        // cv::imshow("ResDet", img_vis);
+        client.SendImage(img_vis);
+
         if (video_record_flag && !threads_quit_flag)
             det_frame_queue.push(img_vis);
         // update visual_info.target*
