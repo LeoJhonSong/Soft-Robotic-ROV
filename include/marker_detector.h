@@ -101,6 +101,7 @@ namespace marker
         void camera_resize(cv::Size new_size);
         void set_dict_o(cv::aruco::PREDEFINED_DICTIONARY_NAME dict_o);
         marker::MarkerInfo detect_single_marker(cv::Mat &img, bool visible = true, char ver = marker::VER_ARUCO, char mode = marker::MODE_DETECT);
+        marker::MarkerInfo detect_average_marker(cv::Mat &img, bool visible=true, char ver=marker::VER_ARUCO, char mode=marker::MODE_DETECT);
         std::vector<marker::MarkerInfo> detect_markers(cv::Mat &img, bool visible = true, char ver = marker::VER_ARUCO, char mode = marker::MODE_DETECT);
     };
 }; // namespace marker

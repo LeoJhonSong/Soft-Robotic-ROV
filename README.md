@@ -267,11 +267,11 @@ netG x SSD维度可选组合
 使用示例
 ```shell
 # 以项目根目录下test/test.mp4作为视频源进行图像恢复及目标识别 (会跳过片头数帧)
-./build/Soft-Robotic-ROV
+./build/Soft-Robotics-ROV
 # 以下标为0的双目摄像头左路作为视频源进行图像恢复及目标识别并录像
-./build/Soft-Robotic-ROV --stream=camera --bi=true --record=true
+./build/Soft-Robotics-ROV --stream=camera --bi=true --record=true
 # 以网络摄像头为视频源...
-./build/Soft-Robotic-ROV --stream=link --address="rtsp://admin:zhifan518@192.168.1.88/11"
+./build/Soft-Robotics-ROV --stream=link --address="rtsp://admin:zhifan518@192.168.1.88/11"
 ```
 
 #### 测试
