@@ -21,7 +21,6 @@ class Controller():
         return False
 
     def printScreen(self):
-        # TODO: ui待设计
         # https://asciimatics.readthedocs.io/en/stable/asciimatics.html#asciimatics.screen.Screen.print_at
         self.screen.clear()
         self.screen.refresh()

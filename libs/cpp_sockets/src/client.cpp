@@ -48,7 +48,6 @@ void Client::Send(std::string message) {
 }
 
 std::string Client::Receive() {
-  // TODO(oleguer): try catch, if connection dropped print notification and try
   // to reconnect
 
   // Receive length of the message

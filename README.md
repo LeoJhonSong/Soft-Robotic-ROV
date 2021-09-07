@@ -12,22 +12,19 @@
    1. [程序逻辑](#程序逻辑)
    2. [巡航策略](#巡航策略)
 3. [程序说明](#程序说明)
-   1. [环境配置](#环境配置)
+   1. [如何启动](#如何启动)
+   2. [环境配置](#环境配置)
       1. [libtorch安装](#libtorch安装)
       2. [CUDA安装](#cuda安装)
       3. [cuDNN安装](#cudnn安装)
       4. [OpenCV安装](#opencv安装)
-   2. [识别模型](#识别模型)
+   3. [识别模型](#识别模型)
       1. [识别类别](#识别类别)
-   3. [Cpp Visual Server程序参数](#cpp-visual-server程序参数)
+   4. [Cpp Visual Server程序参数](#cpp-visual-server程序参数)
       1. [测试](#测试)
-   4. [程序状态-键盘按键-手柄按键对照表](#程序状态-键盘按键-手柄按键对照表)
-   5. [与其他设备通信](#与其他设备通信)
-      1. [UART](#uart)
-      2. [游戏手柄](#游戏手柄)
-      3. [TCP_Server类](#tcp_server类)
-         1. [成员函数](#成员函数)
-         2. [sendMsg()中move值与动作与可用宏定义对应表](#sendmsg中move值与动作与可用宏定义对应表)
+   5. [程序状态-键盘按键-手柄按键对照表](#程序状态-键盘按键-手柄按键对照表)
+   6. [与其他设备通信](#与其他设备通信)
+      1. [游戏手柄](#游戏手柄)
 4. [水域分析](#水域分析)
 
 ## 需要注意的问题
@@ -131,6 +128,12 @@
 ![巡航路线示意图](doc/巡航路线示意图.png)
 
 ## 程序说明
+
+### 如何启动
+
+1. 进入项目根目录
+2. 启动Visual Server `./build/Soft-Robotics-ROV --stream=camera --bi=true`
+3. 启动Control Server `./server/ROV-Control-Server.py`
 
 ### 环境配置
 
@@ -298,14 +301,6 @@ netG x SSD维度可选组合
 
 ### 与其他设备通信
 
-#### UART
-
-目前程序通过`/dev/ttyUSB0`(第一个被发现的USB串口设备) 以**9600**的波特率进行串口通信. 只有连接了一个串口设备时`/dev/`下才会有这个设备.
-
-❗️ 另一侧也需要以9600的波特率进行通信, 否则收到的会是乱七八糟的东西.
-
-程序发送`!!`以告知软体臂控制程序开始抓取, 随后发送以`#`为帧头, **目标相对于标记**的位置. 坐标正方向如下图所示.
-
 💡 标记和目标的坐标均归一化并乘了100.
 
 ![相对位置坐标系](doc/relative_position.png)
@@ -315,56 +310,6 @@ netG x SSD维度可选组合
 对于非蓝牙游戏手柄, 可能是`/dev/js0`, `/dev/input/js0`, `/dev/input/js1`等, 如果识别不到可能需要安装驱动, 比如**xboxdrv**. 可以在终端输入`cat /dev/input/js0 | hexdump`, 然后看看操作手柄终端会不会有新输入, 来确认这个设备是不是要配对的游戏手柄. 根据设备路径可能需要改动`utils/js2key`.
 
 从终端运行项目里`utils/joystick`会输出操作游戏手柄对应的摇杆, 按键事件.
-
-#### TCP_Server类
-
-##### 成员函数
-
-|函数名|功能|
-|-|-|
-|(构造函数)|创建监听socket, 绑定端口并开始监听端口|
-|(析构函数)|关闭业务socket, 关闭监听socket|
-|`void recvMsg( void )`|如果未建立业务socket则在accept()处阻塞, 直到建立业务socket. 接收ROV发来的24位数据并处理第4位 (舱1是否漏水, 存至 **isOneLeak**), 第7位 (舱2是否漏水, 存至 **isTwoLeak**), 第8, 9位 (深度信息, 存至 **depth**)数据.|
-|`void sendMsg( int move )`|按传递的参数**move**对应的动作 (见下表) 发送指令给ROV|
-
-⚠️ accept()在 `recvMsg()` 中意味着必须先执行一次recvMsg()才能和ROV建立连接.
-
-另外值得注意的是`accept()`和`recv()`在未接收到ROV数据时会一直等待, 即阻塞, 直到接收到数据程序才会继续.
-
-##### sendMsg()中move值与动作与可用宏定义对应表
-
-|动作|move的值|宏定义名|
-|-|-|-|
-|开灯|SEND_LIGHTS_ON|0|
-|全速前进|SEND_FORWARD|1|
-|全速后退|SEND_BACKWARD|2|
-|全速左|SEND_LEFT|3|
-|全速右|SEND_RIGHT|4|
-|全速左转|SEND_TURN_LEFT|5|
-|全速右转|SEND_TURN_RIGHT|6|
-|全速上升|SEND_UP|7|
-|全速下降|SEND_DOWN|8|
-|半速前进|SEND_HALF_FORWARD|9|
-|半速后退|SEND_HALF_BACKWARD|10|
-|半速左|SEND_HALF_LEFT|11|
-|半速右|SEND_HALF_RIGHT|12|
-|半速左转|SEND_HALF_TURN_LEFT|13|
-|半速右转|SEND_HALF_TURN_RIGHT|14|
-|半速上升|SEND_HALF_UP|15|
-|半速下降|SEND_HALF_DOWN|16|
-|悬停|SEND_SLEEP|17|
-|全速坐底并向前微调|SEND_DIVE_FORWARD|18|
-|全速坐底并向后微调|SEND_DIVE_BACKWARD|19|
-|全速坐底并向左微调|SEND_DIVE_LEFT|20|
-|全速坐底并向右微调|SEND_DIVE_RIGHT|21|
-|全速坐底并微左转|SEND_DIVE_TURN_LEFT|22|
-|全速坐底并微右转|SEND_DIVE_TURN_RIGHT|23|
-|向前微调|SEND_ADJUST_FORWARD|24|
-|向后微调|SEND_ADJUST_BACKWARD|25|
-|向左微调|SEND_ADJUST_LEFT|26|
-|向右微调|SEND_ADJUST_RIGHT|27|
-|微左转|SEND_ADJUST_TURN_LEFT|28|
-|微右转|SEND_ADJUST_TURN_RIGHT|29|
 
 ## 水域分析
 

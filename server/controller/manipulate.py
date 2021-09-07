@@ -42,6 +42,7 @@ class Manipulator():
         for channel, p in enumerate(p_list):
             # 0-1 pwm duty cycle -> 0-5 V analog voltage -> 0-500 KPa pressure
             if channel == 3:
+                # Jetson PWM模块的通道3坏了, 用通道10代替
                 self.pwm.setValue(10, np.interp(p, [0, 500], [0, 1]))
                 continue
             self.pwm.setValue(channel, np.interp(p, [0, 500], [0, 1]))
@@ -53,7 +54,7 @@ class Manipulator():
         self.segElgLen = self.initElgLen
         self.pressures = [0.0] * 10
         self.controller = self.PID()
-        print('[Arm] Manipulator reset')
+        print('💪  Manipulator reset 👌')
 
     def transform(self, x: float, y: float, z: float) -> Tuple[float, float, float]:
         """transform vector from camera coordinate system to manipulator coordinate system
@@ -207,14 +208,14 @@ class Manipulator():
             all([self.bendPressureThresh[0] <= p <= self.bendPressureThresh[1] for p in pressures[3:6]])
             and self.elgPressureThresh[0] <= pressures[6] <= self.elgPressureThresh[1]
         ):
-            print(f'[Arm] ❌ exceed pressure threshold! segBendLow:', ', '.join(f'{p:.3f}' for p in pressures[3:6]), f'segElg: {pressures[6]:.3f}')
+            print(f'💪  ❌ exceed pressure threshold! segBendLow:', ', '.join(f'{p:.3f}' for p in pressures[3:6]), f'segElg: {pressures[6]:.3f}')
             return False
         self.segBendLowLen, self.segBendUpLen, self.segElgLen = segBendLen, segBendLen, segElgLen
         pressures[0:3] = np.clip(pressures[0:3], self.bendPressureThresh[0], self.bendPressureThresh[1])
         pressures[-1] = np.clip(pressures[-1], self.handPressureThresh[0], self.handPressureThresh[1])
         # balance the influence of outside water pressure
         self.pressures = [p + self.water_pressure for p in pressures]
-        print(f'[Arm] 💨 pressures:', ', '.join(f'{p:.3f}' for p in self.pressures), f'🌊 water pressure: {self.water_pressure:.3f}')
+        print(f'💪  💨 pressures:', ', '.join(f'{p:.3f}' for p in self.pressures), f'🌊 water pressure: {self.water_pressure:.3f}')
         if (__name__ == '__main__' and len(sys.argv) == 3 and sys.argv[2] == 'with_pwm') or __name__ != '__main__':
             self.set_pwm()
         return True

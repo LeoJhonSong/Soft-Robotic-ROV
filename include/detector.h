@@ -9,7 +9,6 @@ namespace detector
 {
 struct Visual_info
 {
-    // TODO: (optional) add target_time, marker_time?
     // for target
     bool has_target;
     unsigned int target_class;
