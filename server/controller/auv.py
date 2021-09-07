@@ -3,6 +3,7 @@ import time
 
 import rov
 import visual_info
+import manipulate
 
 
 class Auv(rov.Rov):
@@ -21,7 +22,7 @@ class Auv(rov.Rov):
     def __init__(self, state: str = 'initial'):
         self.state = state
         self.target = visual_info.Target()
-        self.arm = visual_info.Arm()
+        self.visual_arm = visual_info.Arm()
         self.grasp_state = 'idle'
         self.cruise_periods = 2
         self.cruise_time = 0.0
@@ -35,50 +36,9 @@ class Auv(rov.Rov):
             6: [0.7, 0, 0, 0.3],
             7: [0, 0, -0.5, -0.99],
         }
-        self.aim_chances = [4] * 2  # FIXME: may adjust
+        self.aim_chances = [4, 4]  # FIXME: may adjust
+        self.arm = manipulate.Manipulator()
         super().__init__()
-
-    def __enter__(self):
-        return super().__enter__()
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        return super().__exit__(exc_type, exc_value, traceback)
-
-    def start(self):
-        return super().start()
-
-    def kill(self):
-        return super().kill()
-
-    def int2u8list(self, value: int, n: int):
-        return super().int2u8list(value, n)
-
-    def write(self, id: int, data: list):
-        return super().write(id, data)
-
-    def read(self, id: int, request_needed: bool) -> list:
-        return super().read(id, request_needed)
-
-    def set_led(self, value: float):
-        return super().set_led(value)
-
-    def set_Vx(self, value: float):
-        return super().set_Vx(value)
-
-    def set_Vy(self, value: float):
-        return super().set_Vy(value)
-
-    def set_Vz(self, value: float):
-        return super().set_Vz(value)
-
-    def set_direction(self, value: float):
-        return super().set_direction(value)
-
-    def set_move(self, velocity: list):
-        return super().set_move(velocity)
-
-    def get_sensors_data(self):
-        return super().get_sensors_data()
 
     def land(self) -> str:
         """坐底
@@ -95,18 +55,18 @@ class Auv(rov.Rov):
         """
         # TODO: change to judge by Manipulator.inverse_kinematics_simplified
         if self.target.roi_check():
-            if not self.arm.arm_is_working:
+            if not self.visual_arm.arm_is_working:
                 self.grasp_state = 'ready'
                 return 'grasp'
             else:
-                if self.arm.chances[0]:
-                    if time.time() - self.arm.start_time > self.arm.time_limit:
-                        self.arm.chances[0] -= 1
+                if self.visual_arm.chances[0]:
+                    if time.time() - self.visual_arm.start_time > self.visual_arm.time_limit:
+                        self.visual_arm.chances[0] -= 1
                     self.grasp_state = 'activated'
                     return 'grasp'
         # has no more target in thresh range / no more chances
         self.grasp_state = 'idle'
-        self.arm.chances[0] = self.arm.chances[1]  # reset chances
+        self.visual_arm.chances[0] = self.visual_arm.chances[1]  # reset chances
         # 往前荡一下, 确保目标进袋
         self.set_Vx(1)
         time.sleep(1)
@@ -258,25 +218,25 @@ if __name__ == '__main__':
                         continue
                     # send flags to visual server
                     # threads_quit_flag: 2; arm_is_working: 1
-                    visual_socket.send(bytes(str(quit_flag * 2 + auv.arm.arm_is_working).encode()))
+                    visual_socket.send(bytes(str(quit_flag * 2 + auv.visual_arm.arm_is_working).encode()))
                     # receive data from ROV then update target and arm
                     visual_info_dict = yaml.load(visual_socket.recv(1024), Loader=yaml.Loader)
                 # quit_flag置1后待运行到下一循环, 将quit_flag发送给visual_server后再break
                 # update AUV data
                 auv.target.update(visual_info_dict["target"])
-                auv.arm.update(visual_info_dict["arm"])
+                auv.visual_arm.update(visual_info_dict["arm"])
                 auv.get_sensors_data()  # 主要是获取深度
                 # 状态机状态跳转并给出抓取判断
                 grasp_state = auv.state_machine()
                 # 软体臂控制
                 if grasp_state == 'ready':
                     # FIXME: 软体臂可以开始了. 这个分支好像可以删掉了
-                    auv.arm.arm_is_working = True
-                    auv.arm.start_time = time.time()
+                    auv.visual_arm.arm_is_working = True
+                    auv.visual_arm.start_time = time.time()
                 elif grasp_state == 'activated':
                     # TODO: 软体臂发一次指令
                     pass
                 elif grasp_state == 'idle':
-                    auv.arm.arm_is_working = False
+                    auv.visual_arm.arm_is_working = False
 
     Screen.wrapper(screen_main)
