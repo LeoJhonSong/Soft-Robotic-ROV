@@ -1,6 +1,6 @@
 from asciimatics.screen import Screen
 from asciimatics.event import KeyboardEvent
-import auv
+from . import auv
 
 
 class Controller():

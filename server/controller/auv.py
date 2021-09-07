@@ -1,9 +1,9 @@
 from math import pi, atan
 import time
 
-import rov
-import visual_info
-import manipulate
+from . import rov
+from .import visual_info
+from . import manipulate
 
 
 class Auv(rov.Rov):

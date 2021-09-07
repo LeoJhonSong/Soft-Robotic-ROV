@@ -33,7 +33,7 @@ class Manipulator():
         self.controller = self.PID()
         # create 10 channel pwm module instance
         if (__name__ == '__main__' and len(sys.argv) == 3 and sys.argv[2] == 'with_pwm') or __name__ != '__main__':
-            from pwm import PWM
+            from .pwm import PWM
             self.pwm = PWM()
 
     def set_pwm(self):
