@@ -19,8 +19,8 @@ find_package(aruco REQUIRED)
 include_directories(include)
 include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${aruco_INCLUDE_DIRS})
-add_subdirectory(cpp_sockets)
-include_directories(cpp_sockets/include/)
+add_subdirectory(libs/cpp_sockets)
+include_directories(libs/cpp_sockets/include/)
 # set path to find *.so, *.a fils
 link_directories(/usr/local/lib)
 
