@@ -92,7 +92,7 @@ class Rov(object):
 
     def __init__(self):
         # set motors speed controlled by closed-loop (PID) or open-loop
-        self.is_closed_loop = 0x55  # TODO: adjst PID?
+        self.is_closed_loop = 0x55  # TODO: adjust PID?
         # UI测试模式/手柄遥控模式: 0/1
         self.control_mode = 0xaa  # 手柄遥控模式为0xaa, UI测试模式为0x55
         # initial sensors
@@ -236,8 +236,15 @@ class Rov(object):
         ----------
         velocity : list
             a list of [Vx, Vy, direction, Vz] in range [-1, 1]
+            #FIXME: 确认下优先级
         """
         self.write(speed, [int(127 + 127 * v) for v in velocity] + [self.control_mode, self.is_closed_loop])
+
+    def reset(self):
+        """reset ROV led, motors
+        """
+        self.set_led(0)
+        self.set_move([0, 0, 0, 0])
 
     def get_sensors_data(self):
         """get the latest data from sensors

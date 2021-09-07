@@ -36,6 +36,25 @@ class Manipulator():
             from pwm import PWM
             self.pwm = PWM()
 
+    def set_pwm(self):
+        # 5 channels used: 3 upper bending, 3 lower bending, 1 elongation, 1 hand
+        p_list = self.pressures[0:7] + [self.pressures[-1]]
+        for channel, p in enumerate(p_list):
+            # 0-1 pwm duty cycle -> 0-5 V analog voltage -> 0-500 KPa pressure
+            if channel == 3:
+                self.pwm.setValue(10, np.interp(p, [0, 500], [0, 1]))
+                continue
+            self.pwm.setValue(channel, np.interp(p, [0, 500], [0, 1]))
+
+    def reset(self):
+        self.pwm.reset_all()
+        self.segBendUpLen = [self.initBendLen] * 3
+        self.segBendLowLen = [self.initBendLen] * 3
+        self.segElgLen = self.initElgLen
+        self.pressures = [0.0] * 10
+        self.controller = self.PID()
+        print('[Arm] Manipulator reset')
+
     def transform(self, x: float, y: float, z: float) -> Tuple[float, float, float]:
         """transform vector from camera coordinate system to manipulator coordinate system
 
@@ -58,7 +77,8 @@ class Manipulator():
 
     def inverse_kinematics(self, x: float, y: float, z: float) -> Tuple[Tuple[float, float, float], float]:
         """(Simplified algorithm for manual control) do inverse kinematics for the soft manipulator
-        under the OBSS model with given position of end effector.
+        under the OBSS model with given position of end effector. In this inverse kinematics model,
+        bending segments do not get involved in elongation actively.
 
         If end point in the workspace, set length of each chamber of two bending
         segments and one elongation segment; if not, do nothing
@@ -136,13 +156,6 @@ class Manipulator():
         )
         segElgLen = -r * np.sin(theta) * 2 + z
         return segBendLen, segElgLen
-
-    def set_pwm(self):
-        # 5 channels used: 3 bending, 1 elongation, 1 hand
-        p_list = self.pressures[0:3] + self.pressures[8:]
-        for channel, p in enumerate(p_list):
-            # 0-1 pwm duty cycle -> 0-5 V analog voltage -> 0-500 KPa pressure
-            self.pwm.setValue(channel, np.interp(p, [0, 500], [0, 1]))
 
     def set_Pressures(self, segLen: Tuple[Tuple[float, float, float], float], pressures_dict=None):
         """set pressures of chambers `in the arm` (hand pressure not set here)
