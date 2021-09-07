@@ -28,15 +28,15 @@ class Auv(rov.Rov):
         self.cruise_time = 0.0
         # the period is 7s, keys are the last time of that move [key_n-1, key_n)
         self.cruise_path = {
-            1: [0, 0, -0.5, -0.99],
-            2: [0.7, 0, 0, 0.3],
-            3: [0, 0, 0.5, -0.99],
-            4: [0.7, 0, 0, 0.3],
-            5: [0, 0, 0.5, -0.99],
-            6: [0.7, 0, 0, 0.3],
-            7: [0, 0, -0.5, -0.99],
+            1: (0, 0, -0.5, -0.99),
+            2: (0.7, 0, 0, 0.3),
+            3: (0, 0, 0.5, -0.99),
+            4: (0.7, 0, 0, 0.3),
+            5: (0, 0, 0.5, -0.99),
+            6: (0.7, 0, 0, 0.3),
+            7: (0, 0, -0.5, -0.99),
         }
-        self.aim_chances = [4, 4]  # FIXME: may adjust
+        self.aim_chances = [4, 4]  # FIXME: 需要调参: 尝试次数
         self.arm = manipulate.Manipulator()
         super().__init__()
 
@@ -45,7 +45,7 @@ class Auv(rov.Rov):
         """
         self.set_Vz(-1)
         if self.depth_sensor.is_landed:
-            print('[AUV] landed, start grasping')
+            print('🤿 AUV landed, start grasping')
             return 'grasp'
         else:
             return 'land'
@@ -73,7 +73,7 @@ class Auv(rov.Rov):
         # float up to cruise hight
         self.set_Vz(1)
         time.sleep(0.5)
-        print('[AUV] grasp done, start cruise')
+        print('🤿 AUV grasp done, start cruise')
         return 'cruise'
 
     def cruise(self) -> str:
@@ -82,14 +82,14 @@ class Auv(rov.Rov):
         if self.target.has_target:
             self.cruise_time = 0
             # 发现目标后一个后撤步!
-            self.set_move([-0.7, 0, 0, -0.99])
+            self.set_move((-0.7, 0, 0, -0.99))
             time.sleep(1)  # 1s
-            print('[AUV] target found, start aiming')
+            print('🤿 AUV target found, start aiming')
             return 'aim'
         # if reach time limit
         elif time.time() - self.cruise_time > list(self.cruise_path.keys())[-1] * self.cruise_periods:
             self.cruise_time = 0
-            print('[AUV] time out, start landing')
+            print('🤿 AUV time out, start landing')
             return 'land'
         else:
             key = list(self.cruise_path.keys())[0]
@@ -114,7 +114,7 @@ class Auv(rov.Rov):
         if not self.target.has_target:
             # 目标丢失, 转坐底
             self.aim_chances[0] = self.aim_chances[1]
-            print('[AUV] target lost, start landing')
+            print('🤿 AUV target lost, start landing')
             return 'land'
         else:
             # 最多4次调整机会
@@ -141,13 +141,13 @@ class Auv(rov.Rov):
                             Vy = dy * 0.8
                         elif abs(dx) > grasp_thresh_x:
                             omega = omega * 1.2
-                    # print(f'[AUV] {}')  # FIXME: what is this
-                    self.set_move([0, max(min(Vy, 1), -1), 0, max(min(omega, 1), -1)])
+                    print(f'🤿 AUV aiming! try: {self.aim_chances[-1] - self.aim_chances[0]}')
+                    self.set_move((0, max(min(Vy, 1), -1), 0, max(min(omega, 1), -1)))
                     return 'aim'
                 else:  # 坐底后考虑是否起跳调整位置
                     if self.target.roi_check():  # 检查位置阈值
                         self.aim_chances[0] = self.aim_chances[1]
-                        print('[AUV] ready for grasping, start grasping!')
+                        print('🤿 AUV ready for grasping, start grasping!')
                         return 'grasp'
                     else:
                         if abs(dx) > 0.35:
@@ -159,16 +159,15 @@ class Auv(rov.Rov):
                                 Vy = dy * 1.4
                         elif abs(dx) > grasp_thresh_x:
                             omega = omega * 0.8
-                        # 上浮
-                        # print(f'[AUV] {}')  # FIXME: what is this
                         self.aim_chances[0] -= 1
-                        self.set_move([0, max(min(Vy, 1), -1), 0, max(min(omega, 1), -1)])
+                        print(f'🤿 AUV try again! {self.aim_chances[0]} chances left')
+                        self.set_move((0, max(min(Vy, 1), -1), 0, max(min(omega, 1), -1)))
                         time.sleep(0.5)  # 上浮0.5s
                         return 'aim'
             else:
                 # 放弃瞄准, 转坐底, 然后会转抓取, 如果还是没有东西会转巡航
                 self.aim_chances[0] = self.aim_chances[1]
-                print('[AUV] give up aiming, start landing')
+                print('🤿 AUV give up aiming, start landing')
                 return 'land'
 
     def state_machine(self) -> str:
@@ -214,7 +213,6 @@ if __name__ == '__main__':
                         visual_socket.connect(('127.0.0.1', VISUAL_SERVER_PORT))
                     except ConnectionRefusedError:
                         print('[Visual Info Client] lost connection')
-                        # TODO: 启动/重启visual_info server
                         continue
                     # send flags to visual server
                     # threads_quit_flag: 2; arm_is_working: 1
@@ -230,12 +228,10 @@ if __name__ == '__main__':
                 grasp_state = auv.state_machine()
                 # 软体臂控制
                 if grasp_state == 'ready':
-                    # FIXME: 软体臂可以开始了. 这个分支好像可以删掉了
                     auv.visual_arm.arm_is_working = True
                     auv.visual_arm.start_time = time.time()
                 elif grasp_state == 'activated':
-                    # TODO: 软体臂发一次指令
-                    pass
+                    auv.arm.controller.send((auv.target.center + (0,), auv.visual_arm.marker_position + (0,)))
                 elif grasp_state == 'idle':
                     auv.visual_arm.arm_is_working = False
 

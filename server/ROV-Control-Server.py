@@ -1,10 +1,15 @@
+#! /usr/bin/env python3
+
 import argparse
 import threading
 
 import cv2
+import numpy as np
 from flask import Flask, Response, render_template, request
 
+from controller.auv import Auv
 from CppPythonSocket import Server
+from controller import auv
 
 # initialize the output frame and a lock used to ensure thread-safe
 # exchanges of the output frames (useful when multiple browsers/tabs
@@ -18,9 +23,10 @@ app = Flask(__name__, static_folder='static', template_folder='templates')
 def video_stream():
     # grab global references to the video stream, output frame, and lock variables
     global vs, outputFrame, lock
-    server = Server("127.0.0.1", 8000)
+    # server = Server("127.0.0.1", 8010)
     while True:
-        frame = server.receive_image()
+        # frame = server.receive_image()
+        frame = np.random.randint(255, size=(900, 800, 3), dtype=np.uint8)
         # acquire the lock, set the output frame, and release the lock
         with lock:
             outputFrame = frame.copy()
@@ -60,22 +66,28 @@ def video_feed():
     return Response(generate(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
 
-@app.route("/joysticks/rov", methods=['GET', 'POST'])
-def js_rov():
-    data = request.json
-    print(data)
-    return data
+@app.route("/auv/joystick", methods=['GET', 'POST'])
+def js_auv():
+    velocity = request.json
+    # print(f'Vx: {velocity["vx"]:.03f}, Vy: {velocity["vy"]:.03f}')
+    robot.set_move((velocity['vx'], velocity['vy'], 0, velocity['vz']))
+    return velocity
 
 
-@app.route("/joysticks/arm", methods=['GET', 'POST'])
+@app.route("/arm/joystick", methods=['GET', 'POST'])
 def js_arm():
     data = request.json
     print(data)
     return data
 
 
-# check to see if this is the main thread of execution
-if __name__ == '__main__':
+@app.route("/arm/reset", methods=['GET', 'POST'])
+def reset_arm():
+    robot.arm.reset()
+    return {}
+
+
+with Auv() as robot:
     # construct the argument parser and parse command line arguments
     ap = argparse.ArgumentParser()
     ap.add_argument("-i", "--ip", type=str, default='0.0.0.0', help="ip address of the device")
@@ -85,4 +97,4 @@ if __name__ == '__main__':
     t = threading.Thread(target=video_stream, daemon=True)
     t.start()
     # start the flask app
-    app.run(host=args["ip"], port=args["port"], debug=True, threaded=True, use_reloader=False)
+    app.run(host=args["ip"], port=args["port"], debug=False, threaded=True, use_reloader=False)

@@ -1,5 +1,6 @@
 import os
 import can
+from typing import Tuple
 
 
 class Gyro(object):
@@ -71,7 +72,6 @@ depth = 0x42  # 深度
 pitch = 0x18  # Pitch角
 roll = 0x19  # Roll角
 yaw = 0x1a  # Yaw角
-pry = 0x1b  # 获得上述三个角  # FIXME: does it work?
 # 设置数据帧的仲裁id
 speed = 0x11  # 设置各方向速度 (设置电机速度)
 led1 = 0x21  # 设置传感器1板照明PWM
@@ -91,22 +91,23 @@ class Rov(object):
     """
 
     def __init__(self):
-        # set motors speed controlled by closed-loop (PID) or open-loop
-        self.is_closed_loop = 0x55  # TODO: adjust PID?
+        # set motors speed controlled by closed-loop (PID): 0xaa or open-loop: 0x55
+        self.is_closed_loop = 0x55
         # UI测试模式/手柄遥控模式: 0/1
         self.control_mode = 0xaa  # 手柄遥控模式为0xaa, UI测试模式为0x55
         # initial sensors
         self.depth_sensor = Depth_sensor()
         self.gyro = Gyro()
-        # turn lights on  # FIXME: value?
+        # turn lights on
         self.start()
         self.set_led(1)
-        print('[ROV] started')
+        print('🚀 ROV started')
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
+        self.reset()
         self.kill()
 
     def start(self):
@@ -171,7 +172,7 @@ class Rov(object):
             in range [0, 1]
         """
         self.write(led2, self.int2u8list(int(value * led_pwm_max), 2))
-        print(f'[ROV] led brightness set to {value * 100:.02f}%')
+        print(f'🚀 ROV led brightness set to {value * 100:.02f}%')
 
     def set_Vx(self, value: float):
         """set Vx and clear others
@@ -183,9 +184,9 @@ class Rov(object):
         """
         self.write(speed, [int(127 + 127 * value), 127, 127, 127, self.control_mode, self.is_closed_loop])
         if value:
-            print(f'[ROV] going {"forward" if value > 0 else "backward"} with {int(abs(value) * 100):.02f}% speed')
+            print(f'🚀 ROV going {"forward" if value > 0 else "backward"} with {int(abs(value) * 100):.02f}% speed')
         else:
-            print('[ROV] stopped')
+            print('🚀 ROV stopped')
 
     def set_Vy(self, value: float):
         """set Vy and clear others
@@ -197,9 +198,9 @@ class Rov(object):
         """
         self.write(speed, [127, int(127 + 127 * value), 127, 127, self.control_mode, self.is_closed_loop])
         if value:
-            print(f'[ROV] going {"left" if value > 0 else "right"} with {int(abs(value) * 100):.02f}% speed')
+            print(f'🚀 ROV going {"left" if value > 0 else "right"} with {int(abs(value) * 100):.02f}% speed')
         else:
-            print('[ROV] stopped')
+            print('🚀 ROV stopped')
 
     def set_Vz(self, value: float):
         """set Vz and clear others
@@ -211,12 +212,12 @@ class Rov(object):
         """
         self.write(speed, [127, 127, 127, int(127 + 127 * value), self.control_mode, self.is_closed_loop])
         if value:
-            print(f'[ROV] going {"up" if value > 0 else "down"} with {int(abs(value) * 100):.02f}% speed')
+            print(f'🚀 ROV going {"up" if value > 0 else "down"} with {int(abs(value) * 100):.02f}% speed')
         else:
-            print('[ROV] stopped')
+            print('🚀 ROV stopped')
 
-    def set_direction(self, value: float):
-        """set direction and clear others
+    def set_steer(self, value: float):
+        """set steer and clear others
 
         Parameters
         ----------
@@ -225,45 +226,44 @@ class Rov(object):
         """
         self.write(speed, [127, 127, int(127 + 127 * value), 127, self.control_mode, self.is_closed_loop])
         if value:
-            print(f'[ROV] turning {"left" if value > 0 else "right"} with {int(abs(value) * 100):.02f}% speed')
+            print(f'🚀 ROV turning {"left" if value > 0 else "right"} with {int(abs(value) * 100):.02f}% speed')
         else:
-            print('[ROV] stopped')
+            print('🚀 ROV stopped')
 
-    def set_move(self, velocity: list):
+    def set_move(self, velocity: Tuple[float, float, float, float]):
         """set multi-direction values
 
         Parameters
         ----------
-        velocity : list
-            a list of [Vx, Vy, direction, Vz] in range [-1, 1]
-            #FIXME: 确认下优先级
+        velocity : tuple
+            a tuple of (Vx, Vy, steer, Vz) in range [-1, 1]. It seems the ROV
+            could do all four directions move at the same time
         """
         self.write(speed, [int(127 + 127 * v) for v in velocity] + [self.control_mode, self.is_closed_loop])
+        print(f'🚀 ROV Vx: {100 * velocity[0]:.02f}%, Vy: {100 * velocity[1]:.02f}%, Vz: {100 * velocity[-1]:.02f}%, steer: {100 * velocity[2]:.02f}%')
 
     def reset(self):
         """reset ROV led, motors
         """
         self.set_led(0)
-        self.set_move([0, 0, 0, 0])
+        self.set_move((0, 0, 0, 0))
+        print('🚀 ROV led, motors reset 👌')
 
     def get_sensors_data(self):
         """get the latest data from sensors
         """
-        self.depth_sensor.update(int.from_bytes(self.read(depth, False), 'big'))
-        # TODO: this need checking
-        # gyro_list = self.read(pry, True)
-        # gyro_list = [gyro_list[3:6], gyro_list[0:3], gyro_list[6:9]]  # roll, pitch, yaw
-        # gyro_list = [f"{int.from_bytes(b''.join(i), 'big'):06x}" for i in gyro_list]  # convert data into 'SXXXYY' format strings
-        # gyro_list = [(-1 if int(i[0]) else 1) * (int(i[1:4]) + int(i[4:]) / 100) for i in gyro_list]  # calculated to float
-        # self.gyro.update(gyro_list)
+        self.depth_sensor.update(int.from_bytes(self.read(depth, False), 'big') / 100)
+        gyro_list = [self.read(d, True) for d in [roll, pitch, yaw]]  # roll, pitch, yaw
+        gyro_list = [f"{int.from_bytes(i, 'big'):06x}" for i in gyro_list]  # convert data into 'SXXXYY' format strings
+        gyro_list = [(-1 if int(i[0]) else 1) * (int(i[1:4]) + int(i[4:]) / 100) for i in gyro_list]  # calculated to float
+        self.gyro.update(gyro_list)
 
 
 if __name__ == '__main__':
     # for simple test
     with Rov() as robot:
-        # robot.get()  # FIXME: not needed?
         while True:
-            command, value = input('Vx [-1, 1], Vy [-1, 1], Vz [-1, 1], led [0, 1], direction [-1, 1]').split(',')
+            command, value = input('Vx [-1, 1], Vy [-1, 1], Vz [-1, 1], led [0, 1], steer [-1, 1]').split(',')
             eval(f'robot.set_{command}({value})')
             # robot.get_sensors_data()
             # print(robot.depth_sensor.depth)
