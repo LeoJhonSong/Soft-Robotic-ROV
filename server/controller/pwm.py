@@ -98,9 +98,9 @@ class PCA9685():
     def reset_all(self):
         """reset duty of all 16 channels to 0
         """
-        for channel in range(16):
-            self.setValue(channel, 0)
-        print('[PWM] PWM module reset')
+        for c in range(self.channels_number):
+            self.setValue(c, 0)
+        print('⚙️  PWM module reset 👌')
 
 
 class PiGPIO():
@@ -121,6 +121,11 @@ class PiGPIO():
         """
         self.pwm_pins[channel].value = percentage
 
+    def reset_all(self):
+        for c in range(self.channels_number):
+            self.setValue(c, 0)
+        print('⚙️  PWM module reset 👌')
+
 
 class PWM(PCA9685, PiGPIO):
     def __init__(self, address=0x40, bus=8, debug=False):
@@ -140,9 +145,7 @@ if __name__ == "__main__" and sys.argv[1] == 'reset':
       >>> python pwm.py reset
     """
     pwm = PWM()
-    for c in range(pwm.channels_number):
-        pwm.setValue(c, 0.00)
-    print('All channels reset 👍')
+    pwm.reset_all()
 
 if __name__ == '__main__' and sys.argv[1] == 'manual':
     """set duty cycle of specific pwm channel manually. run with:
