@@ -47,14 +47,14 @@ class Manipulator():
                 continue
             self.pwm.setValue(channel, np.interp(p, [0, 500], [0, 1]))
 
-    def reset(self):
+    def release(self):
         self.pwm.reset_all()
         self.segBendUpLen = [self.initBendLen] * 3
         self.segBendLowLen = [self.initBendLen] * 3
         self.segElgLen = self.initElgLen
         self.pressures = [0.0] * 10
         self.controller = self.PID()
-        print('💪  Manipulator reset 👌')
+        print('💪  Manipulator released 👌')
 
     def transform(self, x: float, y: float, z: float) -> Tuple[float, float, float]:
         """transform vector from camera coordinate system to manipulator coordinate system
@@ -219,6 +219,18 @@ class Manipulator():
         if (__name__ == '__main__' and len(sys.argv) == 3 and sys.argv[2] == 'with_pwm') or __name__ != '__main__':
             self.set_pwm()
         return True
+
+    def reset(self):
+        """reset manipulator to initial position
+        """
+        # TODO
+        pass
+
+    def collect(self):
+        """collect grasped target into basket
+        """
+        # TODO
+        pass
 
     def PID(self) -> Generator[None, Tuple[Tuple[float, float, float], Tuple[float, float, float]], None]:
         """simple closed loop feedback on error of arm position and target position

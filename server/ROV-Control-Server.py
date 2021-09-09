@@ -1,6 +1,8 @@
 #! /usr/bin/env python3
 
+import logging
 import argparse
+from sys import prefix
 import threading
 
 import cv2
@@ -18,6 +20,9 @@ outputFrame = None
 lock = threading.Lock()
 # initialize a flask object
 app = Flask(__name__, static_folder='static', template_folder='templates')
+# filter Werkzeug logger to error level
+log = logging.getLogger('werkzeug')
+# log.setLevel(logging.ERROR)
 
 
 def video_stream():
@@ -59,6 +64,17 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/tone", methods=['GET', 'POST'])
+def form():
+    p_dict = {i: 0 for i in range(10)}
+    if request.method == 'POST':
+        for i in range(7):
+            p_dict[i] = request.form.get('chamber' + str(i + 1))
+        p_dict[9] = request.form.get('hand')
+        robot.arm.set_Pressures((0, 0, 0), pressures_dict=p_dict)
+    return render_template("tone.html", p_dict=p_dict)
+
+
 @app.route("/video_feed")
 def video_feed():
     """return the response generated along with the specific media type (mime type), a byte array of a JPEG image
@@ -70,24 +86,48 @@ def video_feed():
 def js_auv():
     velocity = request.json
     # print(f'Vx: {velocity["vx"]:.03f}, Vy: {velocity["vy"]:.03f}')
-    robot.set_move((velocity['vx'], velocity['vy'], 0, velocity['vz']))
+    robot.set_move((velocity['vx'], velocity['vy'], velocity['steer'], velocity['vz']))
     return velocity
 
 
-@app.route("/arm/joystick", methods=['GET', 'POST'])
-def js_arm():
-    data = request.json
-    print(data)
-    return data
+@app.route("/arm/release", methods=['GET', 'POST'])
+def release_arm():
+    robot.arm.release()
+    return {}
 
 
 @app.route("/arm/reset", methods=['GET', 'POST'])
 def reset_arm():
     robot.arm.reset()
+    pass
+
+
+@app.route("/arm/collect", methods=['GET', 'POST'])
+def collect():
+    robot.arm.collect()
     return {}
 
 
-with Auv() as robot:
+@app.route("/arm/joystick", methods=['GET', 'POST'])
+def js_arm():
+    data = request.json
+    scale = 150
+    x = scale * float(data['x'])
+    y = scale * float(data['y'])
+    elg = 30 * float(data['elg'])
+    print(f'💪 Arm x: {x:.03f}mm, y: {y:.03f}mm, elongation: {elg:.03f}mm (manual)')
+    p_dict = {i: elg for i in range(6, 9)}
+    if data['hand'] == 'open':
+        robot.arm.pwm.setValue(9, 0.9)
+    if data['hand'] == 'close':
+        p_dict[9] = 30  # pressure given to hand
+    robot.arm.set_Pressures(robot.arm.inverse_kinematics(x, y, 0), pressures_dict=p_dict)
+    print(p_dict)
+    return data
+
+
+# with Auv() as robot:
+if True:
     # construct the argument parser and parse command line arguments
     ap = argparse.ArgumentParser()
     ap.add_argument("-i", "--ip", type=str, default='0.0.0.0', help="ip address of the device")
