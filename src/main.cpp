@@ -217,7 +217,7 @@ int main(int argc, char *argv[])
     // Start visual info server thread
     std::thread visual_info_server(server::server_start);
     // 创建Cpp-Python通信socket
-    socket_communication::Client client("127.0.0.1", 8080);
+    socket_communication::Client client("127.0.0.1", 8010);
 
     // 一些中间变量
     std::vector<float> target_loc = {0, 0, 0, 0};
