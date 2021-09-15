@@ -39,7 +39,7 @@ def video_stream():
             _, frame = cap.read()
             frame = frame[:, :frame.shape[1] // 2:, :]
         else:
-        frame = np.random.randint(255, size=(900, 800, 3), dtype=np.uint8)
+            frame = np.random.randint(255, size=(900, 800, 3), dtype=np.uint8)
         # acquire the lock, set the output frame, and release the lock
         with lock:
             outputFrame = frame.copy()
@@ -79,7 +79,8 @@ def form():
         for i in range(7):
             p_dict[i] = float(request.form.get('chamber' + str(i + 1)))
         p_dict[9] = float(request.form.get('hand'))
-    return render_template("tone.html", p_dict=p_dict)
+        robot.arm.len2pressures(robot.arm.inverse_kinematics(0, 0, 0), pressures_dict=p_dict)
+    return render_template("tune.html", p_dict=p_dict)
 
 
 @app.route("/video_feed")
@@ -103,6 +104,13 @@ def release_arm():
     return {}
 
 
+@app.route("/led", methods=['GET', 'POST'])
+def led():
+    data = request.json
+    robot.set_led(int(data['led']))
+    return {}
+
+
 @app.route("/arm/reset", methods=['GET', 'POST'])
 def reset_arm():
     robot.arm.reset()
@@ -115,21 +123,24 @@ def collect():
     return {}
 
 
+@app.route("/arm/fold", methods=['GET', 'POST'])
+def fold():
+    data = request.json
+    robot.arm.fold(data['state'])
+    return {}
+
+
 @app.route("/arm/joystick", methods=['GET', 'POST'])
 def js_arm():
     data = request.json
-    scale = 150
+    scale = 300
     x = scale * float(data['x'])
     y = scale * float(data['y'])
-    elg = 30 * float(data['elg'])
+    elg = 40 * float(data['elg'])
     print(f'💪 Arm x: {x:.03f}mm, y: {y:.03f}mm, elongation: {elg:.03f}mm (manual)')
     p_dict = {i: elg for i in range(6, 9)}
-    if data['hand'] == 'open':
-        robot.arm.pwm.setValue(9, 0.9)
-    if data['hand'] == 'close':
-        p_dict[9] = 30  # pressure given to hand
-    robot.arm.set_Pressures(robot.arm.inverse_kinematics(x, y, 0), pressures_dict=p_dict)
-    print(p_dict)
+    robot.arm.len2pressures(robot.arm.inverse_kinematics(x, y, 0), pressures_dict=p_dict)
+    robot.arm.hand(data['hand'])
     return data
 
 
