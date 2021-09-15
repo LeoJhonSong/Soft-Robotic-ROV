@@ -28,10 +28,11 @@ class Manipulator():
         self.pressures = [0.0] * 10
         self.water_pressure = 0.0
         self.bendPressureThresh = [0, 130]
-        self.elgPressureThresh = [0, 30]
+        self.elgPressureThresh = [0, 40]
         self.handPressureThresh = [0, 60]
         self.controller = self.PID()
         self.controller.send(None)
+        self.reached = False
         # create 10 channel pwm module instance
         if (__name__ == '__main__' and len(sys.argv) == 3 and sys.argv[2] == 'with_pwm') or __name__ != '__main__':
             from .pwm import PWM
@@ -61,27 +62,8 @@ class Manipulator():
         self.set_Pressures()
         self.controller = self.PID()
         self.controller.send(None)
+        self.reached = False
         print('💪  Manipulator released 👌')
-
-    def transform(self, x: float, y: float, z: float) -> Tuple[float, float, float]:
-        """transform vector from camera coordinate system to manipulator coordinate system
-
-        Parameters
-        ----------
-        x : float
-            x of end effector in camera coordinate system, unit: mm
-        y : float
-            y of end effector in camera coordinate system, unit: mm
-        z : float
-            z of end effector in camera coordinate system, unit: mm
-
-        Returns
-        -------
-        Tuple[float, float, float]
-            position of end effector in manipulator coordinate system
-        """
-        # TODO: 需要调参: 转移矩阵
-        return x, y, z
 
     def inverse_kinematics(self, x: float, y: float, z: float) -> Tuple[Tuple[float, float, float], float]:
         """(Simplified algorithm for manual control) do inverse kinematics for the soft manipulator
@@ -247,10 +229,9 @@ class Manipulator():
     def reset(self):
         """reset manipulator to initial position
         """
-        self.pwm.reset_all()
-        self.pressures = [0, 120, 100] + [0] * 7
+        self.release()
+        self.pressures = [0, 130, 90] + [0] * 6 + [30]
         self.set_Pressures()
-        self.hand('close')
         print('💪 Arm reset')
 
     def fold(self, is_on: bool):
@@ -260,27 +241,29 @@ class Manipulator():
             self.pwm.setValue(8, 0.99)
             self.pressures[6:9] = [0, 0, 0]
             self.set_Pressures()
+            time.sleep(2)  # 2s
         else:
             self.pwm.setValue(8, 0)
 
     def collect(self):
         """collect grasped target into basket
         """
+        # 缩手
+        self.fold(True)
         # 甩回来
-        self.len2pressures(self.inverse_kinematics(0, 0, self.initZ), pressures_dict={1: 120, 2: 120, 3: 100, 5: 100, 9: 40})
-        time.sleep(2)  # wait for 2s
+        self.len2pressures(self.inverse_kinematics(0, 0, self.initZ), pressures_dict={1: 130, 2: 80, 3: 130, 9: 40})
+        time.sleep(4)  # wait for 2s
         # 放进去
         self.pwm.setValue(8, 0)
-        self.len2pressures(self.inverse_kinematics(0, 0, self.initZ), pressures_dict={1: 120, 2: 120, 3: 100, 5: 100, 6: 30, 7: 30, 8: 30, 9: 40})
+        self.len2pressures(self.inverse_kinematics(0, 0, self.initZ), pressures_dict={1: 130, 2: 80, 3: 130, 6: 30, 7: 30, 8: 30, 9: 40})
         time.sleep(4)  # wait for 4s
         # 松手
-        self.len2pressures(self.inverse_kinematics(0, 0, self.initZ), pressures_dict={1: 120, 2: 120, 3: 100, 5: 100, 6: 30, 7: 30, 8: 30})
+        self.len2pressures(self.inverse_kinematics(0, 0, self.initZ), pressures_dict={1: 130, 2: 80, 3: 130, 6: 30, 7: 30, 8: 30})
         self.pwm.setValue(9, 0.90)
         time.sleep(2)
         # 收伸长段
-        self.len2pressures(self.inverse_kinematics(0, 0, self.initZ), pressures_dict={1: 120, 2: 120, 3: 100, 5: 100})
-        self.fold(True)
-        time.sleep(1)
+        self.len2pressures(self.inverse_kinematics(0, 0, self.initZ), pressures_dict={1: 130, 2: 80, 3: 130})
+        time.sleep(3)
         # 归位
         self.reset()
         print('💪 Arm collecting')
@@ -294,7 +277,7 @@ class Manipulator():
             open/close/idle
         """
         if mode == 'open':
-            self.pwm.setValue(9, 0.90)
+            self.pwm.setValue(9, 0.96)
             self.pressures[-1] = 0
             print('🖐 hand opened')
         elif mode == 'close':
@@ -324,28 +307,29 @@ class Manipulator():
             if False, feedback exceed system limit
         """
         # TODO: 需要调参: PID系数
-        Kp = np.array([5, 5, 5])  # x, y, z
-        Ki = np.array([5, 5, 5])  # x, y, z
+        Kp = np.array([1, 1, 1])  # x, y, z
+        Ki = np.array([0.005, 0.005, 0])  # x, y, z
         Kd = np.array([0, 0, 0])  # x, y, z
         e_prev = np.zeros(3)
         t_prev = time.time()
         integral = np.zeros(3)
-        self.state = False
         while True:
             target_pos, arm_pos = yield
             print(f'target: {target_pos[:3]}, arm: {arm_pos[:3]}')
             t = time.time()
-            e = np.multiply(np.array(target_pos) - np.array(arm_pos), np.array([1000, 800, 0]))
-            abs_e = sqrt(e[0] ** 2 + e[1] ** 2)
+            e = np.multiply(np.array(arm_pos) - np.array(target_pos), np.array([800, 800, 0]))
+            print(f'error: {e}')
+            abs_e = ((e[0] / 5) ** 2 + e[1] ** 2) ** 0.5
+            # 如果加权模小于10, 认为手爪到达位置  # TODO: 需要调参
             if abs_e < 10:
-                self.state = True
+                self.reached = True
             proportional = np.multiply(Kp, e)
             integral = integral + np.multiply(Ki, e) * (t - t_prev)
             derivative = np.multiply(Kd, e - e_prev) / (t - t_prev)
             x_corrected, y_corrected, z_corrected = tuple(proportional + integral + derivative)
             print(x_corrected, y_corrected, self.initZ + 25, abs_e)
             # self.len2pressures(self.inverse_kinematics(x_corrected, y_corrected, z_corrected))
-            self.len2pressures(self.inverse_kinematics(x_corrected, y_corrected, self.initZ + 25))
+            self.len2pressures(self.inverse_kinematics(x_corrected, y_corrected, self.initZ + 55))
             # TODO: 需要调参: 采样时间
             time.sleep(1)  # sleep for 1s
 

@@ -1,17 +1,18 @@
 #! /usr/bin/env python3
 
-import logging
 import argparse
-from sys import prefix
+import logging
+import socket
 import threading
+import time
 
 import cv2
 import numpy as np
+import yaml
 from flask import Flask, Response, render_template, request
 
 from controller.auv import Auv
 from CppPythonSocket import Server
-from controller import auv
 
 # initialize the output frame and a lock used to ensure thread-safe
 # exchanges of the output frames (useful when multiple browsers/tabs
@@ -144,8 +145,82 @@ def js_arm():
     return data
 
 
-# with Auv() as robot:
-if True:
+is_auto = False
+
+
+@app.route("/auto", methods=['GET', 'POST'])
+def auto_trigger():
+    global is_auto
+    data = request.json
+    is_auto = data['auto']
+    if is_auto:
+        robot.state = 'land'
+        print('🤖 switch to auto mode')
+        auto()
+    else:
+        robot.reset()
+        print('🧠 switch to manual mode')
+    return {}
+
+
+def auto():
+    global is_auto
+    quit_flag = False
+    robot.arm.reset()
+    robot.set_led(1)
+    while True:
+        if not is_auto:
+            break
+        # 更新target, arm数据
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as visual_socket:
+            try:
+                visual_socket.connect(('127.0.0.1', 8080))
+            except ConnectionRefusedError:
+                print('[Visual Info Client] lost connection')
+                continue
+            # send flags to visual server
+            # threads_quit_flag: 2
+            visual_socket.send(bytes(str(quit_flag * 2).encode()))
+            # receive data from ROV then update target and arm
+            visual_info_dict = yaml.load(visual_socket.recv(1024), Loader=yaml.Loader)
+        # quit_flag置1后待运行到下一循环, 将quit_flag发送给visual_server后再break
+        # update AUV data
+        robot.target.update(visual_info_dict["target"])
+        robot.visual_arm.update(visual_info_dict["arm"])
+        robot.get_sensors_data()  # 主要是获取深度
+        # time.sleep(0.001)  # 1ms
+        # 状态机状态跳转并给出抓取判断
+        grasp_state = robot.state_machine()
+        print(grasp_state)
+        # 软体臂控制
+        if grasp_state == 'ready':
+            robot.visual_arm.arm_is_working = True
+            robot.arm.release()
+            robot.arm.hand('open')
+            time.sleep(5)
+            tc = robot.target.center
+            robot.visual_arm.start_time = time.time()
+            print('💪 Arm ready')
+        elif grasp_state == 'activated':
+            if not robot.arm.reached:
+                robot.arm.controller.send((tc + (robot.arm.initZ + 55,), robot.visual_arm.marker_position + (robot.arm.initZ + 55,)))
+            else:
+                # 到达位置后伸长手臂
+                robot.arm.pressures[6:9] = [35] * 3
+                robot.arm.set_Pressures()
+                time.sleep(2)
+                # 抓取
+                robot.arm.hand('close')
+                time.sleep(2)
+                # 收集
+                robot.arm.collect()
+                robot.grasp_state = 'idle'
+                robot.visual_arm.arm_is_working = False
+        elif grasp_state == 'idle':
+            robot.visual_arm.arm_is_working = False
+
+
+with Auv() as robot:
     # construct the argument parser and parse command line arguments
     ap = argparse.ArgumentParser()
     ap.add_argument("-i", "--ip", type=str, default='0.0.0.0', help="ip address of the device")

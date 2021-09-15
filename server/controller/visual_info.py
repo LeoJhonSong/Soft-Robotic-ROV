@@ -7,8 +7,9 @@ class Target():
         self.id = -1
         self.center = (0.0, 0.0)
         self.shape = [0, 0]
-        self.roi_offset = [0.5, 0.7]  # x, y
-        self.roi_thresh = [0.2, 0.15]  # x, y
+        # TODO: 需要调参
+        self.roi_offset = [0.54, 0.645]  # x, y
+        self.roi_thresh = [0.09, 0.175]  # x, y
 
     def update(self, target_dict):
         self.has_target = bool(target_dict["has_target"])
@@ -41,8 +42,9 @@ class Arm():
         self.has_marker = False
         self.marker_position = (0.0, 0.0)
         self.start_time = 0.0
-        self.time_limit = 70  # 70s
-        self.chances = [2] * 2  # use the the second to store the total chances
+        # TODO: 需要调参
+        self.time_limit = 25  # 25s
+        self.chances = [2, 2]  # use the the second to store the total chances
 
     def update(self, arm_dict):
         self.has_marker = arm_dict["has_marker"]
