@@ -47,7 +47,7 @@ class Depth_sensor(object):
         self.old_depth = 0.0
         self.relative_pressure = 0  # unit: kPa
         self.time = 0
-        self.time_thresh = 3  # unit: s
+        self.time_thresh = 2  # unit: s
         self.diff_thresh = 0.03  # 3cm
         self.is_landed = False
         self.sensor = ms5837.MS5837_30BA()
@@ -75,7 +75,8 @@ class Depth_sensor(object):
                 if not self.is_landed:
                     print('📏 landed / hovering!')
                     self.is_landed = True
-        else:  # 当深度变化幅度超过阈值, 判定未坐底并归零稳定计次
+        else:  # 当深度变化幅度超过阈值, 判定未坐底并归零稳定计时
+            self.old_depth = depth
             if self.is_landed:
                 print('📏 leaving seabed / leaving hovering state')
             self.time = 0
@@ -280,10 +281,11 @@ class Rov(object):
         """get the latest data from sensors
         """
         self.depth_sensor.update()
-        gyro_list = [self.read(d, True) for d in [roll, pitch, yaw]]  # roll, pitch, yaw
-        gyro_list = [f"{int.from_bytes(i, 'big'):06x}" for i in gyro_list]  # convert data into 'SXXXYY' format strings
-        gyro_list = [(-1 if int(i[0]) else 1) * (int(i[1:4]) + int(i[4:]) / 100) for i in gyro_list]  # calculated to float
-        self.gyro.update(gyro_list)
+        # 这个角度读取有一定可能卡住
+        # gyro_list = [self.read(d, True) for d in [roll, pitch, yaw]]  # roll, pitch, yaw
+        # gyro_list = [f"{int.from_bytes(i, 'big'):06x}" for i in gyro_list]  # convert data into 'SXXXYY' format strings
+        # gyro_list = [(-1 if int(i[0]) else 1) * (int(i[1:4]) + int(i[4:]) / 100) for i in gyro_list]  # calculated to float
+        # self.gyro.update(gyro_list)
 
 
 if __name__ == '__main__':
