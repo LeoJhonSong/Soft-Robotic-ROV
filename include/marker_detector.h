@@ -14,6 +14,11 @@ namespace marker
     const char MODE_DETECT = 2;
     const char MODE_TRACK = 3;
 
+    const std::map<int, cv::Point2f> MARKER_OFFSETS = {
+        {39, cv::Point2f(115, 40)},
+        {35, cv::Point2f(-95, 50)}
+    };
+
     struct MarkerInfo
     {
         int id;
@@ -25,6 +30,13 @@ namespace marker
         {
             id = -1;
             center = cv::Point2f(0.0, 0.0);
+            Rvec = (cv::Mat_<float>(3, 1) << 0, 0, 0);
+            Tvec = (cv::Mat_<float>(3, 1) << 0, 0, 0);
+        }
+        MarkerInfo(int _id, cv::Point2f _center)
+        {
+            id = _id;
+            center = _center;
             Rvec = (cv::Mat_<float>(3, 1) << 0, 0, 0);
             Tvec = (cv::Mat_<float>(3, 1) << 0, 0, 0);
         }

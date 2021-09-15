@@ -294,16 +294,16 @@ int main(int argc, char *argv[])
         cv::cvtColor(img_vis, img_vis, cv::COLOR_BGR2RGB);
         cv::resize(img_vis, img_vis, vis_size);
 
-        // detect marker
+        // detect markers
         marker_info_current =
-            marker_detector.detect_single_marker(img_vis, true, marker::VER_OPENCV, marker::MODE_DETECT);
-        marker_info = marker_info_current;
+            marker_detector.detect_average_marker(img_vis, true, marker::VER_OPENCV, marker::MODE_DETECT);
+        // 只有当前有marker时才更新marker坐标, 否则保持原本坐标
         if (marker_info_current.center.x > 0 && marker_info_current.center.y > 0)
         {
-            // 补偿偏置
-            marker_info.center.x += MARKER_OFFSET_X;
-            marker_info.center.y += MARKER_OFFSET_Y;
-            // update visual_info.marker*
+            marker_info = marker_info_current;
+        }
+        if (marker_info.center.x > 0 && marker_info.center.y > 0)
+        {
             visual_info.has_marker = true;
             visual_info.marker_position =
                 cv::Point2f(marker_info.center.x / vis_size.width, marker_info.center.y / vis_size.height);
