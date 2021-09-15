@@ -46,6 +46,10 @@ class Manipulator():
                 # Jetson PWM模块的通道3坏了, 用通道10代替
                 self.pwm.setValue(10, np.interp(p, [0, 500], [0, 1]))
                 continue
+            if channel == 6:
+                self.pwm.setValue(11, np.interp(p, [0, 500], [0, 1]))
+            if channel == 0:
+                self.pwm.setValue(12, np.interp(p, [0, 500], [0, 1]))
             self.pwm.setValue(channel, np.interp(p, [0, 500], [0, 1]))
 
     def release(self):
@@ -196,8 +200,10 @@ class Manipulator():
             segBendLen
         )
         # upper bending segment
-        # 稍微增大上段气压以平衡重力影响
-        pressures[3:6] = map(lambda p: 0.98 * p - 0.6413, pressures[0:3])
+        # 稍微减小下弯曲段气压以平衡重力影响, 因每个腔道性能有区别因此系数不一样
+        pressures[3] = 0.77 * pressures[0]
+        pressures[4] = 0.54 * pressures[1]
+        pressures[5] = 0.77 * pressures[2]
         # elongation segment
         pressures[6:9] = [0.51789321 * segElgLen - 64.06856906] * 3
         # cover pressures specified manually
