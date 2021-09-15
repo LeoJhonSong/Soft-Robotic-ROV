@@ -93,7 +93,7 @@ class PCA9685():
         percentage : float
             0-1
         """
-        self.setPWM(channel, 0, int(4096 * percentage))
+        self.setPWM(channel, 0, int(4095 * percentage))
 
     def reset_all(self):
         """reset duty of all 16 channels to 0
