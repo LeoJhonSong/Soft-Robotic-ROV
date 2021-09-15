@@ -32,15 +32,18 @@ void ParallelCamera::receive()
 // copy image read by ParallelCamera::receive()
 bool ParallelCamera::read(cv::Mat &image)
 {
+    cv::Mat temp;
     if (FLAGS_BINOCULAR)
     {
-        cv::Rect rect(0, 0, int(this->current_frame.cols / 2), this->current_frame.rows); // x, y of top left + width, height
-        image = this->current_frame(rect);
+        cv::Rect rect(int(this->current_frame.cols / 2), 0, int(this->current_frame.cols / 2), this->current_frame.rows); // x, y of top left + width, height
+        temp = this->current_frame(rect);
+        cv::rotate(temp, temp, cv::ROTATE_180);
     }
     else
     {
-        image = this->current_frame.clone();  // able to have 竞争冒险 if not copy
+        temp = this->current_frame;
     }
+    image = temp.clone()  // able to have 竞争冒险 if not copy
     return current_read_ret;
 }
 
