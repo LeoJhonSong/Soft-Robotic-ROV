@@ -5,7 +5,7 @@ project(Soft-Robotics-ROV)
 
 set(OpenCV_LIBS ${OpenCV_LIBS})
 # for desktop
-set(CMAKE_PREFIX_PATH "~/local/libtorch")
+# set(CMAKE_PREFIX_PATH "~/local/libtorch")
 # for jetson
 set(CMAKE_PREFIX_PATH "~/.local/lib/python3.6/site-packages/torch")
 

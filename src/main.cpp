@@ -231,7 +231,7 @@ int main(int argc, char *argv[])
     // 或者resize后的img_vis)比较好 marker::MarkerDetector marker_detector(frame.size());
     // marker::MarkerDetector marker_detector(vis_size);
     cv::Size frame_size(frame.size());
-    marker::MarkerDetector marker_detector(frame.size());
+    marker::MarkerDetector marker_detector(frame_size);
     marker::MarkerInfo marker_info_current;
     marker::MarkerInfo marker_info;
 
