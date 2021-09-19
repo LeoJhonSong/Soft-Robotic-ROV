@@ -17,7 +17,6 @@ struct Visual_info
     cv::Point2f target_center; // cx, cy
     cv::Point2f target_shape;  // width, height
     // for arm
-    bool arm_is_working; // from outside
     bool has_marker;
     cv::Point2f marker_position;
     Visual_info()
@@ -27,7 +26,6 @@ struct Visual_info
         target_id = -1;
         target_center = cv::Point2f(0, 0);
         target_shape = cv::Point2f(0, 0);
-        arm_is_working = false;
         has_marker = false;
         marker_position = cv::Point2f(0, 0);
     }

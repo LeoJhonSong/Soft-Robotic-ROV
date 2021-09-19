@@ -17,19 +17,11 @@ void server::recvMsg(int newFD)
     memset(receive, 0, sizeof(receive));
     recv(newFD, receive, 10, 0);
     int code = atoi(receive);
-    // threads_quit_flag: 2; arm_is_working: 1
+    // threads_quit_flag: 2
     if (code > 1)
     {
         threads_quit_flag = true;
         code = code - 2;
-    }
-    if (code == 1)
-    {
-        visual_info.arm_is_working = true;
-    }
-    else if (code == 0)
-    {
-        visual_info.arm_is_working = false;
     }
 }
 
@@ -49,7 +41,6 @@ void server::communicate(int newFD)
     ss << "    width: " << visual_info.target_shape.x << std::endl;
     ss << "    height: " << visual_info.target_shape.y << std::endl;
     ss << "arm:" << std::endl;
-    ss << "  arm_is_working: " << visual_info.arm_is_working << std::endl;
     ss << "  has_marker: " << visual_info.has_marker << std::endl;
     ss << "  position:" << std::endl;
     ss << "    x: " << visual_info.marker_position.x << std::endl;
