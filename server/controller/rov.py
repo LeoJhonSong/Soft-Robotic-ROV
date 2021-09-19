@@ -1,6 +1,10 @@
 import os
-import can
+import time
 from typing import Tuple
+
+import can
+
+from . import ms5837
 
 
 class Gyro(object):
@@ -34,28 +38,47 @@ class Depth_sensor(object):
     ----------
     depth : float
         in meters
+    relative_pressure: float
+        in kPa, relative to initial pressure
     """
 
     def __init__(self):
         self.depth = 0.0
         self.old_depth = 0.0
-        self.count = 0
-        self.count_thresh = 10
+        self.relative_pressure = 0  # unit: kPa
+        self.time = 0
+        self.time_thresh = 3  # unit: s
         self.diff_thresh = 0.03  # 3cm
         self.is_landed = False
+        self.sensor = ms5837.MS5837_30BA()
+        self.sensor.init()
+        self.sensor.setFluidDensity(ms5837.DENSITY_SALTWATER)
+        self.reset()
+        print(f'📏 depth sensor initialed')
 
-    def update(self, depth: float) -> None:
+    def reset(self):
+        """reset initial depth and pressure of depth sensor
+        """
+        self.sensor.read()
+        self.init_depth = self.sensor.depth()  # unit: m
+        self.init_pressure = self.sensor.pressure(ms5837.UNITS_kPa)  # unit: kPa
+
+    def update(self) -> None:
+        self.sensor.read()
+        depth = self.sensor.depth() - self.init_depth
+        self.relative_pressure = self.sensor.pressure(ms5837.UNITS_kPa) - self.init_pressure
         # check if landed onto the sea bed
         if abs(self.old_depth - depth) < self.diff_thresh:
-            self.count += 1
-            if self.count > self.count_thresh:
+            if self.time == 0:
+                self.time = time.time()
+            if time.time() - self.time > self.time_thresh:
                 if not self.is_landed:
-                    print('[Depth Sensor] landed!')
-                self.is_landed = True
+                    print('📏 landed / hovering!')
+                    self.is_landed = True
         else:  # 当深度变化幅度超过阈值, 判定未坐底并归零稳定计次
             if self.is_landed:
-                print('[Depth Sensor] leaving seabed')
-            self.count = 0
+                print('📏 leaving seabed / leaving hovering state')
+            self.time = 0
             self.is_landed = False
         self.old_depth = self.depth
         self.depth = depth
@@ -100,7 +123,11 @@ class Rov(object):
         self.gyro = Gyro()
         # turn lights on
         self.start()
-        self.set_led(1)
+        for i in range(2):
+            time.sleep(0.1)
+            self.set_led(1)
+            time.sleep(0.1)
+            self.set_led(0)
         print('🚀 ROV started')
 
     def __enter__(self):
@@ -222,11 +249,11 @@ class Rov(object):
         Parameters
         ----------
         value : float
-            in range (right)[-1, 1](left)
+            in range (left)[-1, 1](right)
         """
         self.write(speed, [127, 127, int(127 + 127 * value), 127, self.control_mode, self.is_closed_loop])
         if value:
-            print(f'🚀 ROV turning {"left" if value > 0 else "right"} with {int(abs(value) * 100):.02f}% speed')
+            print(f'🚀 ROV turning {"right" if value > 0 else "left"} with {int(abs(value) * 100):.02f}% speed')
         else:
             print('🚀 ROV stopped')
 
@@ -252,7 +279,7 @@ class Rov(object):
     def get_sensors_data(self):
         """get the latest data from sensors
         """
-        self.depth_sensor.update(int.from_bytes(self.read(depth, False), 'big') / 100)
+        self.depth_sensor.update()
         gyro_list = [self.read(d, True) for d in [roll, pitch, yaw]]  # roll, pitch, yaw
         gyro_list = [f"{int.from_bytes(i, 'big'):06x}" for i in gyro_list]  # convert data into 'SXXXYY' format strings
         gyro_list = [(-1 if int(i[0]) else 1) * (int(i[1:4]) + int(i[4:]) / 100) for i in gyro_list]  # calculated to float
