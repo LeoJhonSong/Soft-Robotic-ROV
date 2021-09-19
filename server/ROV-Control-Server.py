@@ -22,15 +22,23 @@ lock = threading.Lock()
 app = Flask(__name__, static_folder='static', template_folder='templates')
 # filter Werkzeug logger to error level
 log = logging.getLogger('werkzeug')
-# log.setLevel(logging.ERROR)
+log.setLevel(logging.ERROR)
 
 
 def video_stream():
     # grab global references to the video stream, output frame, and lock variables
     global vs, outputFrame, lock
-    # server = Server("127.0.0.1", 8010)
+    if args['source'] == 'socket':
+        server = Server("127.0.0.1", 8010)
+    elif args['source'] == 'zed':
+        cap = cv2.VideoCapture(0)
     while True:
-        # frame = server.receive_image()
+        if args['source'] == 'socket':
+            frame = server.receive_image()
+        elif args['source'] == 'zed':
+            _, frame = cap.read()
+            frame = frame[:, :frame.shape[1] // 2:, :]
+        else:
         frame = np.random.randint(255, size=(900, 800, 3), dtype=np.uint8)
         # acquire the lock, set the output frame, and release the lock
         with lock:
@@ -64,14 +72,13 @@ def index():
     return render_template("index.html")
 
 
-@app.route("/tone", methods=['GET', 'POST'])
+@app.route("/tune", methods=['GET', 'POST'])
 def form():
     p_dict = {i: 0 for i in range(10)}
     if request.method == 'POST':
         for i in range(7):
-            p_dict[i] = request.form.get('chamber' + str(i + 1))
-        p_dict[9] = request.form.get('hand')
-        robot.arm.set_Pressures((0, 0, 0), pressures_dict=p_dict)
+            p_dict[i] = float(request.form.get('chamber' + str(i + 1)))
+        p_dict[9] = float(request.form.get('hand'))
     return render_template("tone.html", p_dict=p_dict)
 
 
@@ -99,7 +106,7 @@ def release_arm():
 @app.route("/arm/reset", methods=['GET', 'POST'])
 def reset_arm():
     robot.arm.reset()
-    pass
+    return {}
 
 
 @app.route("/arm/collect", methods=['GET', 'POST'])
@@ -132,6 +139,7 @@ if True:
     ap = argparse.ArgumentParser()
     ap.add_argument("-i", "--ip", type=str, default='0.0.0.0', help="ip address of the device")
     ap.add_argument("-o", "--port", type=int, default=8000, help="ephemeral port number of the server (1024 to 65535)")
+    ap.add_argument("-s", "--source", type=str, default='socket', help="video source (socket or zed)")
     args = vars(ap.parse_args())
     # start a thread that will perform motion detection
     t = threading.Thread(target=video_stream, daemon=True)
