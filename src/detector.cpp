@@ -521,7 +521,8 @@ std::vector<float> Detector::visualization(cv::Mat &img)
                 int bottom = boxes[j][3].item<int>();
                 if ((top + bottom) / 2.0 > img.rows * 0.9)
                     continue;
-                if (this->track && this->tracking_class == 0 && matched_times[j].item<int>() > 30)
+                if (this->track && this->tracking_class == 0 && matched_times[j].item<int>() > 10)
+                // 至少被识别到10帧+, 判定为可追踪
                 {
                     this->tracking_class = i;
                     this->track_id = id;

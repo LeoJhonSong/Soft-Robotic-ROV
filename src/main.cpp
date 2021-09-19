@@ -225,11 +225,13 @@ int main(int argc, char *argv[])
     std::vector<torch::jit::IValue> net_input, net_output;
     torch::Tensor img_tensor, fake_B, loc, conf;
     unsigned char loc_index = 0;
-
+    capture.read(frame);
     // marker detector
     // 初始化的size要对应上后面输入图片的size,看到时候用哪个图片(原始的frame, net_G输出的fake_B,
     // 或者resize后的img_vis)比较好 marker::MarkerDetector marker_detector(frame.size());
-    marker::MarkerDetector marker_detector(vis_size);
+    // marker::MarkerDetector marker_detector(vis_size);
+    cv::Size frame_size(frame.size());
+    marker::MarkerDetector marker_detector(frame.size());
     marker::MarkerInfo marker_info_current;
     marker::MarkerInfo marker_info;
 
@@ -241,6 +243,7 @@ int main(int argc, char *argv[])
             threads_quit_flag = true;
         if (!read_ret || threads_quit_flag)
             break;
+        cv::Mat frame_ori = frame.clone();
         // pre processing
         cv::resize(frame, frame, cv::Size(FLAGS_NETG_DIM, FLAGS_NETG_DIM));
         if (FLAGS_RUAS == 1)
@@ -296,11 +299,22 @@ int main(int argc, char *argv[])
 
         // detect markers
         marker_info_current =
-            marker_detector.detect_average_marker(img_vis, true, marker::VER_OPENCV, marker::MODE_DETECT);
+            // marker_detector.detect_average_marker(img_vis, true, marker::VER_OPENCV, marker::MODE_DETECT);
+            marker_detector.detect_average_marker(frame_ori, true, marker::VER_OPENCV, marker::MODE_DETECT);
         // 只有当前有marker时才更新marker坐标, 否则保持原本坐标
         if (marker_info_current.center.x > 0 && marker_info_current.center.y > 0)
         {
             marker_info = marker_info_current;
+            marker_info.center.x = int(marker_info.center.x * vis_size.width / frame_size.width);
+            marker_info.center.y = int(marker_info.center.y * vis_size.height / frame_size.height);
+            // 补偿后原点
+            cv::circle(img_vis, marker_info.center, 6, cv::Scalar(0, 0, 255), -1, 8, 0);
+        }
+        else
+        {
+            // 补偿后原点
+            cv::circle(img_vis, marker_info.center, 6, cv::Scalar(255, 0, 0), -1, 8, 0);
+
         }
         if (marker_info.center.x > 0 && marker_info.center.y > 0)
         {
@@ -313,8 +327,6 @@ int main(int argc, char *argv[])
             visual_info.has_marker = false;
             visual_info.marker_position = cv::Point2f(0, 0);
         }
-        // 补偿后原点
-        cv::circle(img_vis, marker_info.center, 6, cv::Scalar(0, 0, 255), -1, 8, 0);
         // print(BOLDYELLOW, "x: " << marker_info.center.x << " y: " << marker_info.center.y);
 
         target_loc = detector.detect_and_visualize(loc, conf, conf_thresh, tub_thresh, reset_id, detect_scallop,

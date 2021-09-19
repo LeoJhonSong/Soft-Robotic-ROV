@@ -37,13 +37,12 @@ bool ParallelCamera::read(cv::Mat &image)
     {
         cv::Rect rect(int(this->current_frame.cols / 2), 0, int(this->current_frame.cols / 2), this->current_frame.rows); // x, y of top left + width, height
         temp = this->current_frame(rect);
-        cv::rotate(temp, temp, cv::ROTATE_180);
+        cv::rotate(temp, image, cv::ROTATE_180);
     }
     else
     {
-        temp = this->current_frame;
+        image = this->current_frame.clone();  // able to have 竞争冒险 if not copy
     }
-    image = temp.clone()  // able to have 竞争冒险 if not copy
     return current_read_ret;
 }
 
