@@ -31,14 +31,15 @@ class Manipulator():
         self.elgPressureThresh = [0, 30]
         self.handPressureThresh = [0, 60]
         self.controller = self.PID()
+        self.controller.send(None)
         # create 10 channel pwm module instance
         if (__name__ == '__main__' and len(sys.argv) == 3 and sys.argv[2] == 'with_pwm') or __name__ != '__main__':
             from .pwm import PWM
             self.pwm = PWM()
 
-    def set_pwm(self):
+    def set_pwm(self, pressures):
         # 5 channels used: 3 upper bending, 3 lower bending, 1 elongation, 1 hand
-        p_list = self.pressures[0:7] + [self.pressures[-1]]
+        p_list = pressures[0:7] + [pressures[-1]]
         for channel, p in enumerate(p_list):
             # 0-1 pwm duty cycle -> 0-5 V analog voltage -> 0-500 KPa pressure
             if channel == 3:
@@ -53,7 +54,9 @@ class Manipulator():
         self.segBendLowLen = [self.initBendLen] * 3
         self.segElgLen = self.initElgLen
         self.pressures = [0.0] * 10
+        self.set_Pressures()
         self.controller = self.PID()
+        self.controller.send(None)
         print('💪  Manipulator released 👌')
 
     def transform(self, x: float, y: float, z: float) -> Tuple[float, float, float]:
@@ -158,10 +161,8 @@ class Manipulator():
         segElgLen = -r * np.sin(theta) * 2 + z
         return segBendLen, segElgLen
 
-    def set_Pressures(self, segLen: Tuple[Tuple[float, float, float], float], pressures_dict=None):
-        """set pressures of chambers `in the arm` (hand pressure not set here)
-        then set pwm value of all channels. set pressure of hand with pressures_dict
-
+    def len2pressures(self, segLen: Tuple[Tuple[float, float, float], float], pressures_dict=None) -> bool:
+        """convert length of chambers to pressures of chambers
         Parameters
         ----------
         segLen: Tuple[Tuple[float, float, float], float]
@@ -187,7 +188,7 @@ class Manipulator():
         e = 4.8148148148148148148148148148148
         pressures = [0.0] * 10
         # lower bending segment
-        pressures[3:6] = map(
+        pressures[0:3] = map(
             lambda l: (
                 (a * l + ((a * l - b)**2 + c) ** 0.5 - b)**(1 / 3) +
                 - d / (a * l + ((a * l - b)**2 + c)**0.5 - b)**(1 / 3) - e
@@ -195,42 +196,109 @@ class Manipulator():
             segBendLen
         )
         # upper bending segment
-        # 稍微减小上段气压以平衡重力影响
-        pressures[0:3] = map(lambda p: 0.98 * p - 0.6413, pressures[3:6])
+        # 稍微增大上段气压以平衡重力影响
+        pressures[3:6] = map(lambda p: 0.98 * p - 0.6413, pressures[0:3])
         # elongation segment
         pressures[6:9] = [0.51789321 * segElgLen - 64.06856906] * 3
         # cover pressures specified manually
         if pressures_dict is not None:
             for key in pressures_dict:
                 pressures[key] = pressures_dict[key]
+        self.pressures = pressures.copy()
+        self.segBendLowLen, self.segBendUpLen, self.segElgLen = segBendLen, segBendLen, segElgLen
+        return self.set_Pressures()
+
+    def set_Pressures(self) -> bool:
+        """set pressures of all chambers then set pwm value of all channels.
+        could set pressure of hand with pressures_dict
+
+        Returns
+        -------
+        is_in_workspace: give bool value of whetcher the end point is in workspace
+            based on the pressure thresholds
+        """
+        pressures = self.pressures.copy()
         # decide whether end point is in workspace by pressure threshold
         if not (
-            all([self.bendPressureThresh[0] <= p <= self.bendPressureThresh[1] for p in pressures[3:6]])
+            all([self.bendPressureThresh[0] <= p <= self.bendPressureThresh[1] for p in pressures[0:3]])
             and self.elgPressureThresh[0] <= pressures[6] <= self.elgPressureThresh[1]
         ):
-            print(f'💪  ❌ exceed pressure threshold! segBendLow:', ', '.join(f'{p:.3f}' for p in pressures[3:6]), f'segElg: {pressures[6]:.3f}')
+            print(f'💪  ❌ exceed pressure threshold! segBendUp:', ', '.join(f'{p:.3f}' for p in pressures[0:3]), f'segElg: {pressures[6]:.3f}')
             return False
-        self.segBendLowLen, self.segBendUpLen, self.segElgLen = segBendLen, segBendLen, segElgLen
-        pressures[0:3] = np.clip(pressures[0:3], self.bendPressureThresh[0], self.bendPressureThresh[1])
+        # 当气压值小于6气动阀输出不稳定, 因此直接置零
+        for i, p in enumerate(pressures):
+            if p <= 6:
+                pressures[i] = 0
+        pressures[3:6] = np.clip(pressures[3:6], self.bendPressureThresh[0], self.bendPressureThresh[1])
         pressures[-1] = np.clip(pressures[-1], self.handPressureThresh[0], self.handPressureThresh[1])
         # balance the influence of outside water pressure
-        self.pressures = [p + self.water_pressure for p in pressures]
-        print(f'💪  💨 pressures:', ', '.join(f'{p:.3f}' for p in self.pressures), f'🌊 water pressure: {self.water_pressure:.3f}')
+        pressures = [p + self.water_pressure for p in pressures]
+        print(f'💪  💨 pressures:', ', '.join(f'{p:.3f}' for p in pressures), f'🌊 water pressure: {self.water_pressure:.3f}')
         if (__name__ == '__main__' and len(sys.argv) == 3 and sys.argv[2] == 'with_pwm') or __name__ != '__main__':
-            self.set_pwm()
+            self.set_pwm(pressures)
         return True
 
     def reset(self):
         """reset manipulator to initial position
         """
-        # TODO
-        pass
+        self.pwm.reset_all()
+        self.pressures = [0, 120, 100] + [0] * 7
+        self.set_Pressures()
+        self.hand('close')
+        print('💪 Arm reset')
+
+    def fold(self, is_on: bool):
+        """fold elongation segment
+        """
+        if is_on:
+            self.pwm.setValue(8, 0.99)
+            self.pressures[6:9] = [0, 0, 0]
+            self.set_Pressures()
+        else:
+            self.pwm.setValue(8, 0)
 
     def collect(self):
         """collect grasped target into basket
         """
-        # TODO
-        pass
+        # 甩回来
+        self.len2pressures(self.inverse_kinematics(0, 0, self.initZ), pressures_dict={1: 120, 2: 120, 3: 100, 5: 100, 9: 40})
+        time.sleep(2)  # wait for 2s
+        # 放进去
+        self.pwm.setValue(8, 0)
+        self.len2pressures(self.inverse_kinematics(0, 0, self.initZ), pressures_dict={1: 120, 2: 120, 3: 100, 5: 100, 6: 30, 7: 30, 8: 30, 9: 40})
+        time.sleep(4)  # wait for 4s
+        # 松手
+        self.len2pressures(self.inverse_kinematics(0, 0, self.initZ), pressures_dict={1: 120, 2: 120, 3: 100, 5: 100, 6: 30, 7: 30, 8: 30})
+        self.pwm.setValue(9, 0.90)
+        time.sleep(2)
+        # 收伸长段
+        self.len2pressures(self.inverse_kinematics(0, 0, self.initZ), pressures_dict={1: 120, 2: 120, 3: 100, 5: 100})
+        self.fold(True)
+        time.sleep(1)
+        # 归位
+        self.reset()
+        print('💪 Arm collecting')
+
+    def hand(self, mode: str):
+        """set hand to specific mode
+
+        Parameters
+        ----------
+        mode : str
+            open/close/idle
+        """
+        if mode == 'open':
+            self.pwm.setValue(9, 0.90)
+            self.pressures[-1] = 0
+            print('🖐 hand opened')
+        elif mode == 'close':
+            self.pwm.setValue(9, 0)
+            self.pressures[-1] = 60
+            print('🤌 hand closed')
+        elif mode == 'idle':
+            self.pwm.setValue(9, 0)
+            self.pressures[-1] = 0
+        self.set_Pressures()
 
     def PID(self) -> Generator[None, Tuple[Tuple[float, float, float], Tuple[float, float, float]], None]:
         """simple closed loop feedback on error of arm position and target position
@@ -250,22 +318,28 @@ class Manipulator():
             if False, feedback exceed system limit
         """
         # TODO: 需要调参: PID系数
-        Kp = np.array([1, 1, 1])  # x, y, z
-        Ki = np.array([0, 0, 0])  # x, y, z
+        Kp = np.array([5, 5, 5])  # x, y, z
+        Ki = np.array([5, 5, 5])  # x, y, z
         Kd = np.array([0, 0, 0])  # x, y, z
         e_prev = np.zeros(3)
         t_prev = time.time()
         integral = np.zeros(3)
+        self.state = False
         while True:
             target_pos, arm_pos = yield
+            print(f'target: {target_pos[:3]}, arm: {arm_pos[:3]}')
             t = time.time()
-            e = np.array(target_pos) - np.array(arm_pos)
+            e = np.multiply(np.array(target_pos) - np.array(arm_pos), np.array([1000, 800, 0]))
+            abs_e = sqrt(e[0] ** 2 + e[1] ** 2)
+            if abs_e < 10:
+                self.state = True
             proportional = np.multiply(Kp, e)
             integral = integral + np.multiply(Ki, e) * (t - t_prev)
             derivative = np.multiply(Kd, e - e_prev) / (t - t_prev)
             x_corrected, y_corrected, z_corrected = tuple(proportional + integral + derivative)
-            print(x_corrected, y_corrected, z_corrected)
-            self.set_Pressures(self.inverse_kinematics(x_corrected, y_corrected, z_corrected))
+            print(x_corrected, y_corrected, self.initZ + 25, abs_e)
+            # self.len2pressures(self.inverse_kinematics(x_corrected, y_corrected, z_corrected))
+            self.len2pressures(self.inverse_kinematics(x_corrected, y_corrected, self.initZ + 25))
             # TODO: 需要调参: 采样时间
             time.sleep(1)  # sleep for 1s
 
@@ -278,8 +352,8 @@ if __name__ == "__main__" and sys.argv[1] == 'auto':
     arm = Manipulator()
     target_pos = (0, 0, 355)
     # start the PID controller
-    next(arm.controller)
-    for i in range(10):
+    arm.controller.send(None)
+    for i in range(50):
         arm_pos = (-1, -1, 355)
         arm.controller.send((target_pos, arm_pos))
 
@@ -297,4 +371,4 @@ if __name__ == '__main__' and sys.argv[1] == 'manual':
             break
         elif command == '':
             continue
-        arm.set_Pressures(eval(f'arm.inverse_kinematics({command})'))
+        arm.len2pressures(eval(f'arm.inverse_kinematics({command})'))
