@@ -22,11 +22,13 @@
 
 ## 驱动配置
 
-### I2C舵机驱动板
+💡上图中`J30`右上有箭头的引脚为pin1
+
+### I2C舵机驱动板 (pwm控制板)
 
 📑 [树莓派Jetson16路I2C舵机驱动板](树莓派Jetson16路I2C舵机驱动板.md)
 
-💡上图中`J30`右上有箭头的引脚为pin1
+舵机驱动板使用Jetson的I2C Bus 8
 
 ```shell
 sudo apt-get install -y python3-smbus  # I2C库
@@ -37,6 +39,12 @@ sudo -H pip install --upgrade Jetson.GPIO
 sudo cp /usr/local/lib/python3.6/dist-packages/Jetson/GPIO/99-gpio.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
+
+### I2C气压传感器 (深度传感器)
+
+📑 [水压水深传感器](水压水深传感器.md)
+
+深度传感器使用Jetson的I2C Bus 1, 驱动程序来自[BlueRobotics](https://github.com/bluerobotics/ms5837-python)
 
 ## 软件配置
 
@@ -73,7 +81,7 @@ sudo ln -s /usr/local/cuda-10.0/lib64/libcublas.so /usr/local/cuda-10.0/lib64/li
 # 删除JetPack安装的opencv4,避免gstreamer出问题 (指无法读取本地摄像头)
 sudo rm -rf /usr/include/opencv4
 
-# 减少不必要的编译, 开启一些加速的模块
+# 减少不必要的编译, 开启一些加速的模块, 开启专有算法 (non-f)
 cmake \
 -D CMAKE_BUILD_TYPE=Release \
 -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib-3.4.11/modules \
@@ -91,6 +99,7 @@ cmake \
 -D BUILD_PERF_TESTS=OFF \
 -D BUILD_EXAMPLES=OFF \
 -D WITH_PROTOBUF=OFF \
+-D OPENCV_ENABLE_NONFREE=1 \
 -D WITH_GTK=ON \..
 
 sudo make -j 18
