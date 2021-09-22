@@ -90,11 +90,12 @@ function draw() {
         elg_arm.val = 1;
         elg_arm.isChanged = true;
         post('/arm/fold', { 'state': fold_arm.val });
+        return;
     }
     if (auto_trigger.isPressed) {
         post('/auto', { 'auto': auto_trigger.val });
     }
-    if (open_hand.isPressed || close_hand.isPressed || elg_arm.isChanged || xy_arm.isChanged) {
+    if ((open_hand.isPressed || close_hand.isPressed || elg_arm.isChanged || xy_arm.isChanged) && !fold_arm.isPressed) {
         if (open_hand.val) {
             hand_status = 'open';
         }

@@ -121,6 +121,7 @@ def reset_arm():
 
 @app.route("/arm/collect", methods=['GET', 'POST'])
 def collect():
+    robot.get_sensors_data()
     robot.arm.collect()
     return {}
 
@@ -128,6 +129,7 @@ def collect():
 @app.route("/arm/fold", methods=['GET', 'POST'])
 def fold():
     data = request.json
+    robot.get_sensors_data()
     robot.arm.fold(data['state'])
     return {}
 
@@ -141,6 +143,8 @@ def js_arm():
     elg = 40 * float(data['elg'])
     tprint(f'💪 📍 Arm x: {x:.03f}mm, y: {y:.03f}mm, elongation: {elg:.03f}mm (manual)')
     p_dict = {i: elg for i in range(6, 9)}
+    time.sleep(0.1)
+    robot.get_sensors_data()
     robot.arm.len2pressures(robot.arm.inverse_kinematics(x, y, 0), pressures_dict=p_dict)
     robot.arm.hand(data['hand'])
     return data
