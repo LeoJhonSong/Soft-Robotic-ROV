@@ -1,6 +1,7 @@
-from math import pi, atan
 import time
+from math import atan, pi
 
+from . import manipulate, rov, visual_info
 from .utils import tprint
 
 
@@ -39,7 +40,7 @@ class Auv(rov.Rov):
             12: (0.7, 0, 0, 0.1),
             13: (0, 0, -0.7, -0.99),
         }
-        self.aim_chances = [4, 4]  # FIXME: 需要调参: 尝试次数
+        self.aim_chances = [5, 5]
         self.arm = manipulate.Manipulator()
         super().__init__()
 
@@ -90,8 +91,8 @@ class Auv(rov.Rov):
                     self.visual_arm.chances[0] -= 1
                     # 收回手臂后再次识别并抓取
                     self.grasp_state = 'ready'
-                    self.reset()
-                    time.sleep(2)
+                    self.arm.reset()
+                    time.sleep(3)
                 else:
                     tprint(f'💪 🕐 time cost: {time.time() - self.visual_arm.start_time}')
                     self.grasp_state = 'activated'
@@ -169,12 +170,13 @@ class Auv(rov.Rov):
                 # 以底部中间处为原点, y多减0.01保证分母不为零
                 theta = atan((self.target.center[0] - offset_x) / (1 - self.target.center[1] + 0.001))
                 omega = theta / (pi / 2) * 0.99
+                gain = 1 + 0.2 * ((self.aim_chances[1] - self.aim_chances[0]) ** 2)  # 注意满足gain(0)=1
                 if not self.depth_sensor.is_landed:
                     # 级联阈值，粗调+细调，优先旋转, 保证目标一直在视野范围内
                     if abs(dx) > 1.5 * grasp_thresh_x:  # x一级阈值框
                         omega = omega * 0.8  # 限制大小
                         Vy = 0
-                    elif abs(dy) > 1.5 * grasp_thresh_y:  # y一级阈值框
+                    if abs(dy) > 1.2 * grasp_thresh_y:  # y一级阈值框
                         Vy = dy * 2.1
                         omega = 0
                     elif grasp_thresh_y <= abs(dy) <= 1.5 * grasp_thresh_y:  # y二级阈值框, 离得近一些速度放小
@@ -183,9 +185,9 @@ class Auv(rov.Rov):
                     elif grasp_thresh_x <= abs(dx) <= 1.5 * grasp_thresh_x:  # x二级阈值框
                         omega = omega * 0.6
                         Vy = 0
-                    print(f'🤿 AUV aiming! try: {self.aim_chances[-1] - self.aim_chances[0]}')
-                    print(f'❌ target: {self.target.center}, dx: {dx}, dy: {dy}, omega: {omega}')
-                    self.set_move((max(min(Vy, 1), -1), 0, max(min(omega, 1), -1), -1))
+                    tprint(f'🤿 AUV aiming! try: {self.aim_chances[-1] - self.aim_chances[0]}')
+                    tprint(f'❌ target: {self.target.center}, dx: {dx}, dy: {dy}, omega: {omega}')
+                    self.set_move((max(min(gain * Vy, 1), -1), 0, max(min(gain * omega, 1), -1), -1))
                     while not self.depth_sensor.is_landed:
                         self.get_sensors_data()
                         time.sleep(0.01)
@@ -210,10 +212,11 @@ class Auv(rov.Rov):
                             Vy = 0
                         self.aim_chances[0] -= 1
                         tprint(f'🤿 👀 target not in range.               target: {self.target.center}, dx: {dx}, dy: {dy}, omega: {omega}')
-                        print(f'🤿 target: {self.target.center}, dx: {dx}, dy: {dy}, omega: {omega}')
-                        print(f'🤿 AUV try again! {self.aim_chances[0]} chances left')
-                        self.set_move((max(min(Vy, 1), -1), 0, max(min(omega, 1), -1), 0.3))
+                        tprint(f'🤿 AUV try aim again! {self.aim_chances[0]} chances left')
+                        self.set_move((max(min(gain * Vy, 1), -1), 0, max(min(gain * omega, 1), -1), 0.3))
                         time.sleep(0.5)  # 上浮0.5s
+                        self.depth_sensor.is_landed = False
+                        self.depth_sensor.time = 0
                         self.set_Vz(0)
                         return 'aim'
             else:

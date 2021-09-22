@@ -32,7 +32,7 @@ def video_stream():
     global vs, outputFrame, lock
     if args['source'] == 'socket':
         server = Server("127.0.0.1", 8010)
-    elif args['source'] == 'zed':
+    elif args['source'] in ['zed', 'camera']:
         cap = cv2.VideoCapture(0)
     while True:
         if args['source'] == 'socket':
@@ -40,6 +40,8 @@ def video_stream():
         elif args['source'] == 'zed':
             _, frame = cap.read()
             frame = frame[:, :frame.shape[1] // 2:, :]
+        elif args['source'] == 'camera':
+            _, frame = cap.read()
         else:
             frame = np.random.randint(255, size=(900, 800, 3), dtype=np.uint8)
         # acquire the lock, set the output frame, and release the lock
@@ -137,7 +139,7 @@ def fold():
 @app.route("/arm/joystick", methods=['GET', 'POST'])
 def js_arm():
     data = request.json
-    scale = 300
+    scale = 1000
     x = scale * float(data['x'])
     y = scale * float(data['y'])
     elg = 40 * float(data['elg'])
@@ -206,11 +208,11 @@ def auto():
             robot.visual_arm.start_time = time.time()
             tprint('💪 Arm ready')
         elif grasp_state == 'activated':
-            if not robot.arm.reached:
-                robot.arm.controller.send((tc + (robot.arm.initZ + 55,), robot.visual_arm.marker_position + (robot.arm.initZ + 55,)))
-            else:
+            if robot.arm.reached in ['not', 'wait']:
+                robot.arm.controller.send((tc + (robot.arm.initZ,), robot.visual_arm.marker_position + (robot.arm.initZ,)))
+            elif robot.arm.reached == 'yes':
                 # 到达位置后伸长手臂
-                robot.arm.pressures[6:9] = [35] * 3
+                robot.arm.pressures[6:9] = [40] * 3
                 robot.arm.set_Pressures()
                 time.sleep(2)
                 # 抓取
@@ -218,6 +220,10 @@ def auto():
                 time.sleep(2)
                 # 收集
                 robot.arm.collect()
+                robot.grasp_state = 'idle'
+                robot.visual_arm.arm_is_working = False
+            elif robot.arm.reached == 'out':
+                robot.arm.reset()
                 robot.grasp_state = 'idle'
                 robot.visual_arm.arm_is_working = False
         elif grasp_state == 'idle':

@@ -66,8 +66,8 @@ class Depth_sensor(object):
 
     def update(self) -> None:
         self.sensor.read()
-        depth = self.sensor.depth() - self.init_depth
-        self.relative_pressure = self.sensor.pressure(ms5837.UNITS_kPa) - self.init_pressure
+        depth = max(0, self.sensor.depth() - self.init_depth)
+        self.relative_pressure = max(0, self.sensor.pressure(ms5837.UNITS_kPa) - self.init_pressure)
         # check if landed onto the sea bed
         if abs(self.old_depth - depth) < self.diff_thresh:
             if self.time == 0:
@@ -211,6 +211,9 @@ class Rov(object):
         value : float
             in range (backward)[-1, 1](forward)
         """
+        # 先置零电机转速, 防止电机立即反转损伤电机
+        self.write(speed, [127, 127, 127, 127, self.control_mode, self.is_closed_loop])
+        time.sleep(0.01)
         self.write(speed, [int(127 + 127 * value), 127, 127, 127, self.control_mode, self.is_closed_loop])
         if value:
             tprint(f'🚀 ROV going {"forward" if value > 0 else "backward"} with {int(abs(value) * 100):.02f}% speed')
@@ -225,6 +228,9 @@ class Rov(object):
         value : float
             in range (right)[-1, 1](left)
         """
+        # 先置零电机转速, 防止电机立即反转损伤电机
+        self.write(speed, [127, 127, 127, 127, self.control_mode, self.is_closed_loop])
+        time.sleep(0.01)
         self.write(speed, [127, int(127 + 127 * value), 127, 127, self.control_mode, self.is_closed_loop])
         if value:
             tprint(f'🚀 ROV going {"left" if value > 0 else "right"} with {int(abs(value) * 100):.02f}% speed')
@@ -239,6 +245,9 @@ class Rov(object):
         value : float
             in range (down)[-1, 1](up)
         """
+        # 先置零电机转速, 防止电机立即反转损伤电机
+        self.write(speed, [127, 127, 127, 127, self.control_mode, self.is_closed_loop])
+        time.sleep(0.01)
         self.write(speed, [127, 127, 127, int(127 + 127 * value), self.control_mode, self.is_closed_loop])
         if value:
             tprint(f'🚀 ROV going {"up" if value > 0 else "down"} with {int(abs(value) * 100):.02f}% speed')
@@ -253,6 +262,9 @@ class Rov(object):
         value : float
             in range (left)[-1, 1](right)
         """
+        # 先置零电机转速, 防止电机立即反转损伤电机
+        self.write(speed, [127, 127, 127, 127, self.control_mode, self.is_closed_loop])
+        time.sleep(0.01)
         self.write(speed, [127, 127, int(127 + 127 * value), 127, self.control_mode, self.is_closed_loop])
         if value:
             tprint(f'🚀 ROV turning {"right" if value > 0 else "left"} with {int(abs(value) * 100):.02f}% speed')
@@ -268,6 +280,9 @@ class Rov(object):
             a tuple of (Vx, Vy, steer, Vz) in range [-1, 1]. It seems the ROV
             could do all four directions move at the same time
         """
+        # 先置零电机转速, 防止电机立即反转损伤电机
+        self.write(speed, [127, 127, 127, 127, self.control_mode, self.is_closed_loop])
+        time.sleep(0.01)
         self.write(speed, [int(127 + 127 * v) for v in velocity] + [self.control_mode, self.is_closed_loop])
         tprint(f'🚀 ROV Vx: {100 * velocity[0]:.02f}%, Vy: {100 * velocity[1]:.02f}%, Vz: {100 * velocity[-1]:.02f}%, steer: {100 * velocity[2]:.02f}%')
 

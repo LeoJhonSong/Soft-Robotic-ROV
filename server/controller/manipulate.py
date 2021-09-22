@@ -5,8 +5,9 @@ provide pressure calculation functions with given end effector position
 '''
 
 import sys
-from typing import Tuple, Generator
 import time
+from typing import Generator, Tuple
+
 import numpy as np
 from scipy.optimize import root
 
@@ -29,12 +30,12 @@ class Manipulator():
         # - hand
         self.pressures = [0.0] * 10
         self.water_pressure = 0.0
-        self.bendPressureThresh = [0, 130]
+        self.bendPressureThresh = [0, 160]
         self.elgPressureThresh = [0, 40]
         self.handPressureThresh = [0, 60]
         self.controller = self.PID()
         self.controller.send(None)
-        self.reached = False
+        self.reached = 'not'
         # create 10 channel pwm module instance
         if (__name__ == '__main__' and len(sys.argv) == 3 and sys.argv[2] == 'with_pwm') or __name__ != '__main__':
             from .pwm import PWM
@@ -61,9 +62,10 @@ class Manipulator():
         self.segBendLowLen = [self.initBendLen] * 3
         self.segElgLen = self.initElgLen
         self.pressures = [0.0] * 10
-        self.set_Pressures()
+        self.set_Pressures(if_print=False)
         self.controller = self.PID()
         self.controller.send(None)
+        self.reached = 'not'
         tprint('💪  Manipulator released 👌')
 
     def inverse_kinematics(self, x: float, y: float, z: float) -> Tuple[Tuple[float, float, float], float]:
@@ -77,9 +79,9 @@ class Manipulator():
         Parameters
         ----------
         x : float
-            x of end effector, unit: mm
+            x of end effector, unit: mm. Leftward is the positive direction.
         y : float
-            y of end effector, unit: mm
+            y of end effector, unit: mm. Forward is the positive direction.
         z : float
             z of end effector, unit: mm. Downward is the positive direction.
         """
@@ -146,6 +148,19 @@ class Manipulator():
             (r - self.d * np.cos(phi + np.pi / 6)) * theta
         )
         segElgLen = -r * np.sin(theta) * 2 + z
+        theta = np.arctan2(y, -x) / np.pi * 180  # in degree
+        if -60 < theta < 90:
+            segBendLen = (segBendLen[0], self.initBendLen, segBendLen[2])
+        elif theta == 90:
+            segBendLen = (segBendLen[0], self.initBendLen, self.initBendLen)
+        elif 90 < theta <= 180 or -120 < theta <= -180:
+            segBendLen = (segBendLen[0], segBendLen[1], self.initBendLen)
+        elif theta == -120:
+            segBendLen = (self.initBendLen, segBendLen[1], self.initBendLen)
+        elif -60 < theta < -120:
+            segBendLen = (self.initBendLen, segBendLen[1], segBendLen[2])
+        elif theta == -60:
+            segBendLen = (self.initBendLen, self.initBendLen, segBendLen[2])
         return segBendLen, segElgLen
 
     def len2pressures(self, segLen: Tuple[Tuple[float, float, float], float], pressures_dict=None) -> bool:
@@ -184,9 +199,9 @@ class Manipulator():
         )
         # upper bending segment
         # 稍微减小下弯曲段气压以平衡重力影响, 因每个腔道性能有区别因此系数不一样
-        pressures[3] = 0.77 * pressures[0]
-        pressures[4] = 0.54 * pressures[1]
-        pressures[5] = 0.77 * pressures[2]
+        pressures[3] = 0.625 * pressures[0]
+        pressures[4] = 0.6875 * pressures[1]
+        pressures[5] = 0.6875 * pressures[2]
         # elongation segment
         pressures[6:9] = [0.51789321 * segElgLen - 64.06856906] * 3
         # cover pressures specified manually
@@ -232,9 +247,7 @@ class Manipulator():
         """reset manipulator to initial position
         """
         self.release()
-        self.pressures = [0, 130, 90] + [0] * 6 + [30]
-        self.set_Pressures()
-        print('💪 Arm reset')
+        self.pressures = [0, 130, 90, 90] + [0] * 5 + [30]
         self.set_Pressures(if_print=False)
         tprint('💪 Arm reset')
 
@@ -255,22 +268,22 @@ class Manipulator():
         # 缩手
         self.fold(True)
         # 甩回来
-        self.len2pressures(self.inverse_kinematics(0, 0, self.initZ), pressures_dict={1: 130, 2: 80, 3: 130, 9: 40})
+        self.len2pressures(self.inverse_kinematics(0, 0, self.initZ), pressures_dict={1: 160, 2: 100, 3: 100, 9: 40})
         time.sleep(4)  # wait for 2s
         # 放进去
         self.pwm.setValue(8, 0)
-        self.len2pressures(self.inverse_kinematics(0, 0, self.initZ), pressures_dict={1: 130, 2: 80, 3: 130, 6: 30, 7: 30, 8: 30, 9: 40})
+        self.len2pressures(self.inverse_kinematics(0, 0, self.initZ), pressures_dict={1: 160, 2: 100, 3: 100, 6: 40, 7: 40, 8: 40, 9: 40})
         time.sleep(4)  # wait for 4s
         # 松手
-        self.len2pressures(self.inverse_kinematics(0, 0, self.initZ), pressures_dict={1: 130, 2: 80, 3: 130, 6: 30, 7: 30, 8: 30})
+        self.len2pressures(self.inverse_kinematics(0, 0, self.initZ), pressures_dict={1: 160, 2: 100, 3: 100, 6: 40, 7: 40, 8: 40})
         self.pwm.setValue(9, 0.90)
         time.sleep(2)
         # 收伸长段
-        self.len2pressures(self.inverse_kinematics(0, 0, self.initZ), pressures_dict={1: 130, 2: 80, 3: 130})
+        self.len2pressures(self.inverse_kinematics(0, 0, self.initZ), pressures_dict={1: 160, 2: 100, 3: 100})
         time.sleep(3)
         # 归位
         self.reset()
-        print('💪 Arm collecting')
+        tprint('💪 Arm collecting')
 
     def hand(self, mode: str):
         """set hand to specific mode
@@ -312,7 +325,7 @@ class Manipulator():
         """
         # TODO: 需要调参: PID系数
         Kp = np.array([1, 1, 1])  # x, y, z
-        Ki = np.array([0.005, 0.005, 0])  # x, y, z
+        Ki = np.array([0.005, 0.007, 0])  # x, y, z
         Kd = np.array([0, 0, 0])  # x, y, z
         e_prev = np.zeros(3)
         t_prev = time.time()
@@ -325,14 +338,22 @@ class Manipulator():
             abs_e = ((e[0] / 5) ** 2 + e[1] ** 2) ** 0.5
             # 如果加权模小于10, 认为手爪到达位置  # TODO: 需要调参
             tprint(f'🤖 ❌ PID abs error: {abs_e}, detailed: {e[:2]}')
+            if abs_e < 30:
+                if self.reached == 'not':
+                    self.reached = 'wait'
+                elif self.reached == 'wait':
+                    self.reached = 'yes'
+            else:
+                if self.reached == 'wait':
+                    self.reached = 'not'
             proportional = np.multiply(Kp, e)
             integral = integral + np.multiply(Ki, e) * (t - t_prev)
             derivative = np.multiply(Kd, e - e_prev) / (t - t_prev)
             x_corrected, y_corrected, z_corrected = tuple(proportional + integral + derivative)
             tprint(f'🤖 📍 corrected x: {x_corrected}, y: {y_corrected}')
             # self.len2pressures(self.inverse_kinematics(x_corrected, y_corrected, z_corrected))
-            self.len2pressures(self.inverse_kinematics(x_corrected, y_corrected, self.initZ + 55))
-            # TODO: 需要调参: 采样时间
+            if not self.len2pressures(self.inverse_kinematics(x_corrected, y_corrected, self.initZ), pressures_dict={6: 30, 7: 30, 8: 30}):
+                self.reached = 'out'
             time.sleep(1)  # sleep for 1s
 
 
