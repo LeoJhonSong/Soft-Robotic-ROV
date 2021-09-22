@@ -9,7 +9,7 @@ Client::~Client() { close(client_); }
 void Client::Init(const std::string ip, int port) {
   client_ = socket(AF_INET, SOCK_STREAM, 0);
   if (client_ < 0) {
-    std::cout << "[Client]: ERROR establishing socket\n" << std::endl;
+    std::cout << "[Cpp Python Client]: ERROR establishing socket\n" << std::endl;
     exit(1);
   }
 
@@ -25,12 +25,14 @@ void Client::Init(const std::string ip, int port) {
     if (connect(client_, (const struct sockaddr*)&serv_addr,
                 sizeof(serv_addr)) == 0) {
       connected = true;
-      std::cout << "[Client]: Cpp socket client connected." << std::endl;
+      std::cout << "[Cpp Python Client]: Cpp socket client connected." << std::endl;
     } else {
-      port += 1;
-      connection_attempts -= 1;
-      std::cout << "[Client]: Error connecting to port " << port - 1
-                << ". Attepting to connect to port: " << port << std::endl;
+      // port += 1;
+      // connection_attempts -= 1;
+      // std::cout << "[Cpp Python Client]: Error connecting to port " << port - 1
+      //           << ". Attepting to connect to port: " << port << std::endl;
+      std::cout << "[Cpp Python Client] not connected, waiting..." << std::endl;
+      sleep(2);  // unit: s
     }
   }
 }

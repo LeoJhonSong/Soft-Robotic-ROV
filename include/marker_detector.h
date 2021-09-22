@@ -16,8 +16,8 @@ namespace marker
 
     const std::map<int, cv::Point2f> MARKER_OFFSETS = {
         //TODO 需要调参
-        {39, cv::Point2f(135, 145)},  // 左边指尖
-        {35, cv::Point2f(-115, 110)}  // 右边指尖
+        {39, cv::Point2f(175, 180)},  // 左边指尖
+        {35, cv::Point2f(-165, 130)}  // 右边指尖
     };
 
     struct MarkerInfo
