@@ -10,6 +10,8 @@ import time
 import numpy as np
 from scipy.optimize import root
 
+from .utils import tprint
+
 
 class Manipulator():
     def __init__(self):
@@ -62,8 +64,7 @@ class Manipulator():
         self.set_Pressures()
         self.controller = self.PID()
         self.controller.send(None)
-        self.reached = False
-        print('💪  Manipulator released 👌')
+        tprint('💪  Manipulator released 👌')
 
     def inverse_kinematics(self, x: float, y: float, z: float) -> Tuple[Tuple[float, float, float], float]:
         """(Simplified algorithm for manual control) do inverse kinematics for the soft manipulator
@@ -196,7 +197,7 @@ class Manipulator():
         self.segBendLowLen, self.segBendUpLen, self.segElgLen = segBendLen, segBendLen, segElgLen
         return self.set_Pressures()
 
-    def set_Pressures(self) -> bool:
+    def set_Pressures(self, if_print: bool = True) -> bool:
         """set pressures of all chambers then set pwm value of all channels.
         could set pressure of hand with pressures_dict
 
@@ -211,7 +212,7 @@ class Manipulator():
             all([self.bendPressureThresh[0] <= p <= self.bendPressureThresh[1] for p in pressures[0:3]])
             and self.elgPressureThresh[0] <= pressures[6] <= self.elgPressureThresh[1]
         ):
-            print(f'💪  ❌ exceed pressure threshold! segBendUp:', ', '.join(f'{p:.3f}' for p in pressures[0:3]), f'segElg: {pressures[6]:.3f}')
+            tprint(f'💪  ❌ exceed pressure threshold! segBendUp: {", ".join(f"{p:.3f}" for p in pressures[0:3])} segElg: {pressures[6]:.3f}')
             return False
         # 当气压值小于6气动阀输出不稳定, 因此直接置零
         for i, p in enumerate(pressures):
@@ -221,7 +222,8 @@ class Manipulator():
         pressures[-1] = np.clip(pressures[-1], self.handPressureThresh[0], self.handPressureThresh[1])
         # balance the influence of outside water pressure
         pressures = [p + self.water_pressure for p in pressures]
-        print(f'💪  💨 pressures:', ', '.join(f'{p:.3f}' for p in pressures), f'🌊 water pressure: {self.water_pressure:.3f}')
+        if if_print:
+            tprint(f'💪 💨 pressures: {", ".join(f"{p:.3f}" for p in pressures)} 🌊 water pressure: {self.water_pressure:.3f}')
         if (__name__ == '__main__' and len(sys.argv) == 3 and sys.argv[2] == 'with_pwm') or __name__ != '__main__':
             self.set_pwm(pressures)
         return True
@@ -233,6 +235,8 @@ class Manipulator():
         self.pressures = [0, 130, 90] + [0] * 6 + [30]
         self.set_Pressures()
         print('💪 Arm reset')
+        self.set_Pressures(if_print=False)
+        tprint('💪 Arm reset')
 
     def fold(self, is_on: bool):
         """fold elongation segment
@@ -279,15 +283,15 @@ class Manipulator():
         if mode == 'open':
             self.pwm.setValue(9, 0.96)
             self.pressures[-1] = 0
-            print('🖐 hand opened')
+            tprint('🖐 hand opened')
         elif mode == 'close':
             self.pwm.setValue(9, 0)
             self.pressures[-1] = 60
-            print('🤌 hand closed')
+            tprint('🤌 hand closed')
         elif mode == 'idle':
             self.pwm.setValue(9, 0)
             self.pressures[-1] = 0
-        self.set_Pressures()
+        self.set_Pressures(if_print=False)
 
     def PID(self) -> Generator[None, Tuple[Tuple[float, float, float], Tuple[float, float, float]], None]:
         """simple closed loop feedback on error of arm position and target position
@@ -315,19 +319,17 @@ class Manipulator():
         integral = np.zeros(3)
         while True:
             target_pos, arm_pos = yield
-            print(f'target: {target_pos[:3]}, arm: {arm_pos[:3]}')
+            tprint(f'💪 🤖 target: {target_pos[:3]}, arm: {arm_pos[:3]}')
             t = time.time()
             e = np.multiply(np.array(arm_pos) - np.array(target_pos), np.array([800, 800, 0]))
-            print(f'error: {e}')
             abs_e = ((e[0] / 5) ** 2 + e[1] ** 2) ** 0.5
             # 如果加权模小于10, 认为手爪到达位置  # TODO: 需要调参
-            if abs_e < 10:
-                self.reached = True
+            tprint(f'🤖 ❌ PID abs error: {abs_e}, detailed: {e[:2]}')
             proportional = np.multiply(Kp, e)
             integral = integral + np.multiply(Ki, e) * (t - t_prev)
             derivative = np.multiply(Kd, e - e_prev) / (t - t_prev)
             x_corrected, y_corrected, z_corrected = tuple(proportional + integral + derivative)
-            print(x_corrected, y_corrected, self.initZ + 25, abs_e)
+            tprint(f'🤖 📍 corrected x: {x_corrected}, y: {y_corrected}')
             # self.len2pressures(self.inverse_kinematics(x_corrected, y_corrected, z_corrected))
             self.len2pressures(self.inverse_kinematics(x_corrected, y_corrected, self.initZ + 55))
             # TODO: 需要调参: 采样时间

@@ -1,9 +1,7 @@
 from math import pi, atan
 import time
 
-from . import rov
-from .import visual_info
-from . import manipulate
+from .utils import tprint
 
 
 class Auv(rov.Rov):
@@ -61,9 +59,10 @@ class Auv(rov.Rov):
     def land(self) -> str:
         """坐底
         """
+        tprint('⚪ landing')
         self.set_Vz(-1)
         if self.depth_sensor.is_landed:
-            print('🤿 AUV landed, switch to grasp state')
+            tprint('🤿 AUV landed, switch to grasp state')
             return 'grasp'
         else:
             return 'land'
@@ -71,18 +70,19 @@ class Auv(rov.Rov):
     def grasp(self) -> str:
         """抓取
         """
+        tprint('🟢 grasping')
         time.sleep(1)  # 等待画面稳定
         # no more chances
         if self.visual_arm.chances[0] == 0:
             self.grasp_state = 'idle'
             self.visual_arm.chances[0] = self.visual_arm.chances[1]  # reset chances
-            print('🤿 🤷 AUV give up grasping, start cruise')
+            tprint('🤿 🤷 AUV give up grasping, start cruise')
             return 'cruise'
         # 当还有机会且阈值框内有目标
         if self.target.roi_check():
             if not self.visual_arm.arm_is_working:
                 self.grasp_state = 'ready'
-                print('🤿 🎯 target in range, start grasping')
+                tprint('🤿 🎯 target in range, start grasping')
             return 'grasp'
         else:
             if self.grasp_state in ['ready', 'activated']:  # 正在抓取, 且还有机会. 此时目标很可能被手臂挡住, 不再关注实时目标
@@ -93,11 +93,11 @@ class Auv(rov.Rov):
                     self.reset()
                     time.sleep(2)
                 else:
-                    print(f'💪 🕐 time cost: {time.time() - self.visual_arm.start_time}')
+                    tprint(f'💪 🕐 time cost: {time.time() - self.visual_arm.start_time}')
                     self.grasp_state = 'activated'
                 return 'grasp'
             elif self.target.has_target:  # 有目标但目标在阈值框外, 而且没有在抓
-                print(f'🤿 👀 target not in range: {self.target.center}, try to aim')
+                tprint(f'🤿 👀 target not in range: {self.target.center}, try to aim')
                 self.grasp_state = 'idle'
                 self.visual_arm.chances[0] = self.visual_arm.chances[1]  # reset chances
                 return 'aim'
@@ -106,29 +106,30 @@ class Auv(rov.Rov):
                 self.grasp_state = 'idle'
                 # 进行了抓取尝试又没有目标了说明抓到了
                 if self.visual_arm.chances[0] != self.visual_arm.chances[1]:
-                    print('🎉 target collected')
+                    tprint('🎉 target collected')
                     # 往前荡一下, 确保目标进袋
                     self.set_move((1, 0, 0, 1))
                     self.arm.reset()
                     time.sleep(1)
                 self.visual_arm.chances[0] = self.visual_arm.chances[1]  # reset chances
-                print('🤿 AUV grasp done, start cruise')
+                tprint('🤿 AUV grasp done, start cruise')
                 return 'cruise'
 
     def cruise(self) -> str:
         """巡航
         """
+        tprint('🔴 cruising')
         if self.target.has_target:
             self.cruise_time = 0
             # 发现目标后一个后撤步!
             self.set_move((-0.7, 0, 0, 0))
             time.sleep(0.2)  # 0.2s
             self.set_Vx(0)
-            print('🤿 👀 AUV target found, start aiming')
+            tprint('🤿 👀 AUV target found, start aiming')
             return 'aim'
         # if reach time limit
         elif self.cruise_time != 0 and time.time() - self.cruise_time > list(self.cruise_path.keys())[-1]:
-            print(f'🤿 ⏰ AUV time out, start landing {time.time() - self.cruise_time}')
+            tprint(f'🤿 ⏰ AUV time out, start landing {time.time() - self.cruise_time}')
             self.cruise_time = 0
             return 'land'
         else:
@@ -148,6 +149,7 @@ class Auv(rov.Rov):
         """瞄准, 移动至目标处
         xy坐标系为图像坐标系
         """
+        tprint('🟡 aiming')
         grasp_thresh_x = self.target.roi_thresh[0]
         grasp_thresh_y = self.target.roi_thresh[1]
         Vy = 0
@@ -155,7 +157,7 @@ class Auv(rov.Rov):
         if not self.target.has_target:
             # 目标丢失, 转坐底
             self.aim_chances[0] = self.aim_chances[1]
-            print('🤿 AUV target lost, start landing')
+            tprint('🤿 AUV target lost, start landing')
             return 'land'
         else:
             # 最多4次调整机会
@@ -192,10 +194,9 @@ class Auv(rov.Rov):
                     self.set_Vz(-1)
                     if self.target.roi_check():  # 检查位置阈值
                         self.aim_chances[0] = self.aim_chances[1]
-                        print('🤿 AUV ready for grasping, start grasping!')
+                        tprint('🤿 AUV ready for grasping, start grasping!')
                         return 'grasp'
                     else:
-                        print('🤿 👀 target not in range')
                         if abs(dx) > 1.5 * grasp_thresh_x:
                             omega = omega * 1.4
                         elif abs(dy) > grasp_thresh_y:
@@ -208,6 +209,7 @@ class Auv(rov.Rov):
                             omega = omega * 1.1
                             Vy = 0
                         self.aim_chances[0] -= 1
+                        tprint(f'🤿 👀 target not in range.               target: {self.target.center}, dx: {dx}, dy: {dy}, omega: {omega}')
                         print(f'🤿 target: {self.target.center}, dx: {dx}, dy: {dy}, omega: {omega}')
                         print(f'🤿 AUV try again! {self.aim_chances[0]} chances left')
                         self.set_move((max(min(Vy, 1), -1), 0, max(min(omega, 1), -1), 0.3))
@@ -217,7 +219,7 @@ class Auv(rov.Rov):
             else:
                 # 放弃瞄准, 转坐底, 然后会转抓取, 如果还是没有东西会转巡航
                 self.aim_chances[0] = self.aim_chances[1]
-                print('🤿 AUV give up aiming, start landing')
+                tprint('🤿 AUV give up aiming, start landing')
                 return 'land'
 
     def state_machine(self) -> str:
@@ -229,7 +231,6 @@ class Auv(rov.Rov):
             'land': self.land,
         }
         self.state = cases[self.state]()
-        print(f'🟢  {self.state}')
         return self.grasp_state
 
 

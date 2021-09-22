@@ -5,6 +5,7 @@ from typing import Tuple
 import can
 
 from . import ms5837
+from .utils import tprint
 
 
 class Gyro(object):
@@ -54,7 +55,7 @@ class Depth_sensor(object):
         self.sensor.init()
         self.sensor.setFluidDensity(ms5837.DENSITY_SALTWATER)
         self.reset()
-        print(f'📏 depth sensor initialed')
+        tprint(f'📏 depth sensor initialed')
 
     def reset(self):
         """reset initial depth and pressure of depth sensor
@@ -73,12 +74,12 @@ class Depth_sensor(object):
                 self.time = time.time()
             if time.time() - self.time > self.time_thresh:
                 if not self.is_landed:
-                    print('📏 landed / hovering!')
+                    tprint('📏 landed / hovering!')
                     self.is_landed = True
         else:  # 当深度变化幅度超过阈值, 判定未坐底并归零稳定计时
             self.old_depth = depth
             if self.is_landed:
-                print('📏 leaving seabed / leaving hovering state')
+                tprint('📏 leaving seabed / leaving hovering state')
             self.time = 0
             self.is_landed = False
         self.old_depth = self.depth
@@ -129,7 +130,7 @@ class Rov(object):
             self.set_led(1)
             time.sleep(0.1)
             self.set_led(0)
-        print('🚀 ROV started')
+        tprint('🚀 ROV started')
 
     def __enter__(self):
         return self
@@ -200,7 +201,7 @@ class Rov(object):
             in range [0, 1]
         """
         self.write(led2, self.int2u8list(int(value * led_pwm_max), 2))
-        print(f'🚀 ROV led brightness set to {value * 100:.02f}%')
+        tprint(f'🚀 ROV led brightness set to {value * 100:.02f}%')
 
     def set_Vx(self, value: float):
         """set Vx and clear others
@@ -212,9 +213,9 @@ class Rov(object):
         """
         self.write(speed, [int(127 + 127 * value), 127, 127, 127, self.control_mode, self.is_closed_loop])
         if value:
-            print(f'🚀 ROV going {"forward" if value > 0 else "backward"} with {int(abs(value) * 100):.02f}% speed')
+            tprint(f'🚀 ROV going {"forward" if value > 0 else "backward"} with {int(abs(value) * 100):.02f}% speed')
         else:
-            print('🚀 ROV stopped')
+            tprint('🚀 ROV stopped')
 
     def set_Vy(self, value: float):
         """set Vy and clear others
@@ -226,9 +227,9 @@ class Rov(object):
         """
         self.write(speed, [127, int(127 + 127 * value), 127, 127, self.control_mode, self.is_closed_loop])
         if value:
-            print(f'🚀 ROV going {"left" if value > 0 else "right"} with {int(abs(value) * 100):.02f}% speed')
+            tprint(f'🚀 ROV going {"left" if value > 0 else "right"} with {int(abs(value) * 100):.02f}% speed')
         else:
-            print('🚀 ROV stopped')
+            tprint('🚀 ROV stopped')
 
     def set_Vz(self, value: float):
         """set Vz and clear others
@@ -240,9 +241,9 @@ class Rov(object):
         """
         self.write(speed, [127, 127, 127, int(127 + 127 * value), self.control_mode, self.is_closed_loop])
         if value:
-            print(f'🚀 ROV going {"up" if value > 0 else "down"} with {int(abs(value) * 100):.02f}% speed')
+            tprint(f'🚀 ROV going {"up" if value > 0 else "down"} with {int(abs(value) * 100):.02f}% speed')
         else:
-            print('🚀 ROV stopped')
+            tprint('🚀 ROV stopped')
 
     def set_steer(self, value: float):
         """set steer and clear others
@@ -254,9 +255,9 @@ class Rov(object):
         """
         self.write(speed, [127, 127, int(127 + 127 * value), 127, self.control_mode, self.is_closed_loop])
         if value:
-            print(f'🚀 ROV turning {"right" if value > 0 else "left"} with {int(abs(value) * 100):.02f}% speed')
+            tprint(f'🚀 ROV turning {"right" if value > 0 else "left"} with {int(abs(value) * 100):.02f}% speed')
         else:
-            print('🚀 ROV stopped')
+            tprint('🚀 ROV stopped')
 
     def set_move(self, velocity: Tuple[float, float, float, float]):
         """set multi-direction values
@@ -268,14 +269,13 @@ class Rov(object):
             could do all four directions move at the same time
         """
         self.write(speed, [int(127 + 127 * v) for v in velocity] + [self.control_mode, self.is_closed_loop])
-        print(f'🚀 ROV Vx: {100 * velocity[0]:.02f}%, Vy: {100 * velocity[1]:.02f}%, Vz: {100 * velocity[-1]:.02f}%, steer: {100 * velocity[2]:.02f}%')
+        tprint(f'🚀 ROV Vx: {100 * velocity[0]:.02f}%, Vy: {100 * velocity[1]:.02f}%, Vz: {100 * velocity[-1]:.02f}%, steer: {100 * velocity[2]:.02f}%')
 
     def reset(self):
         """reset ROV led, motors
         """
-        self.set_led(0)
         self.set_move((0, 0, 0, 0))
-        print('🚀 ROV led, motors reset 👌')
+        tprint('🚀 ROV motors reset 👌')
 
     def get_sensors_data(self):
         """get the latest data from sensors

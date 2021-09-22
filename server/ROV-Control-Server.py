@@ -12,6 +12,7 @@ import yaml
 from flask import Flask, Response, render_template, request
 
 from controller.auv import Auv
+from controller.utils import tprint
 from CppPythonSocket import Server
 
 # initialize the output frame and a lock used to ensure thread-safe
@@ -94,7 +95,7 @@ def video_feed():
 @app.route("/auv/joystick", methods=['GET', 'POST'])
 def js_auv():
     velocity = request.json
-    # print(f'Vx: {velocity["vx"]:.03f}, Vy: {velocity["vy"]:.03f}')
+    # tprint(f'Vx: {velocity["vx"]:.03f}, Vy: {velocity["vy"]:.03f}')
     robot.set_move((velocity['vx'], velocity['vy'], velocity['steer'], velocity['vz']))
     return velocity
 
@@ -138,7 +139,7 @@ def js_arm():
     x = scale * float(data['x'])
     y = scale * float(data['y'])
     elg = 40 * float(data['elg'])
-    print(f'💪 Arm x: {x:.03f}mm, y: {y:.03f}mm, elongation: {elg:.03f}mm (manual)')
+    tprint(f'💪 📍 Arm x: {x:.03f}mm, y: {y:.03f}mm, elongation: {elg:.03f}mm (manual)')
     p_dict = {i: elg for i in range(6, 9)}
     robot.arm.len2pressures(robot.arm.inverse_kinematics(x, y, 0), pressures_dict=p_dict)
     robot.arm.hand(data['hand'])
@@ -155,11 +156,11 @@ def auto_trigger():
     is_auto = data['auto']
     if is_auto:
         robot.state = 'land'
-        print('🤖 switch to auto mode')
+        tprint('🤖 switch to auto mode')
         auto()
     else:
         robot.reset()
-        print('🧠 switch to manual mode')
+        tprint('🧠 switch to manual mode')
     return {}
 
 
@@ -191,7 +192,6 @@ def auto():
         # time.sleep(0.001)  # 1ms
         # 状态机状态跳转并给出抓取判断
         grasp_state = robot.state_machine()
-        print(grasp_state)
         # 软体臂控制
         if grasp_state == 'ready':
             robot.visual_arm.arm_is_working = True
@@ -200,7 +200,7 @@ def auto():
             time.sleep(5)
             tc = robot.target.center
             robot.visual_arm.start_time = time.time()
-            print('💪 Arm ready')
+            tprint('💪 Arm ready')
         elif grasp_state == 'activated':
             if not robot.arm.reached:
                 robot.arm.controller.send((tc + (robot.arm.initZ + 55,), robot.visual_arm.marker_position + (robot.arm.initZ + 55,)))
