@@ -11,9 +11,10 @@ import numpy as np
 import yaml
 from flask import Flask, Response, render_template, request
 
+import controller.visual_info as visual_info
 from controller.auv import Auv
 from controller.utils import tprint
-from CppPythonSocket import Server
+import CppPythonSocket
 
 # initialize the output frame and a lock used to ensure thread-safe
 # exchanges of the output frames (useful when multiple browsers/tabs
@@ -29,9 +30,9 @@ log.setLevel(logging.ERROR)
 
 def video_stream():
     # grab global references to the video stream, output frame, and lock variables
-    global vs, outputFrame, lock
+    global outputFrame, lock
     if args['source'] == 'socket':
-        server = Server("127.0.0.1", 8010)
+        global server
     elif args['source'] in ['zed', 'camera']:
         cap = cv2.VideoCapture(0)
     while True:
@@ -181,7 +182,7 @@ def auto():
         # 更新target, arm数据
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as visual_socket:
             try:
-                visual_socket.connect(('127.0.0.1', 8080))
+                visual_socket.connect(('127.0.0.1', visual_info.PORT))
             except ConnectionRefusedError:
                 print('[Visual Info Client] lost connection')
                 continue
@@ -237,8 +238,15 @@ with Auv() as robot:
     ap.add_argument("-o", "--port", type=int, default=8000, help="ephemeral port number of the server (1024 to 65535)")
     ap.add_argument("-s", "--source", type=str, default='socket', help="video source (socket or zed)")
     args = vars(ap.parse_args())
+    if args['source'] == 'socket':
+        server = CppPythonSocket.Server("127.0.0.1", 8010)
     # start a thread that will perform motion detection
     t = threading.Thread(target=video_stream, daemon=True)
     t.start()
     # start the flask app
     app.run(host=args["ip"], port=args["port"], debug=False, threaded=True, use_reloader=False)
+
+    # send quit command to visual server
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as visual_socket:
+        visual_socket.connect(('127.0.0.1', visual_info.PORT))
+        visual_socket.send(bytes(str(True * 2).encode()))

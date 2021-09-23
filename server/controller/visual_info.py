@@ -1,3 +1,5 @@
+PORT = 8080
+
 class Target():
     """info of target detected by visual_info server
     """
