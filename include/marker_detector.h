@@ -15,7 +15,6 @@ namespace marker
     const char MODE_TRACK = 3;
 
     const std::map<int, cv::Point2f> MARKER_OFFSETS = {
-        //TODO 需要调参
         {39, cv::Point2f(175, 180)},  // 左边指尖
         {35, cv::Point2f(-165, 130)}  // 右边指尖
     };

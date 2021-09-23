@@ -44,7 +44,7 @@ unsigned int num_classes = 5; // 背景, 海参, 海胆, 扇贝, 海星
 int top_k = 200;
 float nms_thresh = 0.3;
 // 背景, 海参, 海胆, 扇贝, 海星. 顺序由模型决定, 顺序决定了哪个类别优先级更高
-std::vector<float> conf_thresh = {0, 0.6, 0.8, 0.3, 1.5};
+std::vector<float> conf_thresh = {0, 0.6, 0.8, 0.1, 1.5};
 float tub_thresh = 0.3;
 
 // 在多个线程共享的全局变量
@@ -67,22 +67,21 @@ void video_write(bool video_record_flag, std::string save_path)
     // 如果不录制视频, 退出视频录制线程
     if (!video_record_flag)
         return;
-    char EXT[] = "MJPG";
-    int ex1 = EXT[0] | (EXT[1] << 8) | (EXT[2] << 16) | (EXT[3] << 24);
+    int fourcc = cv::VideoWriter::fourcc('H','2','6','4');
     while (frame_queue.empty() || det_frame_queue.empty())
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     // raw video
     cv::VideoWriter writer_raw;
-    writer_raw.open("./record/" + save_path + "/" + save_path + "_raw.avi", ex1, 20, frame_queue.front().size(), true);
+    writer_raw.open("./record/" + save_path + "/" + save_path + "_raw.mp4", fourcc, 20, frame_queue.front().size(), true);
     if (!writer_raw.isOpened())
     {
         print(BOLDRED, "[ERROR] Can not open the raw output video");
     }
     // det video
     cv::VideoWriter writer_det;
-    writer_det.open("./record/" + save_path + "/" + save_path + "_processed.avi", ex1, 20,
+    writer_det.open("./record/" + save_path + "/" + save_path + "_processed.mp4", fourcc, 20,
                     det_frame_queue.front().size(), true);
     if (!writer_det.isOpened())
     {
