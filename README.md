@@ -193,6 +193,7 @@ mkdir build && cd build
 # cmake配置. 仔细查看输出信息没有报错了. 还需要一些依赖没写, 跟着报错安就好👍 (期间会下载一些东西, 如果下不动需要在终端翻墙)
 cmake \
 -D CMAKE_BUILD_TYPE=Release \
+-D CUDA_HOST_COMPILER=/opt/cuda-10.0/bin/g++ \
 -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib-3.4.11/modules \
 -D BUILD_opencv_python=OFF \
 -D BUILD_opencv_python_bindings_generator=OFF \
@@ -211,8 +212,6 @@ cmake \
 -D WITH_PROTOBUF=OFF \
 -D WITH_GTK=ON \..
 
-
--D CUDA_HOST_COMPILER=/opt/cuda-10.0/bin/g++ \
 # 编译并安装
 make -j 18
 sudo make install
